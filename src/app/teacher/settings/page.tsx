@@ -1,0 +1,569 @@
+'use client';
+// src/app/teacher/settings/page.tsx
+
+
+import { useState, useEffect } from 'react';
+import { useTeacherStore } from '@/lib/store';
+import { saveSettings, uploadFileToStorage, wipeAllData } from '@/lib/db';
+import type { Settings } from '@/types';
+import { Save, Eye, EyeOff, Copy, Upload, Loader2, MessageCircle, Phone, Trash2, AlertTriangle } from 'lucide-react';
+
+const DEFAULT_SETTINGS: Settings = {
+  acadName: 'A-N Academy',
+  teacherName: 'الأستاذ أحمد خالد',
+  teacherPassword: 'admin123',
+  primaryColor: '#F5C518',
+  secTabSwitch: true,
+  secCopyPaste: true,
+  secFullscreen: false,
+  secShuffleOptions: true,
+  certHeader: 'شهادة إتمام واجتياز',
+  certFooter: 'بكل فخر وتقدير',
+  whatsappTemplate: 'السلام عليكم، أود إبلاغكم بأن الطالب/ة {name} أتم/ت اختبار "{exam}" وحصل/ت على درجة {score} من {total}. {status}',
+};
+
+export default function SettingsPage() {
+  const { settings, setSettings } = useTeacherStore();
+  const [form, setForm] = useState<Settings>(settings || DEFAULT_SETTINGS);
+  const [showPass, setShowPass] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [uploadingSignature, setUploadingSignature] = useState(false);
+  const [logoProgress, setLogoProgress] = useState(0);
+  const [signatureProgress, setSignatureProgress] = useState(0);
+  const [showCertPreview, setShowCertPreview] = useState(false);
+  
+  // Wipe Data State
+  const [showWipeModal, setShowWipeModal] = useState(false);
+  const [wipeConfirmText, setWipeConfirmText] = useState('');
+  const [wiping, setWiping] = useState(false);
+
+  useEffect(() => {
+    if (settings) setForm(settings);
+  }, [settings]);
+
+  const update = (key: keyof Settings, value: any) => setForm(f => ({ ...f, [key]: value }));
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await saveSettings(form);
+      setSettings(form);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch { showToast('فشل الحفظ'); }
+    finally { setSaving(false); }
+  };
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 100 * 1024 * 1024) { showToast('حجم الصورة يجب أن لا يتجاوز 100 ميجابايت'); return; }
+    setUploadingLogo(true);
+    setLogoProgress(0);
+    try {
+      const url = await uploadFileToStorage(file, `settings/logo_${Date.now()}_${file.name}`, setLogoProgress);
+      update('logoUrl', url);
+      showToast('تم رفع الشعار بنجاح!');
+    } catch (err: any) {
+      console.error(err);
+      showToast('فشل رفع الشعار: ' + (err.message || 'خطأ غير معروف'));
+    } finally { 
+      setUploadingLogo(false); 
+      setLogoProgress(0);
+      if (e.target) e.target.value = ''; 
+    }
+  };
+
+  const handleSignatureUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 100 * 1024 * 1024) { showToast('حجم الصورة يجب أن لا يتجاوز 100 ميجابايت'); return; }
+    setUploadingSignature(true);
+    setSignatureProgress(0);
+    try {
+      const url = await uploadFileToStorage(file, `settings/signature_${Date.now()}_${file.name}`, setSignatureProgress);
+      update('certSignatureUrl', url);
+      showToast('تم رفع التوقيع بنجاح!');
+    } catch (err: any) {
+      console.error(err);
+      showToast('فشل رفع التوقيع: ' + (err.message || 'خطأ غير معروف'));
+    } finally { 
+      setUploadingSignature(false); 
+      setSignatureProgress(0);
+      if (e.target) e.target.value = ''; 
+    }
+  };
+
+  const studentLink = typeof window !== 'undefined' ? `${window.location.origin}/student` : '';
+  const copyLink = () => { navigator.clipboard.writeText(studentLink); showToast('✅ تم نسخ رابط بوابة الطلاب!'); };
+
+  const handleWipeData = async () => {
+    if (wipeConfirmText !== 'مسح') {
+      showToast('يرجى كتابة كلمة "مسح" للتأكيد');
+      return;
+    }
+    
+    setWiping(true);
+    try {
+      await wipeAllData();
+      showToast('تم مسح جميع البيانات بنجاح.');
+      setShowWipeModal(false);
+      setWipeConfirmText('');
+      window.location.reload(); // Reload to clear any cached states
+    } catch (err) {
+      console.error(err);
+      showToast('حدث خطأ أثناء مسح البيانات.');
+    } finally {
+      setWiping(false);
+    }
+  };
+
+  return (
+    <div className="max-w-2xl mx-auto space-y-5">
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-cairo font-black gold-text">⚙️ الإعدادات</h1>
+        <button onClick={handleSave} disabled={saving}
+          className={`${saved ? 'btn-outline' : 'btn-gold'} disabled:opacity-60`}>
+          <Save size={15} /> {saving ? 'جاري الحفظ...' : saved ? '✅ تم الحفظ' : 'حفظ الإعدادات'}
+        </button>
+      </div>
+
+      {/* Academy Info */}
+      <div className="card-base p-5">
+        <h2 className="font-cairo font-bold mb-4" style={{ color: 'var(--gold)' }}>🎓 معلومات المنصة</h2>
+        <div className="space-y-3">
+          <div>
+            <label className="block text-sm mb-1.5" style={{ color: 'var(--text-muted)' }}>اسم المنصة</label>
+            <input value={form.acadName} onChange={e => update('acadName', e.target.value)} className="input-base" />
+          </div>
+          <div>
+            <label className="block text-sm mb-1.5" style={{ color: 'var(--text-muted)' }}>اسم المعلم</label>
+            <input value={form.teacherName} onChange={e => update('teacherName', e.target.value)} className="input-base" />
+          </div>
+
+          {/* Logo Upload */}
+          <div>
+            <label className="block text-sm mb-1.5" style={{ color: 'var(--text-muted)' }}>شعار المنصة (Logo)</label>
+            <div className="flex items-center gap-3">
+              {form.logoUrl && (
+                <img src={form.logoUrl} alt="شعار المنصة" className="w-14 h-14 object-contain rounded-xl border border-white/10 bg-white/5 p-1 flex-shrink-0" />
+              )}
+              <div className="flex-1 space-y-2">
+                {uploadingLogo && (
+                  <div className="w-full bg-white/10 rounded-full h-2 overflow-hidden">
+                    <div 
+                      className="bg-gold h-full transition-all duration-300" 
+                      style={{ width: `${logoProgress}%` }}
+                    />
+                  </div>
+                )}
+                <label className="btn-outline cursor-pointer w-full justify-center relative overflow-hidden flex items-center gap-2">
+                  {uploadingLogo ? <Loader2 size={15} className="animate-spin" /> : <Upload size={15} />}
+                  {uploadingLogo ? `جاري الرفع... ${logoProgress}%` : 'رفع شعار من جهازك'}
+                  <input type="file" accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer" onChange={handleLogoUpload} disabled={uploadingLogo} />
+                </label>
+                <input
+                  value={form.logoUrl || ''}
+                  onChange={e => update('logoUrl', e.target.value)}
+                  className="input-base text-sm"
+                  placeholder="أو أدخل رابط الشعار مباشرة..."
+                  style={{ direction: 'ltr' }}
+                />
+              </div>
+            </div>
+            <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>الحد الأقصى 100 ميجابايت. يُفضل PNG أو JPG.</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Password */}
+      <div className="card-base p-5">
+        <h2 className="font-cairo font-bold mb-4" style={{ color: 'var(--gold)' }}>🔐 كلمة مرور لوحة التحكم</h2>
+        <div className="relative">
+          <input type={showPass ? 'text' : 'password'} value={form.teacherPassword}
+            onChange={e => update('teacherPassword', e.target.value)} className="input-base has-icon pl-10" />
+          <button type="button" onClick={() => setShowPass(!showPass)}
+            className="absolute top-1/2 left-3 -translate-y-1/2 opacity-50 hover:opacity-100">
+            {showPass ? <EyeOff size={17} /> : <Eye size={17} />}
+          </button>
+        </div>
+        <p className="text-xs mt-2" style={{ color: 'var(--text-muted)' }}>
+          ⚠️ احفظ كلمة المرور في مكان آمن. الافتراضية: admin123
+        </p>
+      </div>
+
+      {/* Student Portal Link */}
+      <div className="card-base p-5">
+        <h2 className="font-cairo font-bold mb-4" style={{ color: 'var(--gold)' }}>🔗 رابط بوابة الطلاب</h2>
+        <div className="flex gap-2">
+          <input value={studentLink} readOnly className="input-base text-sm flex-1" style={{ direction: 'ltr', textAlign: 'left' }} />
+          <button onClick={copyLink} className="btn-outline text-sm px-3 flex-shrink-0">
+            <Copy size={14} /> نسخ
+          </button>
+        </div>
+        <p className="text-xs mt-2" style={{ color: 'var(--text-muted)' }}>
+          شارك هذا الرابط مع طلابك للدخول ببوابة الطالب
+        </p>
+      </div>
+
+      {/* WhatsApp Settings */}
+      <div className="card-base p-5" style={{ border: '1px solid rgba(37,211,102,0.2)', background: 'rgba(37,211,102,0.03)' }}>
+        <h2 className="font-cairo font-bold mb-4 flex items-center gap-2" style={{ color: '#25D366' }}>
+          <MessageCircle size={18} /> إعدادات واتساب
+        </h2>
+        <div className="space-y-4">
+          {/* Teacher WhatsApp for students */}
+          <div>
+            <label className="block text-sm mb-1.5 font-medium" style={{ color: 'var(--text-muted)' }}>
+              📱 رقم واتساب المعلم (للتواصل مع الطلاب)
+            </label>
+            <div className="flex items-center gap-2">
+              <Phone size={16} className="text-gray-400 flex-shrink-0" />
+              <input
+                value={form.whatsappNumber || ''}
+                onChange={e => update('whatsappNumber', e.target.value)}
+                className="input-base has-icon flex-1"
+                placeholder="مثال: 201012345678 (بدون + أو 00)"
+                style={{ direction: 'ltr' }}
+              />
+            </div>
+            <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+              سيظهر زر "تواصل مع المعلم" في صفحة الطالب يفتح واتساب مباشرة على هذا الرقم.
+            </p>
+          </div>
+
+          {/* WhatsApp message template for parents */}
+          <div>
+            <label className="block text-sm mb-1.5 font-medium" style={{ color: 'var(--text-muted)' }}>
+              📋 قالب رسالة إبلاغ أولياء الأمور بالنتائج
+            </label>
+            <textarea
+              value={form.whatsappTemplate || ''}
+              onChange={e => update('whatsappTemplate', e.target.value)}
+              rows={4}
+              className="input-base resize-y text-sm"
+              placeholder="اكتب قالب الرسالة... يمكنك استخدام: {name} {exam} {score} {total} {status}"
+            />
+            <div className="mt-2 p-2 rounded-lg text-xs flex flex-wrap gap-2" style={{ background: 'rgba(37,211,102,0.08)', color: '#25D366' }}>
+              <span className="font-mono bg-black/20 px-1.5 py-0.5 rounded">{'{name}'}</span> اسم الطالب
+              <span className="mx-1 opacity-40">|</span>
+              <span className="font-mono bg-black/20 px-1.5 py-0.5 rounded">{'{exam}'}</span> اسم الاختبار
+              <span className="mx-1 opacity-40">|</span>
+              <span className="font-mono bg-black/20 px-1.5 py-0.5 rounded">{'{score}'}</span> الدرجة
+              <span className="mx-1 opacity-40">|</span>
+              <span className="font-mono bg-black/20 px-1.5 py-0.5 rounded">{'{total}'}</span> الدرجة الكلية
+              <span className="mx-1 opacity-40">|</span>
+              <span className="font-mono bg-black/20 px-1.5 py-0.5 rounded">{'{status}'}</span> ناجح/راسب
+            </div>
+            <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+              سيُستخدم هذا القالب في صفحة النتائج عند الضغط على زر "إبلاغ ولي الأمر عبر واتساب".
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Security */}
+      <div className="card-base p-5">
+        <h2 className="font-cairo font-bold mb-4" style={{ color: 'var(--gold)' }}>🛡️ أمان الاختبار</h2>
+        <div className="space-y-3">
+          {[
+            { key: 'secTabSwitch', label: 'تسجيل مغادرة صفحة الاختبار', desc: 'يُنبّه عند تبديل التبويب' },
+            { key: 'secCopyPaste', label: 'منع النسخ واللصق', desc: 'يمنع النسخ من الاختبار' },
+            { key: 'secShuffleOptions', label: 'خلط ترتيب الخيارات', desc: 'يخلط خيارات كل سؤال عشوائياً' },
+          ].map(({ key, label, desc }) => (
+            <div key={key} className="flex items-center justify-between p-3 rounded-xl"
+              style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+              <div>
+                <div className="text-sm font-medium">{label}</div>
+                <div className="text-xs" style={{ color: 'var(--text-muted)' }}>{desc}</div>
+              </div>
+              <button onClick={() => update(key as keyof Settings, !(form as any)[key])}
+                className="w-10 h-5 rounded-full transition-all relative flex-shrink-0"
+                style={{ background: (form as any)[key] ? 'var(--green)' : 'rgba(255,255,255,0.1)' }}>
+                <div className="absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all"
+                  style={{ right: (form as any)[key] ? '2px' : 'auto', left: (form as any)[key] ? 'auto' : '2px' }} />
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Certificate */}
+      <div className="card-base p-5">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="font-cairo font-bold" style={{ color: 'var(--gold)' }}>🎓 إعدادات الشهادة</h2>
+          <button 
+            onClick={() => setShowCertPreview(true)}
+            className="text-xs btn-outline py-1.5 px-3 flex items-center gap-2"
+          >
+            <Eye size={14} /> معاينة الشهادة
+          </button>
+        </div>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm mb-1.5" style={{ color: 'var(--text-muted)' }}>رأس الشهادة</label>
+            <input value={form.certHeader || ''} onChange={e => update('certHeader', e.target.value)} className="input-base" />
+          </div>
+          <div>
+            <label className="block text-sm mb-1.5" style={{ color: 'var(--text-muted)' }}>تذييل الشهادة</label>
+            <input value={form.certFooter || ''} onChange={e => update('certFooter', e.target.value)} className="input-base" />
+          </div>
+
+          {/* Signature Upload */}
+          <div>
+            <label className="block text-sm mb-1.5 font-medium" style={{ color: 'var(--text-muted)' }}>
+              ✍️ توقيع / ختم الشهادة (اختياري)
+            </label>
+            <div className="flex items-center gap-3">
+              {form.certSignatureUrl && (
+                <div className="w-24 h-14 rounded-xl border border-white/10 bg-white/5 p-2 flex-shrink-0 flex items-center justify-center">
+                  <img src={form.certSignatureUrl} alt="التوقيع" className="max-w-full max-h-full object-contain" />
+                </div>
+              )}
+              <div className="flex-1 space-y-2">
+                {uploadingSignature && (
+                  <div className="w-full bg-white/10 rounded-full h-2 overflow-hidden">
+                    <div 
+                      className="bg-gold h-full transition-all duration-300" 
+                      style={{ width: `${signatureProgress}%` }}
+                    />
+                  </div>
+                )}
+                <label className="btn-outline cursor-pointer w-full justify-center relative overflow-hidden flex items-center gap-2">
+                  {uploadingSignature ? <Loader2 size={15} className="animate-spin" /> : <Upload size={15} />}
+                  {uploadingSignature ? `جاري الرفع... ${signatureProgress}%` : (form.certSignatureUrl ? 'تغيير التوقيع/الختم' : 'رفع توقيع أو ختم')}
+                  <input type="file" accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer" onChange={handleSignatureUpload} disabled={uploadingSignature} />
+                </label>
+                {form.certSignatureUrl && (
+                  <button onClick={() => update('certSignatureUrl', '')} className="text-xs text-red-400 hover:text-red-300 w-full text-center">
+                    🗑️ إزالة التوقيع
+                  </button>
+                )}
+              </div>
+            </div>
+            <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+              يُفضل استخدام صيغة PNG بخلفية شفافة. سيظهر في الشهادات الممنوحة للطلاب الناجحين.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Payment Settings */}
+      <div className="card-base p-5">
+        <h2 className="font-cairo font-bold mb-4" style={{ color: 'var(--gold)' }}>💳 طرق الدفع والاشتراكات</h2>
+        <div>
+          <label className="block text-sm mb-1.5" style={{ color: 'var(--text-muted)' }}>بيانات وطرق الدفع (تظهر للطلاب عند التسجيل)</label>
+          <textarea
+            value={form.paymentMethods || ''}
+            onChange={e => update('paymentMethods', e.target.value)}
+            rows={4}
+            className="input-base resize-y"
+            placeholder="مثال: يرجى تحويل قيمة الاشتراك على فودافون كاش رقم 0101XXXXXXX ثم كتابة رقم التحويل في الملاحظات..."
+          />
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-4">
+          <div>
+            <label className="block text-sm mb-1.5" style={{ color: 'var(--text-muted)' }}>سعر الاشتراك الشهري</label>
+            <div className="relative">
+              <input type="number" value={form.monthlyPrice || ''} onChange={e => update('monthlyPrice', Number(e.target.value))} className="input-base pr-10" placeholder="0" />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-500">ج.م</span>
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm mb-1.5" style={{ color: 'var(--text-muted)' }}>سعر الاشتراك نصف السنوي</label>
+            <div className="relative">
+              <input type="number" value={form.halfYearlyPrice || ''} onChange={e => update('halfYearlyPrice', Number(e.target.value))} className="input-base pr-10" placeholder="0" />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-500">ج.م</span>
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm mb-1.5" style={{ color: 'var(--text-muted)' }}>سعر الاشتراك السنوي</label>
+            <div className="relative">
+              <input type="number" value={form.yearlyPrice || ''} onChange={e => update('yearlyPrice', Number(e.target.value))} className="input-base pr-10" placeholder="0" />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-500">ج.م</span>
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm mb-1.5" style={{ color: 'var(--text-muted)' }}>سعر الاشتراك كورس كامل</label>
+            <div className="relative">
+              <input type="number" value={form.coursePrice || ''} onChange={e => update('coursePrice', Number(e.target.value))} className="input-base pr-10" placeholder="0" />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-500">ج.م</span>
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm mb-1.5" style={{ color: 'var(--text-muted)' }}>سعر الحصة / الجلسة</label>
+            <div className="relative">
+              <input type="number" value={form.sessionPrice || ''} onChange={e => update('sessionPrice', Number(e.target.value))} className="input-base pr-10" placeholder="0" />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-500">ج.م</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Deployment info */}
+      <div className="card-base p-5" style={{ border: '1px solid rgba(79,70,229,0.2)', background: 'rgba(79,70,229,0.05)' }}>
+        <h2 className="font-cairo font-bold mb-3" style={{ color: '#818cf8' }}>🚀 معلومات النشر المجاني</h2>
+        <div className="space-y-2 text-sm" style={{ color: 'var(--text-muted)' }}>
+          <div className="flex items-start gap-2"><span>1.</span><span>ارفع الكود على GitHub (مجاناً)</span></div>
+          <div className="flex items-start gap-2"><span>2.</span><span>أنشئ حساباً على Vercel.com (مجاناً)</span></div>
+          <div className="flex items-start gap-2"><span>3.</span><span>اربط المشروع بـ Vercel - سيُنشر تلقائياً</span></div>
+          <div className="flex items-start gap-2"><span>4.</span><span>أضف متغيرات Firebase في إعدادات Vercel</span></div>
+          <div className="mt-3 p-3 rounded-lg text-xs" style={{ background: 'rgba(0,0,0,0.2)', fontFamily: 'monospace', direction: 'ltr', textAlign: 'left' }}>
+            NEXT_PUBLIC_FIREBASE_API_KEY=...<br/>
+            NEXT_PUBLIC_FIREBASE_PROJECT_ID=...<br/>
+            NEXT_PUBLIC_FIREBASE_APP_ID=...
+          </div>
+        </div>
+      </div>
+
+      {/* Dangerous Operations */}
+      <div className="card-base p-5 border-red-500/20 bg-red-500/5">
+        <h2 className="font-cairo font-bold mb-4 flex items-center gap-2 text-red-500">
+          <AlertTriangle size={20} /> منطقة الخطر (إدارة البيانات)
+        </h2>
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 rounded-xl border border-red-500/10 bg-black/20">
+          <div>
+            <h3 className="font-bold text-red-400 mb-1">مسح جميع بيانات المنصة</h3>
+            <p className="text-sm text-gray-400">
+              سيتم حذف جميع حسابات الطلاب، الامتحانات، والإجابات. سيتم تصفير قاعدة البيانات بالكامل للبدء من جديد وتوفير المساحة. (لا يشمل الملفات المرفوعة يدوياً، يجب حذفها من Firebase Storage لاحقاً إذا لزم الأمر).
+            </p>
+          </div>
+          <button 
+            onClick={() => setShowWipeModal(true)}
+            className="btn-danger whitespace-nowrap"
+          >
+            <Trash2 size={16} /> مسح كل البيانات
+          </button>
+        </div>
+      </div>
+
+      {/* Wipe Confirmation Modal */}
+      {showWipeModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+          <div className="bg-dark2 border border-red-500/30 p-6 rounded-2xl w-full max-w-md shadow-2xl relative animate-scale-in">
+            <div className="mx-auto w-12 h-12 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mb-4">
+              <AlertTriangle size={24} />
+            </div>
+            <h2 className="text-2xl font-bold text-center mb-2 font-cairo">تحذير نهائي!</h2>
+            <p className="text-gray-300 text-center text-sm mb-6 leading-relaxed">
+              أنت على وشك مسح <span className="text-red-400 font-bold">جميع</span> البيانات من المنصة بشكل نهائي ولا يمكن التراجع عن هذا الإجراء أبداً.
+            </p>
+            
+            <div className="mb-6">
+              <label className="block text-sm mb-2 text-center text-gray-400">
+                للتأكيد، اكتب كلمة <span className="font-bold text-white bg-black/50 px-2 py-1 rounded">مسح</span> في المربع التالي:
+              </label>
+              <input
+                type="text"
+                value={wipeConfirmText}
+                onChange={(e) => setWipeConfirmText(e.target.value)}
+                className="input-base text-center font-bold text-red-400 text-lg border-red-500/30 focus:border-red-500 focus:ring-1 focus:ring-red-500"
+                placeholder="اكتب مسح"
+                autoComplete="off"
+              />
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowWipeModal(false)}
+                className="flex-1 btn-outline"
+                disabled={wiping}
+              >
+                إلغاء
+              </button>
+              <button
+                onClick={handleWipeData}
+                disabled={wipeConfirmText !== 'مسح' || wiping}
+                className="flex-1 btn-danger justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {wiping ? 'جاري المسح...' : 'تأكيد المسح'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Certificate Preview Modal */}
+      {showCertPreview && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-fade-in">
+          <div className="w-full max-w-4xl max-h-[90vh] overflow-y-auto bg-white rounded-2xl shadow-2xl relative animate-scale-in p-1">
+             <button 
+               onClick={() => setShowCertPreview(false)}
+               className="absolute top-4 right-4 z-20 bg-black/50 text-white w-10 h-10 rounded-full flex items-center justify-center hover:bg-black"
+             >
+               ✕
+             </button>
+             
+             {/* Realistic Certificate Layout - Preview */}
+             <div className="relative overflow-hidden bg-gradient-to-br from-white to-[#fdfbf7] min-h-[600px] flex flex-col items-center border-[8px] border-[#F5C518] shadow-[inset_0_0_0_4px_#fff,inset_0_0_0_8px_#F5C518] p-8 md:p-12 text-center">
+                
+                {/* Background Pattern */}
+                <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'radial-gradient(#F5C518 1px, transparent 1px)', backgroundSize: '20px 20px' }} />
+                
+                {form.logoUrl && (
+                  <div className="absolute inset-0 flex items-center justify-center opacity-[0.04] pointer-events-none z-0">
+                     <img src={form.logoUrl} alt="Watermark" className="w-[60%] object-contain" />
+                  </div>
+                )}
+                
+                <div className="relative z-10 w-full flex-1 flex flex-col items-center">
+                  <div className="mb-8 flex flex-col items-center">
+                    <div className="w-16 h-16 bg-[#1A1A25] rounded-full flex items-center justify-center shadow-lg mb-4">
+                      🎓
+                    </div>
+                    <h3 className="text-4xl font-black mb-2 text-[#1A1A25] tracking-widest font-cairo" style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.1)' }}>
+                      {form.certHeader || 'شهادة إتمام واجتياز'}
+                    </h3>
+                  </div>
+                  
+                  <p className="text-2xl text-gray-700 mb-6 font-medium">بكل فخر واعتزاز، نمنح هذه الشهادة للطالب/ة:</p>
+                  
+                  <h2 className="text-5xl font-black text-[#F5C518] bg-[#1A1A25] px-12 py-5 rounded-2xl mb-8 shadow-2xl transform -rotate-1 hover:rotate-0 transition-transform font-cairo font-black inline-block">
+                    اسم الطالب الرباعي
+                  </h2>
+                  
+                  <p className="text-xl text-gray-700 mb-12 max-w-2xl mx-auto leading-relaxed font-medium">
+                    نظراً لاجتيازه(ا) بتفوق ونجاح دراسة واختبار <br/>
+                    <b className="text-2xl text-[#1A1A25] inline-block mt-3 border-b-2 border-dashed border-[#F5C518] pb-1">&quot;الرياضيات المتقدمة و الجبر&quot;</b>
+                  </p>
+                  
+                  <div className="w-full mt-auto flex flex-col sm:flex-row sm:grid sm:grid-cols-3 gap-4 items-center sm:items-end pt-8 border-t-2 border-[#F5C518]/20 text-center sm:text-right">
+                     <div className="order-2 sm:order-1 sm:text-right">
+                        <p className="text-sm text-gray-500 mb-2 font-bold">تاريخ الإصدار</p>
+                        <p className="text-xl font-bold text-[#1A1A25]">{new Date().toLocaleDateString('ar-EG')}</p>
+                     </div>
+                     
+                     <div className="text-center flex justify-center relative -top-8">
+                        <div className="w-32 h-32 bg-gradient-to-br from-[#F5C518] to-[#d4af37] rounded-full flex flex-col items-center justify-center border-[6px] border-white shadow-2xl relative">
+                           <div className="absolute inset-1 rounded-full border border-dashed border-black/20" />
+                           <span className="text-sm font-bold text-[#1A1A25] mb-1">النسبة المئوية</span>
+                           <span className="text-4xl font-black text-[#1A1A25]">100%</span>
+                        </div>
+                     </div>
+
+                     <div className="order-3 sm:order-3 sm:text-left flex flex-col items-center">
+                        <p className="text-sm text-gray-500 mb-2 font-bold text-center">التوقيع والختم</p>
+                        {form.certSignatureUrl ? (
+                           <img src={form.certSignatureUrl} alt="توقيع" className="h-16 max-w-[150px] object-contain" />
+                        ) : (
+                           <p className="font-bold text-2xl text-[#1A1A25] mt-2 opacity-80 font-cairo shrink-0 text-center whitespace-nowrap">
+                             {form.teacherName}
+                           </p>
+                        )}
+                     </div>
+                  </div>
+                  
+                  <p className="mt-6 text-lg text-gray-400 font-bold italic w-full text-center">
+                    {form.certFooter || 'بكل فخر وتقدير'}
+                  </p>
+                </div>
+             </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+

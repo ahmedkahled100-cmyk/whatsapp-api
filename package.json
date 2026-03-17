@@ -1,0 +1,48 @@
+{
+  "name": "an-academy",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@google/genai": "^1.44.0",
+    "@google/generative-ai": "^0.24.1",
+    "@ilovepdf/ilovepdf-nodejs": "^0.3.1",
+    "browser-image-compression": "^2.0.2",
+    "cloudinary": "^2.9.0",
+    "clsx": "^2.1.1",
+    "date-fns": "^3.6.0",
+    "firebase": "^10.10.0",
+    "firebase-admin": "^13.7.0",
+    "framer-motion": "^11.1.9",
+    "html2canvas": "^1.4.1",
+    "html2pdf.js": "^0.14.0",
+    "lucide-react": "^0.383.0",
+    "next": "14.2.0",
+    "pdf-lib": "^1.17.1",
+    "react": "^18",
+    "react-dom": "^18",
+    "react-hook-form": "^7.51.3",
+    "react-select": "^5.8.0",
+    "recharts": "^2.12.4",
+    "tailwind-merge": "^2.3.0",
+    "zod": "^3.23.4",
+    "zustand": "^4.5.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "@types/react-select": "^5.0.0",
+    "autoprefixer": "^10.0.1",
+    "eslint": "^8",
+    "eslint-config-next": "14.2.0",
+    "postcss": "^8",
+    "tailwindcss": "^3.4.1",
+    "typescript": "^5"
+  }
+}

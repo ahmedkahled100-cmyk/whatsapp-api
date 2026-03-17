@@ -1,0 +1,38 @@
+{
+  "name": "A-N Academy - منصة التعليم الذكي",
+  "short_name": "A-N Academy",
+  "description": "منصة اختبارات ومتابعة الطلاب - الأستاذ أحمد خالد",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0a0a0f",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "categories": ["education", "productivity"],
+  "screenshots": [
+    {
+      "src": "/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "icons": [
+    {
+      "src": "/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
