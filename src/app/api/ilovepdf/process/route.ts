@@ -18,7 +18,7 @@ const SECRET_KEY = process.env.ILOVEPDF_SECRET_KEY || '';
 
 export async function POST(req: Request) {
   try {
-    const { task, server, fileName, serverFilename, serverFilenames, mode, tool = 'compress' } = await req.json();
+    const { task, server, fileName, serverFilename, serverFilenames, mode, tool = 'compress', settings } = await req.json();
 
     if (!task || !server || (!serverFilename && !serverFilenames)) {
       return NextResponse.json({ 
@@ -46,8 +46,90 @@ export async function POST(req: Request) {
       });
     });
 
-    console.log(`[iLovePDF Process] SDK starting process for ${serverFilename}`);
-    const processData = await taskInstance.process();
+    // 2. Prepare process parameters based on tool and settings
+    let processParams: any = {};
+    const s = settings || {};
+    
+    if (tool === 'compress') {
+      processParams = { compression_level: s.compression_level || 'recommended' };
+    } else if (tool === 'watermark') {
+      processParams = {
+        mode: s.type === 'image' ? 'image' : 'text',
+        text: s.text || 'AN Academy',
+        position: s.position || 'Center',
+        pages: 'all',
+        font_family: s.font || 'Arial',
+        font_style: s.style || 'Bold',
+        font_size: s.size || 40,
+        font_color: s.color || '#000000',
+        transparency: s.transparency || 50,
+        layer: s.layer || 'above'
+      };
+    } else if (tool === 'pagenumber') {
+      processParams = {
+        position: s.position || 'Bottom Center',
+        start_number: s.startNumber || 1,
+        pages: 'all',
+        font_family: s.font || 'Arial',
+        font_style: s.style || 'Regular',
+        font_size: s.size || 12,
+        font_color: s.color || '#000000',
+        text: s.format || '{page}'
+      };
+    } else if (tool === 'split') {
+      processParams = {
+        ranges: s.ranges || '1-end'
+      };
+    } else if (tool === 'merge') {
+        processParams = {}; // Merge has no mandatory process params
+    } else if (tool === 'rotate') {
+      const rotate = s.angle || 90;
+      processParams = { rotate };
+      // Also apply to individual files as some SDK versions prefer it there
+      taskInstance.files.forEach((f: any) => {
+        f.params = f.params || {};
+        f.params.rotate = rotate;
+      });
+    } else if (tool === 'organize') {
+        processParams = {}; // Organize uses file params mostly
+    } else if (tool === 'ocr') {
+      processParams = {
+        language: s.language || 'ara'
+      };
+    } else if (tool === 'protect') {
+      processParams = {
+        password: s.password || '123456'
+      };
+    } else if (tool === 'pdfjpg') {
+      processParams = {
+        dpi: s.dpi || 150
+      };
+    } else if (tool === 'imagepdf') {
+      processParams = {
+        orientation: s.orientation || 'portrait',
+        margin: s.margin || 0,
+        pagesize: s.pagesize || 'fit'
+      };
+    } else if (tool === 'editpdf') {
+        processParams = {
+            elements: s.elements || []
+        };
+    }
+
+    console.log(`[iLovePDF Process] SDK starting process for ${task} with params:`, JSON.stringify(processParams));
+    
+    // Check if process failed internally
+    let processData;
+    try {
+        processData = await taskInstance.process(processParams);
+    } catch (procErr: any) {
+        console.error('[iLovePDF SDK Process Internal Error]:', procErr);
+        if (procErr.response && procErr.response.data) {
+            console.error('[iLovePDF SDK Process Error Detail]:', JSON.stringify(procErr.response.data));
+            throw new Error(procErr.response.data.error?.message || 'فشل معالجة الملف في محرك iLovePDF');
+        }
+        throw procErr;
+    }
 
     // If mode is download, we don't need to download buffer and upload to Cloudinary
     // We just return success so the client can trigger a direct download from iLovePDF

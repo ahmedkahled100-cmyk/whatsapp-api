@@ -29,7 +29,8 @@ export async function GET(req: Request) {
     headers.set('Content-Type', isZip ? 'application/zip' : 'application/pdf');
     
     // Robust Content-Disposition with RFC 5987 (UTF-8) support
-    const safeFileName = fileName.replace(/[/\\?%*:|"<>]/g, '_');
+    // Use a safe ASCII-only filename for the regular 'filename' param to avoid ByteString errors
+    const safeFileName = fileName.replace(/[^\x00-\x7F]/g, '_').replace(/[/\\?%*:|"<>]/g, '_');
     const encodedFileName = encodeURIComponent(fileName).replace(/['()]/g, escape).replace(/\*/g, '%2A');
     headers.set('Content-Disposition', `attachment; filename="${safeFileName}"; filename*=UTF-8''${encodedFileName}`);
 

@@ -150,65 +150,87 @@ export function PDFCompressionModal({ file, onClose, onComplete, onCancel }: PDF
   };
 
   return (
-    <div className="fixed inset-0 z-[10000] bg-black/90 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in" dir="rtl">
-      <div className="bg-[#1A1A25] border border-white/10 rounded-3xl max-w-lg w-full overflow-hidden shadow-[0_0_50px_rgba(245,197,24,0.1)]">
+    <div className="fixed inset-0 z-[10000] bg-black/40 backdrop-blur-2xl flex items-center justify-center p-4 animate-fade-in" dir="rtl">
+      <div className="bg-[#11111a]/80 border border-white/10 rounded-[32px] max-w-lg w-full overflow-hidden shadow-[0_40px_100px_rgba(0,0,0,0.5)] backdrop-saturate-150 relative">
+        <div className="absolute inset-0 bg-gradient-to-br from-gold/5 via-transparent to-accent/5 pointer-events-none" />
         
         {/* iLovePDF Style Header */}
-        <div className="bg-gradient-to-r from-[#E5322E] to-[#b31d1a] p-6 flex items-center justify-between text-white relative overflow-hidden">
-          <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] pointer-events-none" />
-          <div className="flex items-center gap-4 relative z-10">
-             <div className="bg-white p-2.5 rounded-xl shadow-lg transform -rotate-6">
-                <FileText className="text-[#E5322E]" size={28} />
+        <div className="bg-gradient-to-r from-gold/20 via-gold/10 to-transparent p-10 flex items-center justify-between text-white relative">
+          <div className="flex items-center gap-6 relative z-10">
+             <div className="bg-gold/10 p-4 rounded-3xl border border-gold/20 shadow-glow group-hover:scale-110 transition-transform">
+                <FileText className="text-gold" size={32} />
              </div>
              <div>
-                <h2 className="font-cairo font-black text-2xl leading-none flex items-center gap-2">
-                  AN <span className="text-[#E5322E]">Compress</span> <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded-full uppercase tracking-widest font-bold">iLovePDF Turbo</span>
+                <h2 className="font-cairo font-black text-3xl leading-none gold-text">
+                  iLovePDF <span className="text-white/40 font-light mx-1">|</span> سمارت
                 </h2>
-                <p className="text-[10px] opacity-80 mt-1 uppercase tracking-widest font-medium">Auto-Optimization & Cloud Transfer</p>
+                <p className="text-[10px] text-muted font-black mt-2 uppercase tracking-[0.3em]">تحويل الملفات التلقائي والمعالجة الذكية</p>
              </div>
           </div>
-          <button onClick={onCancel} className="hover:bg-white/20 p-2.5 rounded-full transition-all hover:rotate-90">
-            <X size={22} />
+          <button onClick={onCancel} className="hover:bg-white/5 p-3 rounded-2xl transition-all hover:rotate-90 group">
+            <X size={20} className="text-muted group-hover:text-white" />
           </button>
         </div>
 
-        <div className="p-8">
+        <div className="p-10 relative z-10">
             {/* Main Visual */}
-            <div className="flex flex-col items-center text-center mb-8">
-                <div className="mb-4 relative">
-                    {getStageIcon()}
-                    {status.stage === 'completed' && (
-                        <div className="absolute -top-2 -right-2 bg-green-500 text-white rounded-full p-1 animate-bounce">
-                            <CheckCircle size={16} />
+            <div className="flex flex-col items-center text-center mb-10">
+                <div className="relative mb-12">
+                     <div className="w-32 h-32 rounded-full border border-white/5 flex items-center justify-center relative">
+                        {/* Interactive Circle Progress */}
+                        <svg className="w-full h-full -rotate-90">
+                          <circle
+                            cx="64" cy="64" r="60"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="3"
+                            className="text-white/5"
+                          />
+                          <circle
+                            cx="64" cy="64" r="60"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="3"
+                            strokeDasharray={377}
+                            strokeDashoffset={377 - (377 * status.progress) / 100}
+                            className={`transition-all duration-700 ${status.stage === 'completed' ? 'text-green-500' : status.stage === 'error' ? 'text-red-500' : 'text-gold'}`}
+                            strokeLinecap="round"
+                          />
+                        </svg>
+                        <div className={`absolute inset-0 flex items-center justify-center rounded-full animate-pulse-glow ${status.stage === 'completed' ? 'shadow-[0_0_40px_rgba(34,197,94,0.1)] text-green-500' : 'text-gold'}`}>
+                            {getStageIcon()}
                         </div>
-                    )}
+                    </div>
                 </div>
-                <h3 className="font-cairo font-bold text-lg mb-2">{status.message}</h3>
-                <p className="text-gray-400 text-sm">{file.name}</p>
+                <h3 className="text-2xl font-black font-cairo mb-3">{status.message}</h3>
+                <p className="text-muted text-xs font-medium opacity-60 max-w-[280px] truncate">{file.name}</p>
             </div>
 
             {/* Stats Comparison */}
-            <div className="grid grid-cols-1 gap-4 mb-8">
-                <div className="bg-white/5 rounded-2xl p-4 flex items-center justify-between border border-white/5 hover:border-white/10 transition-colors">
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-gray-500/10 flex items-center justify-center">
-                            <FileText size={18} className="text-gray-400" />
+            <div className="grid grid-cols-1 gap-4 mb-10">
+                <div className="bg-white/5 rounded-3xl p-5 flex items-center justify-between border border-white/5 relative overflow-hidden group">
+                    <div className="absolute inset-0 bg-gradient-to-r from-gold/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <div className="flex items-center gap-4 relative z-10">
+                        <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center border border-white/10">
+                            <FileText size={20} className="text-muted" />
                         </div>
                         <div>
-                            <p className="text-[10px] text-gray-500 uppercase">الحجم الأصلي</p>
-                            <p className="font-bold">{formatSize(file.size)}</p>
+                            <p className="text-[10px] text-muted font-black uppercase tracking-widest mb-1 opacity-40">الحجم الأصلي</p>
+                            <p className="font-black text-lg">{formatSize(file.size)}</p>
                         </div>
                     </div>
                     {status.compressedSize && (
                         <>
-                            <ArrowRight className="text-gray-600" size={20} />
-                            <div className="flex items-center gap-3 text-right">
+                            <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center">
+                                <ArrowRight className="text-muted/30" size={16} />
+                            </div>
+                            <div className="flex items-center gap-4 text-right relative z-10">
                                 <div>
-                                    <p className="text-[10px] text-green-500 uppercase">الحجم المضغوط</p>
-                                    <p className="font-bold text-green-400">{formatSize(status.compressedSize)}</p>
+                                    <p className="text-[10px] text-green-500 font-black uppercase tracking-widest mb-1 opacity-60">الحجم النهائي</p>
+                                    <p className="font-black text-lg text-green-400">{formatSize(status.compressedSize)}</p>
                                 </div>
-                                <div className="w-10 h-10 rounded-xl bg-green-500/10 flex items-center justify-center">
-                                    <ShieldCheck size={18} className="text-green-400" />
+                                <div className="w-12 h-12 rounded-2xl bg-green-500/10 flex items-center justify-center border border-green-500/10">
+                                    <ShieldCheck size={20} className="text-green-400" />
                                 </div>
                             </div>
                         </>
@@ -217,62 +239,49 @@ export function PDFCompressionModal({ file, onClose, onComplete, onCancel }: PDF
             </div>
 
             {/* Progress Wrapper */}
-            <div className="mb-8">
-                <div className="flex justify-between text-[11px] mb-2 font-black text-gray-400 uppercase tracking-tighter">
-                    <span>حالة المعالجة</span>
-                    <span>{status.progress}%</span>
+            <div className="mb-10">
+                <div className="flex justify-between items-end text-[11px] mb-3 font-black text-muted uppercase tracking-widest">
+                    <span>تحليل الجزيئات</span>
+                    <span className="text-gold">{status.progress}%</span>
                 </div>
-                <div className="h-3 bg-white/5 rounded-full overflow-hidden border border-white/5 p-0.5">
+                <div className="h-2 bg-white/5 rounded-full overflow-hidden p-0.5">
                     <div 
-                        className="h-full bg-gradient-to-r from-[#E5322E] via-[#ff5d59] to-[#E5322E] bg-[length:200%_100%] animate-gradient-x rounded-full transition-all duration-700 ease-out shadow-[0_0_15px_rgba(229,50,46,0.4)]"
+                        className={`h-full rounded-full transition-all duration-1000 ease-out shadow-glow ${status.stage === 'completed' ? 'bg-green-500 shadow-green-500/30' : 'bg-gold shadow-gold/30'}`}
                         style={{ width: `${status.progress}%` }}
                     />
-                </div>
-                <div className="mt-3 flex items-center justify-between text-[10px] text-gray-500">
-                    <div className="flex items-center gap-1.5">
-                        <div className={`w-1.5 h-1.5 rounded-full ${status.stage === 'uploading' ? 'bg-[#E5322E] animate-pulse' : 'bg-white/10'}`} />
-                        <span>الرفع لـ iLovePDF</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                        <div className={`w-1.5 h-1.5 rounded-full ${status.stage === 'compressing' ? 'bg-[#E5322E] animate-pulse' : 'bg-white/10'}`} />
-                        <span>المعالجة والتخزين الآمن</span>
-                    </div>
                 </div>
             </div>
 
             {/* Error Message */}
             {status.stage === 'error' && (
-                <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 mb-8 flex items-center gap-3 text-red-400">
-                    <AlertCircle size={20} className="flex-shrink-0" />
-                    <p className="text-sm font-medium">{status.error || 'حدث خطأ في عملية الضغط'}</p>
+                <div className="bg-red-500/5 border border-red-500/20 rounded-2xl p-5 mb-10 flex items-start gap-4 text-red-400 animate-shake">
+                    <AlertCircle size={20} className="shrink-0 mt-0.5" />
+                    <p className="text-xs font-bold leading-relaxed">{status.error || 'حدث خطأ غير متوقع أثناء معالجة الملف'}</p>
                 </div>
             )}
 
             {/* Footer Actions */}
-            <div className="flex gap-3">
+            <div className="flex gap-4">
                 {status.stage === 'error' ? (
                     <>
-                        <button onClick={onCancel} className="flex-1 py-3 px-4 rounded-xl bg-white/5 hover:bg-white/10 font-bold transition-all">إلغاء</button>
-                        <button onClick={compressPDF} className="flex-1 py-3 px-4 rounded-xl bg-[#E5322E] text-white font-bold hover:bg-[#c92a27] transition-all shadow-lg shadow-red-500/20">إعادة المحاولة</button>
+                        <button onClick={onCancel} className="flex-1 py-4 px-6 rounded-2xl bg-white/5 hover:bg-white/10 font-black text-sm transition-all text-muted">تجاهل</button>
+                        <button onClick={compressPDF} className="flex-1 py-4 px-6 rounded-2xl bg-gold text-dark font-black text-sm hover:shadow-glow transition-all">إعادة المحاولة</button>
                     </>
                 ) : status.stage === 'completed' ? (
-                    <div className="w-full flex flex-col gap-3">
-                         <div className="text-center py-3 bg-green-500/10 rounded-xl border border-green-500/20 mb-2">
-                            <p className="text-green-400 font-bold text-sm">✅ تم الضغط والرفع بنجاح</p>
-                            <p className="text-[10px] text-green-500/70 mt-1">الملف متاح الآن في المنصة</p>
-                         </div>
-                         <button onClick={onClose} className="w-full py-3.5 px-4 rounded-xl bg-white/10 hover:bg-white/15 font-bold transition-all border border-white/5 shadow-xl">إكمال عملية النشر</button>
+                    <div className="w-full flex flex-col gap-4 animate-in fade-in slide-in-from-bottom-4">
+                         <button onClick={onClose} className="w-full py-5 px-6 rounded-2xl bg-gold text-dark font-black transition-all shadow-glow hover:scale-[1.02] active:scale-[0.98] text-lg">إكمال عملية النشر</button>
+                         <p className="text-center text-[10px] text-green-500 font-bold opacity-60">تم التأمين والرفع بنجاح لـ AN Cloud</p>
                     </div>
                 ) : (
-                    <button onClick={onCancel} className="w-full py-3.5 px-4 rounded-xl bg-white/5 hover:bg-white/10 font-bold transition-all border border-white/5 flex items-center justify-center gap-2">
-                         <Loader2 size={18} className="animate-spin text-gray-400" />
-                         <span>إلغاء العملية</span>
+                    <button onClick={onCancel} className="w-full py-4 px-6 rounded-2xl bg-white/5 hover:bg-white/10 font-bold transition-all border border-white/5 flex items-center justify-center gap-3 text-muted">
+                         <Loader2 size={16} className="animate-spin" />
+                         <span className="text-xs uppercase tracking-widest">إلغاء المعالجة</span>
                     </button>
                 )}
             </div>
             
-            <p className="text-[9px] text-gray-500 text-center mt-6 uppercase tracking-widest opacity-50">
-                Powered by iLovePDF Technology • AN Academy Internal Security
+            <p className="text-[9px] text-muted/30 text-center mt-8 uppercase tracking-[0.4em] font-black">
+                AN SECURITY PROTOCOL • ILOVEPDF CORE
             </p>
         </div>
       </div>

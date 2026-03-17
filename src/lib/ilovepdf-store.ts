@@ -16,11 +16,13 @@ interface CompressionStatus {
 interface ILovePDFStore {
   files: File[];
   tool: string;
+  toolSettings: any;
   status: CompressionStatus;
   addFiles: (files: File[]) => void;
   removeFile: (index: number) => void;
   setFiles: (files: File[]) => void;
   setTool: (tool: string) => void;
+  setToolSettings: (settings: any) => void;
   setStatus: (status: Partial<CompressionStatus>) => void;
   reset: () => void;
   startTask: () => Promise<void>;
@@ -31,6 +33,13 @@ export const useILovePDFStore = create<ILovePDFStore>()(
     (set, get) => ({
       files: [],
       tool: 'compress',
+      toolSettings: {
+        // Default settings for various tools
+        watermark: { type: 'text', text: 'AN Academy', position: 'Center', transparency: 50, size: 40 },
+        pagenumber: { position: 'Bottom Center', startNumber: 1, format: '{page}' },
+        ocr: { language: 'ara' },
+        rotate: { angle: 90 },
+      },
       status: {
         stage: 'idle',
         progress: 0,
@@ -51,6 +60,8 @@ export const useILovePDFStore = create<ILovePDFStore>()(
       setFiles: (files) => set({ files }),
       
       setTool: (tool) => set({ tool }),
+
+      setToolSettings: (settings) => set((state) => ({ toolSettings: { ...state.toolSettings, [state.tool]: settings } })),
       
       setStatus: (update) => set((state) => ({
         status: { ...state.status, ...update }
@@ -62,7 +73,7 @@ export const useILovePDFStore = create<ILovePDFStore>()(
       }),
 
       startTask: async () => {
-        const { files, tool, setStatus } = get();
+        const { files, tool, toolSettings, setStatus } = get();
         if (files.length === 0) return;
 
         try {
@@ -71,7 +82,13 @@ export const useILovePDFStore = create<ILovePDFStore>()(
             'merge': 'الدمج',
             'split': 'التقسيم',
             'pdfjpg': 'التحويل لصور',
-            'imagepdf': 'التحويل لـ PDF'
+            'imagepdf': 'التحويل لـ PDF',
+            'watermark': 'إضافة علامة مائية',
+            'pagenumber': 'ترقيم الصفحات',
+            'ocr': 'التعرف الضوئي (OCR)',
+            'rotate': 'تدوير الصفحات',
+            'protect': 'حماية بكلمة مرور',
+            'unlock': 'فك التشفير'
           };
           const label = toolLabels[tool] || 'المعالجة';
           const totalSize = files.reduce((sum, f) => sum + f.size, 0);
@@ -91,8 +108,7 @@ export const useILovePDFStore = create<ILovePDFStore>()(
 
           const { task, server, token } = initData;
 
-          // 2. Upload Files sequentially or in parallel? Standard iLovePDF SDK likes sequential or managed.
-          // Let's do sequential for simplicity and progress tracking.
+          // 2. Upload Files
           const serverFilenames: string[] = [];
           
           for (let i = 0; i < files.length; i++) {
@@ -147,7 +163,8 @@ export const useILovePDFStore = create<ILovePDFStore>()(
               tool,
               fileName: files.length === 1 ? files[0].name : (tool === 'merge' ? 'merged.pdf' : (tool === 'pdfjpg' ? 'images.zip' : 'processed.pdf')),
               serverFilenames: serverFilenames,
-              mode: 'download'
+              mode: 'download',
+              settings: toolSettings[tool]
             }),
           });
 

@@ -51,10 +51,15 @@ export async function GET(req: Request) {
 
   } catch (error: any) {
     console.error('[iLovePDF Start Error]:', error);
+    // Log the full error object for debugging
+    if (error.response && error.response.data) {
+      console.error('[iLovePDF SDK Error Detail]:', JSON.stringify(error.response.data));
+    }
+    
     return NextResponse.json({ 
       success: false,
       error: error.message || 'Internal Exception during SDK init',
-      details: typeof error === 'object' ? JSON.stringify(error) : error
+      details: error.response?.data || error.message || error
     }, { status: 200 });
   }
 }

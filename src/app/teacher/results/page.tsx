@@ -442,15 +442,15 @@ export default function ResultsPage() {
 
         {/* Results Table */}
         <div className="relative z-10 w-full overflow-hidden rounded-xl shadow-sm" style={{ border: '1px solid #e2e8f0' }}>
-          <table className="w-full border-collapse bg-white text-right" style={{ tableLayout: 'fixed' }}>
+          <table className="w-full border-collapse bg-white text-right">
             <thead>
               <tr style={{ background: '#1A1A25', color: '#ffffff' }}>
-                <th className="p-2.5 font-bold text-[9px] border-b border-gray-300" style={{ width: '12%' }}>الكود</th>
-                <th className="p-2.5 font-bold text-[9px] border-b border-gray-300" style={{ width: '40%' }}>اسم الطالب</th>
-                <th className="p-2.5 font-bold text-[9px] border-b border-gray-300" style={{ width: '18%' }}>الاختبار</th>
-                <th className="p-2.5 text-center font-bold text-[9px] border-b border-gray-300" style={{ width: '10%' }}>الدرجة</th>
-                <th className="p-2.5 text-center font-bold text-[9px] border-b border-gray-300" style={{ width: '10%' }}>النسبة</th>
-                <th className="p-2.5 text-center font-bold text-[9px] border-b border-gray-300" style={{ width: '10%' }}>الحالة</th>
+                <th className="p-2.5 font-bold text-[9px] border-b border-gray-300" style={{ width: 'auto', whiteSpace: 'nowrap' }}>الكود</th>
+                <th className="p-2.5 font-bold text-[9px] border-b border-gray-300">اسم الطالب</th>
+                <th className="p-2.5 font-bold text-[9px] border-b border-gray-300">الاختبار</th>
+                <th className="p-2.5 text-center font-bold text-[9px] border-b border-gray-300" style={{ whiteSpace: 'nowrap' }}>الدرجة</th>
+                <th className="p-2.5 text-center font-bold text-[9px] border-b border-gray-300" style={{ whiteSpace: 'nowrap' }}>النسبة</th>
+                <th className="p-2.5 text-center font-bold text-[9px] border-b border-gray-300" style={{ whiteSpace: 'nowrap' }}>الحالة</th>
               </tr>
             </thead>
             <tbody>
