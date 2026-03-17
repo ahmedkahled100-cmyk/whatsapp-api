@@ -17,22 +17,41 @@ export const FileProcessingCenter = () => {
   useEffect(() => {
     setMounted(true);
     const init = async () => {
-      await loadQueue();
+      try {
+        await loadQueue();
+      } catch (err) {
+        console.error('Error loading queue:', err);
+      }
       
-      // Test iLovePDF Connection silently
-      testILovePDFConnectionAction().then(ok => {
-        if (!ok) console.error('iLovePDF API Keys are not working or project is inactive.');
-      });
+      // Test iLovePDF Connection silently with timeout
+      try {
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Timeout')), 5000)
+        );
+        await Promise.race([testILovePDFConnectionAction(), timeoutPromise]);
+      } catch (err) {
+        console.warn('iLovePDF connection test failed (will use fallback):', err);
+      }
 
       // Resume any stale processes
-      const store = useFileProcessingStore.getState();
-      store.queue.forEach(file => {
-        if (file.status === 'pending' || file.status === 'compressing') {
-          import('@/lib/file-processor').then(({ FileProcessor }) => {
-            FileProcessor.process(file.id);
+      try {
+        const store = useFileProcessingStore.getState();
+        if (store && store.queue) {
+          store.queue.forEach(file => {
+            if (file.status === 'pending' || file.status === 'compressing') {
+              import('@/lib/file-processor').then(({ FileProcessor }) => {
+                FileProcessor.process(file.id).catch((err: any) => {
+                  console.error('Error processing file:', file.id, err);
+                });
+              }).catch((err: any) => {
+                console.error('Error importing FileProcessor:', err);
+              });
+            }
           });
         }
-      });
+      } catch (err) {
+        console.error('Error resuming processes:', err);
+      }
     };
     init();
   }, [loadQueue]);

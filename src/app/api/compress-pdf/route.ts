@@ -3,7 +3,7 @@ import { ILovePDFClient } from '@/lib/ilovepdf';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 /**
  * POST /api/compress-pdf
@@ -11,6 +11,14 @@ export const maxDuration = 60;
  */
 export async function POST(req: NextRequest) {
   try {
+    // Log request details
+    const contentType = req.headers.get('content-type');
+    const contentLength = req.headers.get('content-length');
+    console.log('[API Compress] Request received:', {
+      contentType,
+      contentLength: contentLength ? `${(parseInt(contentLength) / 1024 / 1024).toFixed(2)} MB` : 'unknown',
+    });
+
     // Parse form data
     const formData = await req.formData();
     const file = formData.get('file') as File;
@@ -30,18 +38,18 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Validate file size (max 50MB to stay under Vercel limits)
-    const MAX_SIZE = 50 * 1024 * 1024;
+    // Validate file size (max 100MB for compression)
+    const MAX_SIZE = 100 * 1024 * 1024;
     if (file.size > MAX_SIZE) {
       return NextResponse.json(
-        { error: 'File too large. Maximum size is 50MB / الملف كبير جداً. الحد الأقصى 50 ميجابايت' },
-        { status: 400 }
+        { error: `File too large. Maximum size is 100MB / الملف كبير جداً. الحد الأقصى 100 ميجابايت. Your file: ${(file.size / 1024 / 1024).toFixed(2)}MB` },
+        { status: 413 }
       );
     }
 
     console.log('[API Compress] Starting compression:', {
       fileName: file.name,
-      originalSize: file.size,
+      originalSize: `${(file.size / 1024 / 1024).toFixed(2)} MB`,
       configured: ILovePDFClient.isConfigured(),
     });
 
@@ -49,17 +57,17 @@ export async function POST(req: NextRequest) {
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
-    console.log('[API Compress] File converted to buffer, size:', buffer.length);
+    console.log('[API Compress] File converted to buffer, size:', `${(buffer.length / 1024 / 1024).toFixed(2)} MB`);
 
     // Compress using iLovePDF (with local fallback built-in)
     const compressedBuffer = await ILovePDFClient.compress(buffer);
 
     const reduction = ((buffer.length - compressedBuffer.length) / buffer.length * 100).toFixed(1);
     console.log('[API Compress] ✅ Compression complete:', {
-      originalSize: buffer.length,
-      compressedSize: compressedBuffer.length,
+      originalSize: `${(buffer.length / 1024 / 1024).toFixed(2)} MB`,
+      compressedSize: `${(compressedBuffer.length / 1024 / 1024).toFixed(2)} MB`,
       reduction: reduction + '%',
-      usingFallback: compressedBuffer.length >= buffer.length * 0.95, // If barely compressed, likely using fallback
+      usingFallback: compressedBuffer.length >= buffer.length * 0.95,
     });
 
     // Return compressed file
@@ -70,12 +78,24 @@ export async function POST(req: NextRequest) {
         'X-Original-Size': buffer.length.toString(),
         'X-Compressed-Size': compressedBuffer.length.toString(),
         'X-Compression-Ratio': reduction,
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
       },
     });
 
   } catch (error: any) {
     const errorMsg = error?.message || error;
     console.error('[API Compress] ❌ Error:', errorMsg);
+    
+    // Check if it's a payload too large error
+    if (errorMsg.includes('413') || errorMsg.includes('too large') || errorMsg.includes('payload')) {
+      return NextResponse.json(
+        { 
+          error: 'File too large for processing / الملف كبير جداً للمعالجة',
+          details: process.env.NODE_ENV === 'development' ? errorMsg : undefined,
+        },
+        { status: 413 }
+      );
+    }
     
     return NextResponse.json(
       { 

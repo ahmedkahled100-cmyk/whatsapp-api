@@ -14,8 +14,8 @@ const nextConfig = {
   },
   experimental: {
     serverActions: {
-      bodySizeLimit: '100mb',
-      allowedOrigins: ['localhost:3000', '127.0.0.1:52521', '127.0.0.1:3000'],
+      bodySizeLimit: '300mb',
+      allowedOrigins: ['localhost:3000', '127.0.0.1:52521', '127.0.0.1:3000', 'an-academy.vercel.app', '*.vercel.app'],
     },
   },
   async headers() {
@@ -47,6 +47,19 @@ const nextConfig = {
         ],
       },
       {
+        source: '/icon-:path*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable',
+          },
+          {
+            key: 'Content-Type',
+            value: 'image/svg+xml',
+          },
+        ],
+      },
+      {
         source: '/(.*)',
         headers: [
           {
@@ -61,9 +74,23 @@ const nextConfig = {
             key: 'X-XSS-Protection',
             value: '1; mode=block',
           },
+          {
+            key: 'Access-Control-Allow-Origin',
+            value: '*',
+          },
         ],
       },
     ];
+  },
+  async rewrites() {
+    return {
+      beforeFiles: [
+        {
+          source: '/api/:path*',
+          destination: '/api/:path*',
+        },
+      ],
+    };
   },
 };
 
