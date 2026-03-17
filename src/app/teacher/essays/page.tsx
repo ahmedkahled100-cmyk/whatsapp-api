@@ -118,12 +118,9 @@ export default function EssaysPage() {
                                       </div>
                                     </div>
                                     <div className="flex gap-2">
-                                      <button onClick={() => openPreview(url, `إجابة الطالب - ملف ${i+1}`)} className="btn-outline text-[10px] py-1 px-3 flex-1 flex items-center justify-center gap-1">
-                                        <Eye size={10} /> معاينة
+                                      <button onClick={() => openPreview(url, `إجابة الطالب - ملف ${i+1}`)} className="btn-gold text-[10px] py-1 px-3 flex-1 flex items-center justify-center gap-1 font-bold">
+                                        <Eye size={10} /> معاينة الإجابة
                                       </button>
-                                      <a href={url} target="_blank" rel="noopener noreferrer" className="btn-gold text-[10px] py-1 px-3 flex-1 text-center">
-                                        فتح
-                                      </a>
                                     </div>
                                   </div>
                                 );

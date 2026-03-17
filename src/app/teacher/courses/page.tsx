@@ -14,10 +14,10 @@ import {
 } from 'lucide-react';
 import { CourseMaterial } from '@/types';
 import Select from 'react-select';
-import { getViewerUrl } from '@/lib/utils';
 import { FileProcessor } from '@/lib/file-processor';
 import { useFileProcessingStore } from '@/lib/store';
 import { PDFCompressionModal } from '@/components/PDFCompressionModal';
+import { useFilePreview } from '@/components/FilePreviewModal';
 
 const GRADES = [
   "الصف الأول الإعدادي", "الصف الثاني الإعدادي", "الصف الثالث الإعدادي",
@@ -91,7 +91,7 @@ export default function CoursesPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [expandedSubjects, setExpandedSubjects] = useState<Set<string>>(new Set());
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const { openPreview, PreviewModal } = useFilePreview();
   
   // PDF Compression state
   const [compressionModal, setCompressionModal] = useState<{
@@ -677,7 +677,7 @@ export default function CoursesPage() {
                                   {(material.url || material.fileUrl) && (
                                     <div className="flex gap-3">
                                       <button 
-                                        onClick={() => setPreviewUrl(material.url || material.fileUrl || null)}
+                                        onClick={() => openPreview(material.url || material.fileUrl || '', material.title)}
                                         className="text-xs text-blue-400 hover:underline flex items-center gap-1"
                                       >
                                         <Search size={10} /> معاينة
@@ -738,71 +738,7 @@ export default function CoursesPage() {
         </div>
       )}
 
-      {/* Preview Modal */}
-      {previewUrl && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm animate-fade-in">
-          <div className="relative w-full max-w-5xl h-[90vh] bg-[#1A1A25] border border-white/10 rounded-2xl overflow-hidden flex flex-col shadow-2xl">
-            <div className="p-4 border-b border-white/5 flex justify-between items-center bg-white/5">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-gold/10 flex items-center justify-center">
-                  {previewUrl.toLowerCase().endsWith('.pdf') ? <FileText size={18} className="text-gold" /> : <ImageIcon size={18} className="text-gold" />}
-                </div>
-                <h3 className="font-bold text-sm sm:text-base">معاينة المحتوى التعليمي</h3>
-              </div>
-              <button onClick={() => setPreviewUrl(null)} className="p-2 hover:bg-white/10 rounded-xl transition-all text-white/60 hover:text-white">
-                <X size={20} />
-              </button>
-            </div>
-            
-            <div className="flex-1 bg-[#0a0a0f] relative overflow-hidden">
-              {previewUrl.toLowerCase().endsWith('.pdf') || previewUrl.includes('application/pdf') || previewUrl.includes('/raw/upload/') || previewUrl.includes('/files/upload/') ? (
-                <div className="w-full h-full relative">
-                  <iframe 
-                    src={getViewerUrl(previewUrl)} 
-                    className="w-full h-full border-none" 
-                    title="PDF Viewer"
-                    allow="autoplay"
-                  />
-                  {/* Overlay to catch errors or slow loading */}
-                  <div className="absolute inset-0 pointer-events-none flex items-center justify-center opacity-20">
-                    <Loader2 size={40} className="animate-spin text-gold" />
-                  </div>
-                </div>
-              ) : previewUrl.toLowerCase().match(/\.(jpg|jpeg|png|webp|gif)$/) || previewUrl.includes('/image/upload/') ? (
-                <div className="w-full h-full flex items-center justify-center p-4">
-                  <img src={previewUrl} alt="Preview" className="max-w-full max-h-full object-contain rounded-lg shadow-lg" />
-                </div>
-              ) : (
-                <div className="w-full h-full flex items-center justify-center p-4">
-                  <div className="text-center p-6 bg-white/5 rounded-xl">
-                    <FileText className="mx-auto mb-4 text-gold" size={64} />
-                    <p className="text-white font-bold mb-2">لا يمكن عرض هذا الملف مباشرة</p>
-                    <p className="text-gray-400 text-sm mb-4">
-                      يمكنك تحميل الملف وعرضه على جهازك
-                    </p>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="p-4 border-t border-white/5 bg-white/5 flex flex-wrap gap-3 justify-center sm:justify-between items-center">
-              <div className="text-[10px] text-white/40 max-w-[200px] truncate hidden sm:block">
-                {previewUrl}
-              </div>
-              <div className="flex gap-3 w-full sm:w-auto">
-                <a href={previewUrl} target="_blank" rel="noreferrer" 
-                   className="btn-gold flex-1 sm:flex-none py-2.5 px-6 text-sm font-bold flex items-center justify-center gap-2 shadow-lg shadow-gold/10">
-                  <Upload size={14} className="rotate-180" /> تحميل الملف الأصلي
-                </a>
-                <button onClick={() => setPreviewUrl(null)} 
-                        className="btn-outline flex-1 sm:flex-none py-2.5 px-6 text-sm font-bold">
-                  إغلاق
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {PreviewModal}
 
       {/* PDF Compression Modal */}
       {compressionModal.isOpen && compressionModal.file && (

@@ -12,7 +12,7 @@ import type { Exam, Attempt, CourseMaterial, Assignment, AssignmentSubmission } 
 import { GraduationCap, LogOut, BookOpen, BarChart2, ClipboardList, Download, Award, Video, FileText, Link as LinkIcon, BookMarked, Globe, Lock, Upload, MessageCircle, Loader2 } from 'lucide-react';
 import { PDFCompressionModal } from '@/components/PDFCompressionModal';
 import Link from 'next/link';
-import { formatDateAr, gradeColor, scoreLabel, getViewerUrl } from '@/lib/utils';
+import { formatDateAr, gradeColor, scoreLabel, getViewerUrl, getDownloadUrl } from '@/lib/utils';
 import { useFilePreview, FilePreviewModal } from '@/components/FilePreviewModal';
 
 export default function StudentPortal() {
@@ -440,10 +440,10 @@ export default function StudentPortal() {
                               </button>
                             )}
                             {(material.additionalLinks || []).map((lnk: any, i: number) => (
-                              <a key={i} href={getViewerUrl(lnk.url)} target="_blank" rel="noopener noreferrer" 
+                              <button key={i} onClick={() => openPreview(lnk.url, lnk.label || 'رابط إضافي')}
                                 className="text-xs text-blue-400 hover:underline flex items-center gap-1">
                                 <LinkIcon size={10} /> {lnk.label}
-                              </a>
+                              </button>
                             ))}
                           </div>
                           
@@ -479,17 +479,30 @@ export default function StudentPortal() {
                         </div>
 
                         {(material.url || material.fileUrl) && (
-                          <a 
-                            href={material.type === 'pdf' ? getViewerUrl(material.url || material.fileUrl) : (material.url || material.fileUrl)} 
-                            target="_blank" 
-                            rel="noopener noreferrer" 
-                            className="btn-outline border-white/10 text-white/70 hover:text-white hover:border-gold px-4 py-2 text-xs h-auto flex-shrink-0"
-                          >
-                            {material.type === 'pdf' ? 'عرض الملف' : 
-                             material.type === 'image' ? 'عرض الصورة' : 
-                             material.type === 'video' ? 'مشاهدة' : 
-                             material.type === 'file' ? 'تحميل الملف' : 'فتح الرابط'}
-                          </a>
+                          <div className="flex gap-2">
+                            <button 
+                              onClick={() => openPreview((material.url || material.fileUrl)!, material.title)}
+                              className="btn-outline border-white/10 text-white/70 hover:text-white hover:border-gold px-4 py-2 text-xs h-auto flex-shrink-0"
+                            >
+                              {material.type === 'pdf' ? 'عرض الملف' : 
+                               material.type === 'image' ? 'عرض الصورة' : 
+                               material.type === 'video' ? 'مشاهدة' : 
+                               material.type === 'file' ? 'عرض الملف' : 'فتح الرابط'}
+                            </button>
+                            {(material.type === 'pdf' || material.type === 'file' || material.type === 'image') && (
+                              <a 
+                                href={getDownloadUrl((material.url || material.fileUrl)!, material.title)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                download={`${material.title}${material.type === 'pdf' ? '.pdf' : ''}`}
+                                className="btn-gold px-3 py-2 text-xs flex items-center justify-center gap-1.5 h-auto flex-shrink-0"
+                                title="تحميل الملف"
+                              >
+                                <Download size={14} />
+                                <span className="hidden sm:inline">تحميل</span>
+                              </a>
+                            )}
+                          </div>
                         )}
                       </div>
                     ))}
@@ -707,29 +720,33 @@ export default function StudentPortal() {
               const essayPoints = att.essayAnswers?.reduce((sum, ea) => sum + (ea.score || 0), 0) || 0;
               const totalPoints = att.mcqTotal + (att.essayAnswers?.reduce((sum, ea) => sum + (ea.maxScore || 0), 0) || 0);
               const rawScore = Math.round((mcqPoints + essayPoints) * 10) / 10;
+              
+              const isPendingEssays = att.essayAnswers?.some(ea => ea.pending) || false;
 
               return (
                 <div key={att.id} className="card-base p-4 flex items-center justify-between gap-4">
                   <div className="flex items-center gap-4 flex-1 min-w-0">
                     <div className="w-16 h-16 rounded-full flex flex-col items-center justify-center flex-shrink-0"
                       style={{
-                        border: `3px solid ${gradeColor(scorePercent, passScore)}`,
-                        background: `rgba(${scorePercent >= passScore ? '16,185,129' : '239,68,68'},0.1)`,
+                        border: `3px solid ${isPendingEssays ? 'var(--accent)' : gradeColor(scorePercent, passScore)}`,
+                        background: `rgba(${isPendingEssays ? '124,58,237' : (scorePercent >= passScore ? '16,185,129' : '239,68,68')},0.1)`,
                       }}>
-                      <span className="font-cairo font-black text-sm" style={{ color: gradeColor(scorePercent, passScore) }}>{rawScore} / {totalPoints}</span>
+                      <span className="font-cairo font-black text-[10px] text-center" style={{ color: isPendingEssays ? 'var(--accent)' : gradeColor(scorePercent, passScore) }}>
+                        {isPendingEssays ? 'قيد التصحيح' : `${rawScore} / ${totalPoints}`}
+                      </span>
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="font-bold text-sm truncate">{att.examTitle}</div>
                       <div className="flex items-center gap-2 mt-1">
-                        <span className={`badge ${att.passed ? 'badge-green' : 'badge-red'}`}>
-                          {att.passed ? '✅ ناجح' : '❌ راسب'}
+                        <span className={`badge ${isPendingEssays ? 'badge-purple' : (att.passed ? 'badge-green' : 'badge-red')}`}>
+                          {isPendingEssays ? '📝 بانتظار المقالي' : (att.passed ? '✅ ناجح' : '❌ راسب')}
                         </span>
                         <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
                           {att.submittedAt ? formatDateAr(att.submittedAt) : ''}
                         </span>
                       </div>
                       <div className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
-                        {att.mcqTotal > 0 && `MCQ: ${Math.round(mcqPoints*10)/10} / ${att.mcqTotal}`} | {scoreLabel(scorePercent)}
+                        {isPendingEssays ? 'سيتم إظهار النتيجة فور التصحيح' : `${att.mcqTotal > 0 ? `MCQ: ${Math.round(mcqPoints*10)/10} / ${att.mcqTotal} | ` : ''}${scoreLabel(scorePercent)}`}
                       </div>
                     </div>
                   </div>

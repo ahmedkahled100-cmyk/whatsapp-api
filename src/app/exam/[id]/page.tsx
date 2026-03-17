@@ -9,10 +9,9 @@ import { getExam, getStudentByCode, saveAttempt, getAttemptsByStudent, uploadFil
 import { shuffleArray, generateId, formatTime, gradeColor, scoreLabel, getViewerUrl } from '@/lib/utils';
 import { showToast } from '@/lib/toast';
 import imageCompression from 'browser-image-compression';
-import { PDFDocument } from 'pdf-lib';
+import { compressPDFWithILovePDF } from '@/lib/ilovepdf-client';
 
-
-import { Clock, CheckCircle, XCircle, AlertTriangle, User, ArrowLeft, ArrowRight, Send, Upload, FileText, Image as ImageIcon, X, AlertCircle, Eye } from 'lucide-react';
+import { Clock, CheckCircle, XCircle, AlertTriangle, User, ArrowLeft, ArrowRight, Send, Upload, FileText, Image as ImageIcon, X, AlertCircle, Eye, Loader2 } from 'lucide-react';
 import { useFilePreview, FilePreviewModal } from '@/components/FilePreviewModal';
 import type { Exam, Question, Attempt, EssayAnswer } from '@/types';
 
@@ -24,6 +23,7 @@ export default function ExamPage() {
   const examId = params.id as string;
 
   const { student, setStudent, answers, setAnswer, essayAnswers, setEssayAnswer, timeLeft, setTimeLeft } = useStudentStore();
+  const { openPreview, PreviewModal } = useFilePreview();
 
   const [phase, setPhase] = useState<Phase>('loading');
   const [exam, setExam] = useState<Exam | null>(null);
@@ -421,6 +421,7 @@ export default function ExamPage() {
                       ans={essayAnswers[q.id]} 
                       setEssayAnswer={setEssayAnswer}
                       filePickerOpenRef={filePickerOpenRef}
+                      openPreview={openPreview}
                     />
                   )}
                 </div>
@@ -473,6 +474,7 @@ export default function ExamPage() {
             )}
           </div>
         </div>
+        {PreviewModal}
       </div>
     );
   }
@@ -489,19 +491,21 @@ export default function ExamPage() {
           
           <div className="w-32 h-32 sm:w-40 sm:h-40 rounded-full flex flex-col items-center justify-center mx-auto mb-6 relative z-10"
             style={{
-              border: `6px solid ${gradeColor(score, exam.passScore)}`,
-              background: `rgba(${passed ? '16,185,129' : '239,68,68'},0.1)`,
-              boxShadow: `0 0 50px rgba(${passed ? '16,185,129' : '239,68,68'},0.3)`,
+              border: `6px solid ${isEssayPresent ? 'var(--accent)' : gradeColor(score, exam.passScore)}`,
+              background: `rgba(${isEssayPresent ? '124,58,237' : (passed ? '16,185,129' : '239,68,68')},0.1)`,
+              boxShadow: `0 0 50px rgba(${isEssayPresent ? '124,58,237' : (passed ? '16,185,129' : '239,68,68')},0.3)`,
             }}>
-            <span className="font-cairo font-black text-4xl sm:text-5xl" style={{ color: gradeColor(score, exam.passScore) }}>{score}%</span>
-            <span className="text-xs sm:text-sm mt-1 sm:mt-2 text-muted font-bold">{scoreLabel(score)}</span>
+            <span className="font-cairo font-black text-2xl sm:text-3xl" style={{ color: isEssayPresent ? 'var(--accent)' : gradeColor(score, exam.passScore) }}>
+              {isEssayPresent ? 'قيد التصحيح' : `${score}%`}
+            </span>
+            <span className="text-[10px] sm:text-xs mt-1 sm:mt-2 text-muted font-bold">{isEssayPresent ? 'بانتظار المقالي' : scoreLabel(score)}</span>
           </div>
 
-          <div className="text-4xl sm:text-5xl mb-3">{passed ? '🏆' : '😔'}</div>
-          <h2 className="font-cairo font-black text-2xl sm:text-3xl mb-2" style={{ color: passed ? 'var(--green)' : 'var(--red)' }}>
-            {passed ? 'مبروك! ناجح' : 'للأسف! راسب'}
+          <div className="text-4xl sm:text-5xl mb-3">{isEssayPresent ? '📝' : (passed ? '🏆' : '😔')}</div>
+          <h2 className="font-cairo font-black text-2xl sm:text-3xl mb-2" style={{ color: isEssayPresent ? 'var(--accent)' : (passed ? 'var(--green)' : 'var(--red)') }}>
+            {isEssayPresent ? 'تم تسليم الإجابات' : (passed ? 'مبروك! ناجح' : 'للأسف! راسب')}
           </h2>
-          <p className="text-xs sm:text-sm mb-6 text-muted">درجة النجاح: {exam.passScore}%</p>
+          <p className="text-xs sm:text-sm mb-6 text-muted">{isEssayPresent ? 'سيتم إشعارك بالنتيجة النهائية فور التصحيح' : `درجة النجاح: ${exam.passScore}%`}</p>
           
           {isEssayPresent && (
              <div className="mb-6 bg-blue-500/10 border border-blue-500/20 text-blue-300 p-3 rounded-xl text-[11px] sm:text-sm flex items-center gap-2 justify-center">
@@ -512,7 +516,7 @@ export default function ExamPage() {
 
           <div className="grid grid-cols-2 gap-3 mb-8">
             <div className="p-3 sm:p-4 rounded-xl bg-white/5 border border-white/10">
-               <div className="text-xl sm:text-2xl font-cairo font-black gold-text">{result.mcqTotal}</div>
+               <div className="text-xl sm:text-2xl font-cairo font-black text-gold">{result.mcqTotal}</div> {/* Changed gold-text to text-gold for better contrast with black background */}
                <div className="text-[10px] text-muted mt-1 leading-tight">الأسئلة المصححة تلقائياً</div>
             </div>
             {isEssayPresent && (
@@ -527,6 +531,7 @@ export default function ExamPage() {
              العودة للرئيسية
           </button>
         </div>
+        {PreviewModal}
       </div>
     );
 
@@ -541,12 +546,14 @@ interface EssayUploadAreaProps {
   ans: any;
   setEssayAnswer: (id: string, data: { text?: string; fileUrls?: string[] }) => void;
   filePickerOpenRef: React.MutableRefObject<boolean>;
+  openPreview: (url: string, title: string) => void;
 }
 
-const EssayUploadArea = ({ q, ans, setEssayAnswer, filePickerOpenRef }: EssayUploadAreaProps) => {
+const EssayUploadArea = ({ q, ans, setEssayAnswer, filePickerOpenRef, openPreview }: EssayUploadAreaProps) => {
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
-  const { openPreview, PreviewModal } = useFilePreview();
+  const [statusMsg, setStatusMsg] = useState(''); // Added statusMsg state
+  
   const data = ans || { text: '', fileUrls: [] };
   const { text = '', fileUrls = [] } = data;
 
@@ -554,6 +561,7 @@ const EssayUploadArea = ({ q, ans, setEssayAnswer, filePickerOpenRef }: EssayUpl
     if (!e.target.files?.length) return;
     setUploading(true);
     setProgress(0);
+    setStatusMsg('جاري تحضير الملفات...'); // Initial status message
     filePickerOpenRef.current = false;
     
     try {
@@ -578,24 +586,27 @@ const EssayUploadArea = ({ q, ans, setEssayAnswer, filePickerOpenRef }: EssayUpl
           }
         }
 
-        // 2. Basic PDF Optimization (Experimental)
-        if (file.type === 'application/pdf' && file.size > 2 * 1024 * 1024) {
+        // 2. iLovePDF Cloud Compression for PDFs > 10MB
+        if (file.type === 'application/pdf' && file.size > 10 * 1024 * 1024) {
           try {
-            const arrayBuffer = await file.arrayBuffer();
-            const pdfDoc = await PDFDocument.load(arrayBuffer);
-            // Re-saving can sometimes reduce size by stripping unused objects
-            const compressedPdfBytes = await pdfDoc.save();
-            if (compressedPdfBytes.length < file.size) {
-              file = new File([compressedPdfBytes as any], file.name, { type: 'application/pdf' });
+            setStatusMsg('جاري ضغط ملف PDF (خدمة خارجية)...');
+            const { blob } = await compressPDFWithILovePDF(file, (p) => {
+              setProgress(p.progress);
+              setStatusMsg(p.message);
+            });
+            file = new File([blob], file.name, { type: 'application/pdf' });
+          } catch (err: any) {
+            console.error('iLovePDF Error:', err);
+            showToast('تنبيه: فشل الضغط الفائق لملف PDF، سيتم الرفع بالحجم الأصلي إذا كان أقل من 20 ميجا.');
+            if (file.size > 20 * 1024 * 1024) {
+              throw new Error('الملف كبير جداً وفشل الضغط. حاول تصغيره أولاً.');
             }
-          } catch (err) {
-            console.warn('PDF optimization failed', err);
           }
         }
 
-        // 3. Final Size Check (Cloudinary 10MB limit check)
-        if (file.size > 10 * 1024 * 1024) {
-          showToast(`الملف ${file.name} كبير جداً (أقصى حجم 10 ميجابايت). حاول ضغطه أكثر أو رفعه كصور.`);
+        // 3. Final Size Check (Cloudinary limit check)
+        if (file.size > 25 * 1024 * 1024) { // Changed limit to 25MB
+          showToast(`الملف ${file.name} كبير جداً (أقصى حجم 25 ميجابايت). حاول ضغطه أكثر.`);
           continue;
         }
 
@@ -666,7 +677,7 @@ const EssayUploadArea = ({ q, ans, setEssayAnswer, filePickerOpenRef }: EssayUpl
             {/* Background Progress Bar */}
             {uploading && (
               <div 
-                className="absolute inset-0 bg-gold/10 transition-all duration-300 origin-right"
+                className="absolute inset-x-0 bottom-0 bg-gold/20 transition-all duration-300 h-1"
                 style={{ width: `${progress}%` }}
               />
             )}
@@ -680,9 +691,12 @@ const EssayUploadArea = ({ q, ans, setEssayAnswer, filePickerOpenRef }: EssayUpl
               disabled={uploading}
             />
           </label>
-          <p className="text-[10px] text-center opacity-60">
-            الحد الأقصى للملف الواحد: 10 ميجا | يتم ضغط الصور تلقائياً لتوفير المساحة
-          </p>
+          <div className="flex flex-col items-center gap-1">
+            {statusMsg && <p className="text-[10px] text-gold animate-pulse font-bold">{statusMsg}</p>}
+            <p className="text-[10px] text-center opacity-60">
+              الحد الأقصى للملف الواحد: 25 ميجا | يتم ضغط الصور والـ PDF تلقائياً
+            </p>
+          </div>
         </div>
       )}
 
@@ -715,9 +729,6 @@ const EssayUploadArea = ({ q, ans, setEssayAnswer, filePickerOpenRef }: EssayUpl
           })}
         </div>
       )}
-
-      {/* Preview Modal */}
-      {PreviewModal}
     </div>
   );
 };

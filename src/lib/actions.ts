@@ -27,29 +27,38 @@ export async function compressAndUploadPDFAction(formData: FormData) {
   try {
     const file = formData.get('file') as File;
     const folder = formData.get('folder') as string || 'an-academy';
+    const originalFileName = formData.get('fileName') as string || file.name || 'document.pdf';
     
     if (!file) throw new Error('Missing file');
 
     // Log start of process
-    console.log('[compressAndUploadPDFAction] Starting PDF compression, file size:', file.size);
+    console.log('[compressAndUploadPDFAction] Starting PDF compression:', originalFileName, 'size:', file.size);
 
     // 1. Convert File to Buffer
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
     // 2. Compress with iLovePDF (Server-side)
-    // This happens BEFORE any upload to Cloudinary
     console.log('[compressAndUploadPDFAction] Compressing with iLovePDF...');
     const compressedBuffer = await ILovePDFClient.compress(buffer);
     console.log('[compressAndUploadPDFAction] Compression complete, new size:', compressedBuffer.length);
     
     // 3. Upload the compressed buffer to Cloudinary
     console.log('[compressAndUploadPDFAction] Uploading to Cloudinary...');
+    
+    // Create a safe public_id from the original name
+    const nameWithoutExt = originalFileName.replace(/\.[^/.]+$/, "").replace(/[^a-z0-9]/gi, '_').toLowerCase();
+    const publicId = `${nameWithoutExt}_${Math.random().toString(36).substring(2, 8)}`;
+
     const result: any = await new Promise((resolve, reject) => {
       const uploadStream = cloudinary.uploader.upload_stream(
         { 
           folder, 
-          resource_type: 'auto' 
+          resource_type: 'auto',
+          public_id: publicId,
+          use_filename: true,
+          unique_filename: true,
+          display_name: originalFileName
         },
         (error, result) => {
           if (error) {

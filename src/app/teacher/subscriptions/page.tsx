@@ -5,8 +5,10 @@ import { useState, useMemo } from 'react';
 import { useTeacherStore } from '@/lib/store';
 import { saveStudent, deleteRegistrationRequest } from '@/lib/db';
 import { CreditCard, Search, Calendar, ShieldCheck, Clock, UserX, CheckCircle, XCircle, Copy, AlertCircle, FileText, Image as ImageIcon, X, Download } from 'lucide-react';
+import { showToast } from '@/lib/toast';
 import { formatDateAr, generateCode } from '@/lib/utils';
 import { Student } from '@/types';
+import { useFilePreview } from '@/components/FilePreviewModal';
 
 export default function SubscriptionsPage() {
   const { students, groups, registrationRequests } = useTeacherStore();
@@ -16,7 +18,7 @@ export default function SubscriptionsPage() {
   const [copiedLink, setCopiedLink] = useState(false);
   
   // File Viewer
-  const [previewFile, setPreviewFile] = useState<{ url: string; type: 'image' | 'pdf' } | null>(null);
+  const { openPreview, PreviewModal } = useFilePreview();
 
   const filtered = useMemo(() => {
     return students.filter(s => {
@@ -144,15 +146,8 @@ export default function SubscriptionsPage() {
     setTimeout(() => setCopiedLink(false), 2000);
   };
 
-  const openVFile = (url: string) => {
-    const isImage = url.match(/\.(jpeg|jpg|gif|png)$/i) || url.includes('image%2F') || url.includes('receipts%2F'); // Firebase storage includes encoded slash
-    const isPdf = url.match(/\.pdf$/i) || url.includes('application%2Fpdf');
-    
-    if (isImage || isPdf) {
-      setPreviewFile({ url, type: isPdf ? 'pdf' : 'image' });
-    } else {
-      window.open(url, '_blank');
-    }
+  const openVFile = (url: string, name?: string) => {
+    openPreview(url, name || 'إيصال دفع');
   };
 
   return (
@@ -352,7 +347,7 @@ export default function SubscriptionsPage() {
                           <ImageIcon size={16} className="text-gold" />
                           صورة الإيصال
                         </span>
-                        <button onClick={() => openVFile(req.receiptUrl!)} className="btn-outline text-xs px-3 py-1.5 flex items-center gap-1 border-white/10 hover:border-gold">
+                        <button onClick={() => openVFile(req.receiptUrl!, `إيصال دفع - ${req.name}`)} className="btn-outline text-xs px-3 py-1.5 flex items-center gap-1 border-white/10 hover:border-gold">
                           <FileText size={12} /> عرض صورة الحوالة
                         </button>
                       </div>
@@ -381,33 +376,7 @@ export default function SubscriptionsPage() {
         </div>
       )}
 
-      {/* File Preview Modal */}
-      {previewFile && (
-        <div className="fixed inset-0 z-50 bg-black/90 flex flex-col p-4 animate-fade-in">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-white font-bold text-lg flex items-center gap-2">
-              {previewFile.type === 'image' ? <ImageIcon className="text-gold" /> : <FileText className="text-red-400" />}
-              معاينة المرفق
-            </h3>
-            <div className="flex gap-4">
-              <a href={previewFile.url} target="_blank" rel="noreferrer" download className="btn-gold px-4 py-2 flex items-center gap-2">
-                <Download size={16} /> فتح في نافذة جديدة / تحميل
-              </a>
-              <button onClick={() => setPreviewFile(null)} className="text-gray-400 hover:text-white transition-colors bg-white/10 p-2 rounded-lg">
-                <X size={24} />
-              </button>
-            </div>
-          </div>
-          
-          <div className="flex-1 overflow-auto flex justify-center items-center bg-gray-900 rounded-xl border border-white/10 p-2">
-            {previewFile.type === 'image' ? (
-              <img src={previewFile.url} alt="معاينة" className="max-w-full max-h-full object-contain mx-auto" />
-            ) : (
-              <iframe src={previewFile.url} className="w-full h-full rounded-lg bg-white" title="PDF Preview" />
-            )}
-          </div>
-        </div>
-      )}
+      {PreviewModal}
     </div>
   );
 }

@@ -11,7 +11,7 @@ import {
   LayoutDashboard, PlusCircle, FileText, Users, BookOpen,
   BarChart2, ClipboardList, Calendar, Bot, TrendingUp,
   CreditCard, BookMarked, Settings, LogOut, Bell, Menu, X,
-  GraduationCap, Database, ChevronLeft
+  GraduationCap, Database, ChevronLeft, Zap
 } from 'lucide-react';
 
 const NAV_ITEMS = [
@@ -29,6 +29,7 @@ const NAV_ITEMS = [
   { href: '/teacher/courses', icon: BookMarked, label: 'المناهج', section: 'content' },
   { href: '/teacher/assignments', icon: ClipboardList, label: 'الواجبات', section: 'content' },
   { href: '/teacher/calendar', icon: Calendar, label: 'التقويم', section: 'content' },
+  { href: '/teacher/tools/ilovepdf', icon: Zap, label: 'أدوات iLovePDF', section: 'content' },
   { href: '/teacher/settings', icon: Settings, label: 'الإعدادات', section: 'settings' },
 ];
 

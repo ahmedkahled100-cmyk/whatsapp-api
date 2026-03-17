@@ -6,6 +6,7 @@ import { useTeacherStore } from '@/lib/store';
 import { formatDateAr, gradeColor, scoreLabel } from '@/lib/utils';
 import { Search, Download, Trash2, Filter, MessageCircle, Loader2, Share2, X } from 'lucide-react';
 import { deleteAttempt } from '@/lib/db';
+import { showToast } from '@/lib/toast';
 import html2canvas from 'html2canvas';
 
 export default function ResultsPage() {
@@ -84,7 +85,7 @@ export default function ResultsPage() {
       const html2pdf = (await import('html2pdf.js')).default;
       
       const opt = {
-        margin:       10,
+        margin:       [10, 5, 10, 5] as [number, number, number, number],
         filename:     `نتائج_${examFilter ? exams.find(e => e.id === examFilter)?.title : 'مجمعة'}.pdf`,
         image:        { type: 'jpeg' as const, quality: 0.98 },
         html2canvas:  { scale: 2, useCORS: true, logging: false },
@@ -259,15 +260,15 @@ export default function ResultsPage() {
   };
 
   return (
-    <div className="space-y-5">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <h1 className="text-2xl font-cairo font-black gold-text">📊 النتائج ({filtered.length})</h1>
-        <div className="flex gap-2">
-          <button onClick={exportPDF} disabled={exportingPdf} className="btn-gold text-sm py-2 px-3 flex items-center gap-2">
+    <div className="space-y-6 pb-10">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <h1 className="text-2xl sm:text-3xl font-cairo font-black gold-text">📊 النتائج ({filtered.length})</h1>
+        <div className="flex flex-wrap gap-2">
+          <button onClick={exportPDF} disabled={exportingPdf} className="flex-1 sm:flex-none btn-gold text-xs sm:text-sm py-2 px-3 flex items-center justify-center gap-2">
             {exportingPdf ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />} 
             تصدير PDF
           </button>
-          <button onClick={exportCSV} className="btn-outline text-sm py-2 px-3">
+          <button onClick={exportCSV} className="flex-1 sm:flex-none btn-outline text-xs sm:text-sm py-2 px-3">
              تصدير CSV
           </button>
         </div>
@@ -275,38 +276,44 @@ export default function ResultsPage() {
 
       {/* Stats */}
       {stats && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 xs:grid-cols-3 gap-3">
           {[
-            { label: 'المتوسط (نقاط)', value: stats.rawAvg, color: 'var(--gold)' },
             { label: 'المتوسط (%)', value: `${stats.avg}%`, color: gradeColor(stats.avg, 50) },
             { label: 'نسبة النجاح', value: `${stats.passRate}%`, color: stats.passRate >= 50 ? 'var(--green)' : 'var(--red)' },
           ].map((s, i) => (
-            <div key={i} className="stat-card text-center py-3">
-              <div className="text-2xl font-cairo font-black" style={{ color: s.color }}>{s.value}</div>
-              <div className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>{s.label}</div>
+            <div key={i} className="stat-card text-center py-4 px-2">
+              <div className="text-xl sm:text-2xl font-cairo font-black whitespace-nowrap" style={{ color: s.color }}>{s.value}</div>
+              <div className="text-[10px] sm:text-xs mt-1 font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>{s.label}</div>
             </div>
           ))}
         </div>
       )}
 
       {/* Filters */}
-      <div className="card-base p-4 flex flex-wrap gap-3">
-        <div className="relative flex-1 min-w-40">
-          <Search size={14} className="absolute top-1/2 -translate-y-1/2 right-3 opacity-50" />
+      <div className="card-base p-4 lg:p-5 flex flex-col md:flex-row gap-4">
+        <div className="relative flex-1">
+          <Search size={16} className="absolute top-1/2 -translate-y-1/2 right-4 opacity-50 text-gold" />
           <input type="text" placeholder="بحث بالاسم أو الكود..."
-            value={search} onChange={e => setSearch(e.target.value)} className="input-base pr-11 text-sm" />
+            value={search} onChange={e => setSearch(e.target.value)} className="input-base pr-11 text-sm h-11" />
         </div>
-        <select value={examFilter} onChange={e => setExamFilter(e.target.value)} className="input-base text-sm" style={{ width: 'auto', minWidth: '160px' }}>
-          <option value="">كل الاختبارات</option>
-          {exams.map(e => <option key={e.id} value={e.id}>{e.title}</option>)}
-        </select>
-        <div className="flex gap-1.5">
-          {(['all', 'pass', 'fail'] as const).map(f => (
-            <button key={f} onClick={() => setStatusFilter(f)}
-              className={`text-xs px-3 py-1.5 rounded-lg font-bold transition-all ${statusFilter === f ? 'btn-gold py-1.5' : 'btn-outline py-1.5'}`}>
-              {f === 'all' ? 'الكل' : f === 'pass' ? '✅ ناجح' : '❌ راسب'}
-            </button>
-          ))}
+        
+        <div className="flex flex-col sm:flex-row gap-3">
+          <select value={examFilter} onChange={e => setExamFilter(e.target.value)} className="input-base text-sm h-11 min-w-[180px]">
+            <option value="">كل الاختبارات</option>
+            {exams.map(e => <option key={e.id} value={e.id}>{e.title}</option>)}
+          </select>
+          
+          <div className="flex bg-white/5 p-1 rounded-xl border border-white/5">
+            {(['all', 'pass', 'fail'] as const).map(f => (
+              <button 
+                key={f} 
+                onClick={() => setStatusFilter(f)}
+                className={`flex-1 sm:flex-none text-[10px] sm:text-xs px-3 sm:px-4 py-2 rounded-lg font-bold transition-all whitespace-nowrap ${statusFilter === f ? 'bg-gold text-dark shadow-lg' : 'text-muted hover:text-white'}`}
+              >
+                {f === 'all' ? 'الكل' : f === 'pass' ? '✅ ناجح' : '❌ راسب'}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -317,18 +324,18 @@ export default function ResultsPage() {
           <p style={{ color: 'var(--text-muted)' }}>لا توجد نتائج</p>
         </div>
       ) : (
-        <div className="card-base overflow-hidden">
-          <div className="overflow-x-auto rounded-xl border border-white/5">
-            <table className="w-full text-right min-w-[700px]">
+        <div className="card-base overflow-hidden border border-white/5">
+          <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-gold/20">
+            <table className="w-full text-right min-w-[650px] sm:min-w-[800px]">
               <thead>
-                <tr>
-                  <th>الطالب</th>
-                  <th>الاختبار</th>
-                  <th>النتيجة</th>
-                  <th>MCQ</th>
-                  <th>الحالة</th>
-                  <th>التاريخ</th>
-                  <th>إجراء</th>
+                <tr className="bg-white/5">
+                  <th className="py-4 px-4 text-xs font-bold uppercase tracking-wider">الطالب</th>
+                  <th className="py-4 px-4 text-xs font-bold uppercase tracking-wider hidden md:table-cell">الاختبار</th>
+                  <th className="py-4 px-4 text-xs font-bold uppercase tracking-wider">النتيجة</th>
+                  <th className="py-4 px-4 text-xs font-bold uppercase tracking-wider hidden sm:table-cell">MCQ</th>
+                  <th className="py-4 px-4 text-xs font-bold uppercase tracking-wider">الحالة</th>
+                  <th className="py-4 px-4 text-xs font-bold uppercase tracking-wider hidden lg:table-cell">التاريخ</th>
+                  <th className="py-4 px-4 text-xs font-bold uppercase tracking-wider text-center">إجراء</th>
                 </tr>
               </thead>
               <tbody>
@@ -336,48 +343,56 @@ export default function ResultsPage() {
                   const score = att.finalScore ?? att.mcqScore ?? 0;
                   const exam = exams.find(e => e.id === att.examId);
                   return (
-                    <tr key={att.id}>
-                      <td>
-                        <div className="font-medium text-sm" style={{ color: 'var(--text)' }}>{att.studentName}</div>
-                        <code className="text-xs" style={{ color: 'var(--text-muted)' }}>{att.studentCode}</code>
+                    <tr key={att.id} className="border-t border-white/5 hover:bg-white/[0.02] transition-colors">
+                      <td className="py-4 px-4">
+                        <div className="font-bold text-sm sm:text-base text-white">{att.studentName}</div>
+                        <div className="text-[10px] sm:text-xs font-mono text-gold/60 mt-0.5">{att.studentCode}</div>
+                        <div className="md:hidden text-[10px] text-muted mt-1 truncate max-w-[120px]">{att.examTitle}</div>
                       </td>
-                      <td className="max-w-32 truncate text-sm">{att.examTitle}</td>
-                      <td>
-                        <span className="font-cairo font-black text-base" style={{ color: gradeColor(score, exam?.passScore || 50) }}>
-                          {(() => {
-                            const mcqPoints = att.mcqScore * att.mcqTotal / 100;
-                            const essayPoints = att.essayAnswers?.reduce((sum, ea) => sum + (ea.score || 0), 0) || 0;
-                            const totalPoints = att.mcqTotal + (att.essayAnswers?.reduce((sum, ea) => sum + (ea.maxScore || 0), 0) || 0);
-                            return `${Math.round((mcqPoints + essayPoints)*10)/10} / ${totalPoints}`;
-                          })()}
-                        </span>
-                        <div className="text-xs" style={{ color: 'var(--text-muted)' }}>{score}% — {scoreLabel(score)}</div>
+                      <td className="py-4 px-4 hidden md:table-cell">
+                        <div className="text-sm truncate max-w-[150px]">{att.examTitle}</div>
                       </td>
-                      <td className="text-sm">
+                      <td className="py-4 px-4">
+                        <div className="flex flex-col">
+                          <span className="font-cairo font-black text-sm sm:text-base" style={{ color: gradeColor(score, exam?.passScore || 50) }}>
+                            {(() => {
+                              const mcqPoints = att.mcqScore * att.mcqTotal / 100;
+                              const essayPoints = att.essayAnswers?.reduce((sum, ea) => sum + (ea.score || 0), 0) || 0;
+                              const totalPoints = att.mcqTotal + (att.essayAnswers?.reduce((sum, ea) => sum + (ea.maxScore || 0), 0) || 0);
+                              return `${Math.round((mcqPoints + essayPoints)*10)/10} / ${totalPoints}`;
+                            })()}
+                          </span>
+                          <span className="text-[10px] sm:text-xs font-bold opacity-60">{score}% — {scoreLabel(score)}</span>
+                        </div>
+                      </td>
+                      <td className="py-4 px-4 hidden sm:table-cell text-sm">
                         {att.mcqTotal > 0 ? `${Math.round((att.mcqScore * att.mcqTotal / 100)*10)/10} / ${att.mcqTotal}` : '—'}
                       </td>
-                      <td>
-                        <span className={`badge ${att.passed ? 'badge-green' : 'badge-red'}`}>
+                      <td className="py-4 px-4">
+                        <span className={`badge ${att.passed ? 'badge-green' : 'badge-red'} text-[10px] sm:text-xs py-1 px-2`}>
                           {att.passed ? '✅ ناجح' : '❌ راسب'}
                         </span>
+                        <div className="lg:hidden text-[10px] text-muted mt-1">{att.submittedAt ? formatDateAr(att.submittedAt, false) : ''}</div>
                       </td>
-                      <td className="text-xs">{att.submittedAt ? formatDateAr(att.submittedAt) : '—'}</td>
-                      <td>
-                        <div className="flex gap-2 items-center">
+                      <td className="py-4 px-4 hidden lg:table-cell text-xs text-muted">
+                        {att.submittedAt ? formatDateAr(att.submittedAt) : '—'}
+                      </td>
+                      <td className="py-4 px-4">
+                        <div className="flex flex-col xs:flex-row gap-2 items-center justify-center">
                           <button 
                             onClick={() => handleWhatsApp(att)} 
                             disabled={generatingWA === att.id}
                             title="رسالة واتس آب ذكية لولي الأمر"
-                            className="bg-green-500/10 text-green-500 hover:bg-green-500/20 text-xs p-1.5 rounded transition-colors disabled:opacity-50"
+                            className="w-full xs:w-auto p-2 rounded-xl bg-green-500/10 text-green-500 hover:bg-green-500/20 border border-green-500/10 transition-all disabled:opacity-50"
                           >
-                            {generatingWA === att.id ? <Loader2 size={13} className="animate-spin" /> : <MessageCircle size={13} />}
+                            {generatingWA === att.id ? <Loader2 size={16} className="animate-spin mx-auto" /> : <MessageCircle size={16} className="mx-auto" />}
                           </button>
                           
                           <button onClick={async () => {
                             if (!confirm('سيتم مسح هذه النتيجة والسماح للطالب بإعادة المحاولة. هل أنت متأكد؟')) return;
                             await deleteAttempt(att.id);
-                          }} className="btn-danger text-xs py-1 px-2 flex items-center gap-1" title="إلغاء المحاولة لإعادة الامتحان">
-                            <Trash2 size={11} /> إعادة محاولة
+                          }} className="w-full xs:w-auto p-2 rounded-xl bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/10 transition-all group" title="إعادة محاولة">
+                            <Trash2 size={16} className="mx-auto" />
                           </button>
                         </div>
                       </td>
@@ -392,7 +407,7 @@ export default function ResultsPage() {
 
       {/* Print-only Layout - Used by html2pdf */}
       <div className="absolute top-[200vh] left-[-9999px]">
-        <div id="report-container" className="relative bg-white p-8 text-black font-cairo" style={{ direction: 'rtl', width: '210mm', minHeight: '297mm' }}>
+        <div id="report-container" className="relative bg-white p-6 text-black font-cairo" style={{ direction: 'rtl', width: '200mm', minHeight: '290mm' }}>
         
         {/* Semi-transparent Watermark */}
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0 overflow-hidden" style={{ top: '20vh', opacity: 0.04 }}>
@@ -402,48 +417,40 @@ export default function ResultsPage() {
         {/* Header with Logo */}
         <div className="relative z-10 w-full mb-6 pb-6" style={{ borderBottom: '2px solid #d4af37' }}>
           <div className="text-center mb-4">
-            <img 
-              src={settings?.logoUrl || '/logo.png'} 
-              alt="Logo" 
-              className="w-28 h-28 object-contain mx-auto mb-3" 
-              crossOrigin="anonymous" 
-              onError={(e) => { e.currentTarget.style.display = 'none'; }}
-            />
-            <h1 className="text-3xl font-black mb-1" style={{ color: '#1A1A25' }}>{settings?.acadName || 'A-N Academy'}</h1>
-            <h2 className="text-xl font-bold" style={{ color: '#b8860b' }}>تقرير نتائج الطلاب</h2>
+            <h1 className="text-2xl font-black mb-0.5" style={{ color: '#1A1A25' }}>{settings?.acadName || 'A-N Academy'}</h1>
+            <h2 className="text-lg font-bold" style={{ color: '#b8860b' }}>تقرير نتائج الطلاب</h2>
           </div>
-          <div className="flex justify-center gap-8 mt-4 text-sm font-medium text-gray-700 bg-gray-50 py-2 rounded-lg">
+          <div className="flex justify-center gap-6 mt-3 text-xs font-medium text-gray-700 bg-gray-50 py-1.5 rounded-lg">
             <p><span className="font-bold text-gray-900">الاختبار:</span> {examFilter ? exams.find(e => e.id === examFilter)?.title : 'جميع الاختبارات'}</p>
             <p><span className="font-bold text-gray-900">تاريخ الإصدار:</span> {new Date().toLocaleDateString('ar-EG')}</p>
           </div>
         </div>
 
         {/* Stats Boxes - 4 Column Grid */}
-        <div className="relative z-10 grid grid-cols-4 gap-4 mb-8">
+        <div className="relative z-10 grid grid-cols-3 gap-3 mb-6">
           {[
             { label: 'عدد الطلاب', val: filtered.length, color: '#3b82f6' },
             { label: 'متوسط الدرجات', val: `${stats?.avg || 0}%`, color: '#f59e0b' },
             { label: 'نسبة النجاح', val: `${stats?.passRate || 0}%`, color: '#10b981' },
-            { label: 'متوسط النقاط', val: stats?.rawAvg || '0', color: '#6366f1' }
           ].map((s, i) => (
-             <div key={i} className="p-4 rounded-xl text-center shadow-sm" style={{ background: '#fff', border: '1px solid #e2e8f0', borderBottom: `3px solid ${s.color}` }}>
-               <div className="text-gray-500 text-sm font-bold mb-1">{s.label}</div>
-               <div className="text-2xl font-black" style={{ color: '#1f2937' }}>{s.val}</div>
+             <div key={i} className="p-3 rounded-xl text-center shadow-sm" style={{ background: '#fff', border: '1px solid #e2e8f0', borderBottom: `3px solid ${s.color}` }}>
+               <div className="text-gray-500 text-[10px] font-bold mb-0.5">{s.label}</div>
+               <div className="text-xl font-black" style={{ color: '#1f2937' }}>{s.val}</div>
             </div>
           ))}
         </div>
 
         {/* Results Table */}
         <div className="relative z-10 w-full overflow-hidden rounded-xl shadow-sm" style={{ border: '1px solid #e2e8f0' }}>
-          <table className="w-full border-collapse bg-white text-right" style={{ tableLayout: 'auto' }}>
+          <table className="w-full border-collapse bg-white text-right" style={{ tableLayout: 'fixed' }}>
             <thead>
               <tr style={{ background: '#1A1A25', color: '#ffffff' }}>
-                <th className="p-3 font-bold text-xs border-b border-gray-300 whitespace-nowrap" style={{ width: '1%', minWidth: '60px' }}>كود الطالب</th>
-                <th className="p-3 font-bold text-xs border-b border-gray-300" style={{ minWidth: '120px' }}>اسم الطالب</th>
-                <th className="p-3 font-bold text-xs border-b border-gray-300" style={{ minWidth: '140px' }}>الاختبار</th>
-                <th className="p-3 text-center font-bold text-xs border-b border-gray-300 whitespace-nowrap" style={{ width: '1%', minWidth: '80px' }}>الدرجة</th>
-                <th className="p-3 text-center font-bold text-xs border-b border-gray-300 whitespace-nowrap" style={{ width: '1%', minWidth: '60px' }}>النسبة</th>
-                <th className="p-3 text-center font-bold text-xs border-b border-gray-300 whitespace-nowrap" style={{ width: '1%', minWidth: '70px' }}>الحالة</th>
+                <th className="p-2.5 font-bold text-[9px] border-b border-gray-300" style={{ width: '12%' }}>الكود</th>
+                <th className="p-2.5 font-bold text-[9px] border-b border-gray-300" style={{ width: '40%' }}>اسم الطالب</th>
+                <th className="p-2.5 font-bold text-[9px] border-b border-gray-300" style={{ width: '18%' }}>الاختبار</th>
+                <th className="p-2.5 text-center font-bold text-[9px] border-b border-gray-300" style={{ width: '10%' }}>الدرجة</th>
+                <th className="p-2.5 text-center font-bold text-[9px] border-b border-gray-300" style={{ width: '10%' }}>النسبة</th>
+                <th className="p-2.5 text-center font-bold text-[9px] border-b border-gray-300" style={{ width: '10%' }}>الحالة</th>
               </tr>
             </thead>
             <tbody>
@@ -455,19 +462,19 @@ export default function ResultsPage() {
                 
                 return (
                   <tr key={att.id} style={{ background: isEven ? '#ffffff' : '#f8fafc' }}>
-                    <td className="p-3 font-mono text-xs text-gray-500 border-b border-gray-100 whitespace-nowrap">{att.studentCode}</td>
-                    <td className="p-3 font-bold text-sm text-gray-900 border-b border-gray-100 leading-tight">{att.studentName}</td>
-                    <td className="p-3 text-sm text-gray-700 border-b border-gray-100 leading-tight">{att.examTitle}</td>
-                    <td className="p-3 text-center font-bold text-xs border-b border-gray-100 whitespace-nowrap" style={{ color: '#b8860b' }}>
-                      <span dir="ltr">{Math.round((mcqP + essayP)*10)/10} / {totalP}</span>
+                    <td className="p-2.5 font-mono text-[9px] text-gray-500 border-b border-gray-100 truncate">{att.studentCode}</td>
+                    <td className="p-2.5 font-bold text-[10px] text-gray-900 border-b border-gray-100 leading-tight ">{att.studentName}</td>
+                    <td className="p-2.5 text-[9px] text-gray-700 border-b border-gray-100 leading-tight ">{att.examTitle}</td>
+                    <td className="p-2.5 text-center font-bold text-[9px] border-b border-gray-100" style={{ color: '#b8860b' }}>
+                      <span dir="ltr">{Math.round((mcqP + essayP)*10)/10}/{totalP}</span>
                     </td>
-                    <td className="p-3 text-center font-bold text-xs border-b border-gray-100 whitespace-nowrap" dir="ltr">{att.finalScore ?? att.mcqScore}%</td>
-                    <td className="p-3 text-center border-b border-gray-100 whitespace-nowrap">
+                    <td className="p-2.5 text-center font-bold text-[10px] border-b border-gray-100" dir="ltr">{att.finalScore ?? att.mcqScore}%</td>
+                    <td className="p-2.5 text-center border-b border-gray-100">
                        <span style={{ 
                          color: att.passed ? '#059669' : '#dc2626', 
                          fontWeight: 'bold',
-                         fontSize: '11px',
-                         padding: '3px 8px',
+                         fontSize: '8px',
+                         padding: '2px 6px',
                          borderRadius: '4px',
                          background: att.passed ? '#d1fae5' : '#fee2e2',
                          display: 'inline-block'

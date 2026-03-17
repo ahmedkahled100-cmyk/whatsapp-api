@@ -341,6 +341,7 @@ export const uploadFileToStorage = async (
     // Ensure we send it as a File with a name if it's a Blob
     const fileForAction = fileToUpload instanceof File ? fileToUpload : new File([fileToUpload], originalName, { type: fileType });
     formData.append('file', fileForAction);
+    formData.append('fileName', originalName);
     formData.append('folder', path.split('/')[0] || 'an-academy');
 
     try {
@@ -390,9 +391,10 @@ export const uploadFileToStorage = async (
     throw new Error('حجم الملف يتجاوز الحد المسموح به (100 ميجابايت). يرجى ضغط الملف أو رفعه على Google Drive ومشاركة الرابط.');
   }
 
-  // Obfuscate filename for security
+  // Preserve original name as much as possible for Cloudinary public_id
   const fileExt = originalName.split('.').pop() || 'file';
-  const public_id = `${Math.random().toString(36).substring(2, 15)}_${Date.now()}`;
+  const nameBase = originalName.replace(/\.[^/.]+$/, "").replace(/[^a-z0-9]/gi, '_').toLowerCase();
+  const public_id = `${nameBase}_${Math.random().toString(36).substring(2, 10)}_${Date.now()}`;
   const obfuscatedName = `${public_id}.${fileExt}`;
   const folder = path.split('/')[0] || 'an-academy';
 

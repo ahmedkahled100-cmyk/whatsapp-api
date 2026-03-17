@@ -13,6 +13,7 @@ interface FilePreviewModalProps {
 export function FilePreviewModal({ url, fileName, onClose }: FilePreviewModalProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
+  const [key, setKey] = useState(0); // For reloading
 
   useEffect(() => {
     // Prevent body scroll when modal is open
@@ -32,15 +33,32 @@ export function FilePreviewModal({ url, fileName, onClose }: FilePreviewModalPro
   const cleanUrl = url.replace(/\s+/g, '');
   
   // For Cloudinary PDFs, ensure proper access
-  const getDirectUrl = () => {
+  const getDirectUrl = (forDownload = false) => {
     // If it's a raw resource, don't try to strip transformations
     const isRaw = cleanUrl.includes('/raw/upload/') || cleanUrl.includes('/files/upload/');
-    if (isRaw) return cleanUrl;
+    
+    let processedUrl = cleanUrl;
+    
+    if (!isRaw) {
+      processedUrl = processedUrl.replace('/upload/fl_attachment:false/', '/upload/').replace('/upload/fl_attachment/', '/upload/');
+      
+      // If downloading, we can try to force attachment with filename if it's Cloudinary
+      if (forDownload && processedUrl.includes('cloudinary.com') && fileName) {
+        // Remove existing flags and add fl_attachment
+        const safeName = fileName.replace(/[/\\?%*:|"<>]/g, '_');
+        processedUrl = processedUrl.replace('/upload/', `/upload/fl_attachment:${encodeURIComponent(safeName)}/`);
+      }
+    }
 
-    return cleanUrl.replace('/upload/fl_attachment:false/', '/upload/').replace('/upload/fl_attachment/', '/upload/');
+    return processedUrl;
   };
 
-  const directUrl = getDirectUrl();
+  const directUrl = getDirectUrl(false);
+  const downloadUrl = getDirectUrl(true);
+  const googleViewerUrl = getViewerUrl(directUrl);
+
+  // Ensure fileName has .pdf extension if it's a PDF
+  const displayFileName = fileName ? (isPdf && !fileName.toLowerCase().endsWith('.pdf') ? `${fileName}.pdf` : fileName) : 'file.pdf';
 
   const getFileIcon = () => {
     if (isImage) return <ImageIcon className="text-blue-400" size={24} />;
@@ -56,8 +74,11 @@ export function FilePreviewModal({ url, fileName, onClose }: FilePreviewModalPro
     return 'ملف';
   };
 
-  // For images, show directly. For PDFs use direct iframe.
-  // Other files will show an error with download option
+  const reload = () => {
+    setIsLoading(true);
+    setLoadError(false);
+    setKey(prev => prev + 1);
+  };
 
   return (
     <div 
@@ -65,49 +86,44 @@ export function FilePreviewModal({ url, fileName, onClose }: FilePreviewModalPro
       dir="rtl"
     >
       {/* Header */}
-      <div className="flex justify-between items-center px-4 py-3 bg-white/5 border-b border-white/10">
+      <div className="flex flex-col md:flex-row justify-between items-stretch md:items-center px-4 py-3 bg-white/5 border-b border-white/10 gap-3">
         <div className="flex items-center gap-3">
           {getFileIcon()}
-          <div>
+          <div className="min-w-0">
             <h3 className="text-white font-bold text-sm md:text-base">
               معاينة {getFileTypeLabel()}
             </h3>
             {fileName && (
               <p className="text-gray-400 text-xs truncate max-w-[200px] md:max-w-md">
-                {fileName}
+                {displayFileName}
               </p>
             )}
           </div>
         </div>
         
-        <div className="flex items-center gap-2">
-          {/* Download Button */}
+        <div className="flex flex-wrap items-center gap-2">
+          <button 
+            onClick={reload}
+            className="p-2 bg-white/5 text-white rounded-lg hover:bg-white/10 transition-all border border-white/5"
+            title="إعادة تحميل"
+          >
+            <ExternalLink size={16} />
+          </button>
+
           <a 
-            href={directUrl} 
+            href={downloadUrl} 
             target="_blank" 
             rel="noopener noreferrer" 
-            download
+            download={displayFileName}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-gold text-dark text-xs md:text-sm font-bold rounded-lg hover:brightness-110 transition-all"
           >
             <Download size={16} />
             <span className="hidden sm:inline">تحميل</span>
           </a>
           
-          {/* Open in New Tab */}
-          <a 
-            href={directUrl} 
-            target="_blank" 
-            rel="noopener noreferrer"
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-white/10 text-white text-xs md:text-sm rounded-lg hover:bg-white/20 transition-all"
-            title="فتح في نافذة جديدة"
-          >
-            <ExternalLink size={16} />
-          </a>
-          
-          {/* Close Button */}
           <button 
             onClick={onClose}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/20 text-red-400 text-xs md:text-sm rounded-lg hover:bg-red-500/30 transition-all"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/20 text-red-400 text-xs md:text-sm rounded-lg hover:bg-red-500/30 transition-all border border-red-500/10"
           >
             <X size={18} />
             <span className="hidden sm:inline">إغلاق</span>
@@ -117,32 +133,51 @@ export function FilePreviewModal({ url, fileName, onClose }: FilePreviewModalPro
 
       {/* Content */}
       <div className="flex-1 overflow-hidden bg-gray-900 relative">
-        {isLoading && !isImage && (
-          <div className="absolute inset-0 flex items-center justify-center">
+        {isLoading && (
+          <div className="absolute inset-0 flex items-center justify-center z-10 bg-gray-900">
             <div className="text-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gold mx-auto mb-4"></div>
-              <p className="text-gray-400">جاري تحميل الملف...</p>
+              <div className="relative w-16 h-16 mx-auto mb-4">
+                <div className="absolute inset-0 border-4 border-gold/20 rounded-full"></div>
+                <div className="absolute inset-0 border-4 border-gold border-t-transparent rounded-full animate-spin"></div>
+              </div>
+              <p className="text-gray-400 font-medium">جاري معالجة المحتوى...</p>
+              <p className="text-xs text-gray-500 mt-2">يرجى الانتظار قليلاً أو محاولة إعادة التحميل</p>
             </div>
           </div>
         )}
 
         {loadError && (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="text-center p-6 bg-white/5 rounded-xl max-w-md">
-              <AlertCircle className="mx-auto mb-4 text-red-400" size={48} />
-              <p className="text-white font-bold mb-2">تعذر عرض الملف</p>
-              <p className="text-gray-400 text-sm mb-4">
-                قد يكون الملف كبيراً جداً أو غير متاح للعرض المباشر
+          <div className="absolute inset-0 flex items-center justify-center z-20 bg-gray-900 p-6">
+            <div className="text-center p-8 bg-white/5 rounded-2xl border border-white/10 max-w-md shadow-2xl">
+              <AlertCircle className="mx-auto mb-4 text-red-400" size={64} />
+              <h4 className="text-white font-black text-xl mb-2">عذراً، لم نتمكن من عرض الملف</h4>
+              <p className="text-gray-400 text-sm mb-6 leading-relaxed">
+                قد يكون الملف كبيراً جداً أو يحتاج للمعاينة في صفحة مستقلة أو عبر التحميل المباشر.
               </p>
-              <a 
-                href={directUrl} 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="btn-gold inline-flex items-center gap-2 px-4 py-2"
-              >
-                <Download size={16} />
-                تحميل الملف مباشرة
-              </a>
+              <div className="flex flex-col gap-3">
+                <a 
+                  href={directUrl} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="btn-gold flex items-center justify-center gap-2 py-3"
+                >
+                  <ExternalLink size={18} /> فتح في صفحة مستقلة
+                </a>
+                <a 
+                  href={downloadUrl} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="btn-outline flex items-center justify-center gap-2 py-3 border-white/10"
+                >
+                  <Download size={18} /> تحميل الملف الآن
+                </a>
+                <button 
+                  onClick={reload}
+                  className="text-gold text-xs font-bold hover:underline mt-2"
+                >
+                  إعادة محاولة التحميل
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -150,53 +185,68 @@ export function FilePreviewModal({ url, fileName, onClose }: FilePreviewModalPro
         {/* Viewer */}
         <div className="w-full h-full">
           {isPdf ? (
-            <div className="w-full h-full">
+            <div className="w-full h-full bg-white">
               <iframe
-                src={getViewerUrl(directUrl)}
+                key={key}
+                src={googleViewerUrl}
                 className="w-full h-full border-0"
                 title="PDF Preview"
-                onLoad={() => setIsLoading(false)}
+                onLoad={() => {
+                  // Wait a bit to ensure it actually rendered (especially for Google viewer)
+                  setTimeout(() => setIsLoading(false), 800);
+                }}
                 onError={() => {
                   setIsLoading(false);
                   setLoadError(true);
                 }}
-                // Allow a bit more freedom for Google Viewer
                 sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-top-navigation"
               />
             </div>
           ) : isImage ? (
             <div className="w-full h-full flex items-center justify-center p-4">
               <img 
+                key={key}
                 src={directUrl} 
                 alt={fileName || 'معاينة الصورة'} 
-                className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
+                className="max-w-full max-h-full object-contain rounded-lg shadow-2xl animate-scale-in"
                 onLoad={() => setIsLoading(false)}
-                onError={() => setLoadError(true)}
+                onError={() => {
+                  setIsLoading(false);
+                  setLoadError(true);
+                }}
               />
             </div>
           ) : isVideo ? (
             <div className="w-full h-full flex items-center justify-center p-4">
               <video 
+                key={key}
                 src={directUrl} 
                 controls 
                 className="max-w-full max-h-full rounded-lg shadow-2xl"
                 onLoadedData={() => setIsLoading(false)}
-                onError={() => setLoadError(true)}
+                onError={() => {
+                  setIsLoading(false);
+                  setLoadError(true);
+                }}
               >
                 المتصفح لا يدعم تشغيل هذا الفيديو
               </video>
             </div>
           ) : isAudio ? (
             <div className="w-full h-full flex items-center justify-center p-4">
-              <div className="bg-white/5 p-8 rounded-xl text-center">
-                <FileText className="mx-auto mb-4 text-gold" size={64} />
+              <div className="bg-white/5 p-8 rounded-xl text-center border border-white/10">
+                <FileText className="mx-auto mb-4 text-gold animate-bounce-subtle" size={64} />
                 <p className="text-white font-bold mb-4">ملف صوتي</p>
                 <audio 
+                  key={key}
                   src={directUrl} 
                   controls 
                   className="w-full max-w-md"
                   onLoadedData={() => setIsLoading(false)}
-                  onError={() => setLoadError(true)}
+                  onError={() => {
+                    setIsLoading(false);
+                    setLoadError(true);
+                  }}
                 >
                   المتصفح لا يدعم تشغيل هذا الملف الصوتي
                 </audio>
@@ -204,21 +254,23 @@ export function FilePreviewModal({ url, fileName, onClose }: FilePreviewModalPro
             </div>
           ) : (
             <div className="w-full h-full flex items-center justify-center p-4">
-              <div className="text-center p-6 bg-white/5 rounded-xl">
-                <FileText className="mx-auto mb-4 text-gold" size={64} />
-                <p className="text-white font-bold mb-2">لا يمكن عرض هذا الملف مباشرة</p>
-                <p className="text-gray-400 text-sm mb-4">
-                  يمكنك تحميل الملف وعرضه على جهازك
+              <div className="text-center p-10 bg-white/5 rounded-2xl border border-white/10 shadow-2xl">
+                <FileText className="mx-auto mb-4 text-gold" size={80} />
+                <h4 className="text-white font-bold text-xl mb-2">لا يمكن عرض هذا الملف مباشرة</h4>
+                <p className="text-gray-400 text-sm mb-6 max-w-xs">
+                  نوع هذا الملف يحتاج للتحميل لعرضه على جهازك الشخصي.
                 </p>
-                <a 
-                  href={directUrl} 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="btn-gold inline-flex items-center gap-2 px-4 py-2"
-                >
-                  <Download size={16} />
-                  تحميل الملف
-                </a>
+                <div className="flex flex-col gap-3">
+                  <a 
+                    href={downloadUrl} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="btn-gold flex items-center justify-center gap-2 py-3 px-8"
+                  >
+                    <Download size={18} /> تحميل الملف
+                  </a>
+                  <button onClick={onClose} className="text-gray-500 text-xs hover:text-white transition-colors">إغلاق</button>
+                </div>
               </div>
             </div>
           )}

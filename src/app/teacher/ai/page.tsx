@@ -6,9 +6,9 @@ import { useTeacherStore } from '@/lib/store';
 import { addToQBank } from '@/lib/db';
 import { QuestionBankItem, Question } from '@/types';
 import { showToast } from '@/lib/toast';
-import { Bot, Sparkles, Loader2, Save, CheckCircle } from 'lucide-react';
-
+import { Bot, Sparkles, Loader2, Save, CheckCircle, Upload } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { PDFCompressionModal, usePDFCompression } from '@/components/PDFCompressionModal';
 
 export default function AIPage() {
   const router = useRouter();
@@ -32,6 +32,9 @@ export default function AIPage() {
     unit: '', // Using unit for Grades/Class
     difficulty: 'medium' as 'easy' | 'medium' | 'hard',
   });
+
+  // iLovePDF Compression Hook
+  const { openCompression, CompressionModal } = usePDFCompression();
 
   const handleGenerate = async () => {
     if (!topic && !fileData) {
@@ -119,9 +122,16 @@ export default function AIPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Check file size - max 5MB for original file
-    if (file.size > 5 * 1024 * 1024) {
-      showToast('حجم الملف كبير جداً. الحد الأقصى هو 5 ميجابايت.');
+    // Check file size - max 15MB for PDF, 5MB for images
+    const isPDF = file.type === 'application/pdf';
+    const maxSize = isPDF ? 15 * 1024 * 1024 : 5 * 1024 * 1024;
+    
+    if (file.size > maxSize) {
+      if (isPDF) {
+        openCompression(file);
+      } else {
+        showToast(`حجم الملف كبير جداً. الحد الأقصى للصور هو 5 ميجابايت.`);
+      }
       e.target.value = '';
       return;
     }
@@ -170,6 +180,27 @@ export default function AIPage() {
       showToast('حدث خطأ أثناء معالجة الملف. يرجى المحاولة مرة أخرى.');
       e.target.value = '';
       setFileName('');
+    }
+  };
+
+  const handleCompressed = async (blob: Blob, url: string) => {
+    try {
+      const reader = new FileReader();
+      const base64Data = await new Promise<string>((resolve, reject) => {
+        reader.onload = (event) => resolve(event.target?.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+
+      const base64 = base64Data.split(',')[1];
+      setFileData({
+        inlineData: base64,
+        mimeType: 'application/pdf',
+      });
+      showToast('تم ضغط الملف ومعالجته بجودة عالية');
+    } catch (error) {
+      console.error('Error handling compressed file:', error);
+      showToast('حدث خطأ أثناء معالجة الملف المضغوط');
     }
   };
 
@@ -312,7 +343,7 @@ export default function AIPage() {
                     </button>
                   )}
                 </div>
-                <p className="text-xs mt-1 text-gray-500">يدعم PDF وصور (الحد الأقصى 5 ميجابايت مع ضغط تلقائي). إذا أرفقت ملفاً، الوصف يصبح اختيارياً.</p>
+                <p className="text-xs mt-1 text-gray-500">يدعم PDF (حتى 15MB) وصور (حتى 5MB). سيتم ضغط ملفات PDF الكبيرة تلقائياً.</p>
               </div>
 
               <button 
@@ -488,6 +519,15 @@ export default function AIPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {CompressionModal && CompressionModal.props && (
+        <PDFCompressionModal 
+          file={CompressionModal.props.file}
+          onClose={CompressionModal.props.onClose}
+          onCancel={CompressionModal.props.onCancel}
+          onComplete={handleCompressed}
+        />
       )}
     </div>
   );

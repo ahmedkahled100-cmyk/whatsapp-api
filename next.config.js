@@ -14,9 +14,13 @@ const nextConfig = {
   },
   experimental: {
     serverActions: {
-      bodySizeLimit: '300mb',
+      bodySizeLimit: '50mb',
       allowedOrigins: ['localhost:3000', '127.0.0.1:52521', '127.0.0.1:3000', 'an-academy.vercel.app', '*.vercel.app'],
     },
+  },
+  onDemandEntries: {
+    maxInactiveAge: 60 * 1000,
+    pagesBufferLength: 5,
   },
   async headers() {
     return [

@@ -38,61 +38,88 @@ export function PDFCompressionModal({ file, onClose, onComplete, onCancel }: PDF
 
   const compressPDF = useCallback(async () => {
     try {
-      setStatus(prev => ({ ...prev, stage: 'uploading', progress: 10, message: 'جاري رفع وضغط الملف...' }));
+      // Stage 1: Init Task
+      setStatus(prev => ({ ...prev, stage: 'preparing', progress: 5, message: 'جاري بدء جلسة الضغط...' }));
+      
+      const initRes = await fetch('/api/ilovepdf/start');
+      const data = await initRes.json();
+      
+      if (!initRes.ok || data.success === false) {
+        throw new Error(data.error || 'فشل بدء جلسة iLovePDF');
+      }
+      
+      const { task, server, publicKey, token } = data;
+
+      // Stage 2: Upload Direct to iLovePDF (Bypassing Vercel Limit)
+      setStatus(prev => ({ ...prev, stage: 'uploading', progress: 10, message: 'جاري رفع الملف إلى iLovePDF...' }));
       
       const formData = new FormData();
+      formData.append('task', task);
       formData.append('file', file);
 
       const xhr = new XMLHttpRequest();
-      const uploadPromise = new Promise<{ blob: Blob; originalSize: number; compressedSize: number }>((resolve, reject) => {
+      const uploadPromise = new Promise((resolve, reject) => {
         xhr.upload.addEventListener('progress', (e) => {
           if (e.lengthComputable) {
-            const percent = Math.round((e.loaded / e.total) * 70) + 10;
+            const percent = Math.round((e.loaded / e.total) * 60) + 10;
             setStatus(prev => ({ ...prev, progress: percent }));
           }
         });
         xhr.addEventListener('load', () => {
-          console.log('[Compress] Status:', xhr.status);
-          if (xhr.status >= 200 && xhr.status < 300) {
-            const blob = new Blob([xhr.response], { type: 'application/pdf' });
-            const originalSize = parseInt(xhr.getResponseHeader('X-Original-Size') || '0');
-            const compressedSize = parseInt(xhr.getResponseHeader('X-Compressed-Size') || '0');
-            resolve({ blob, originalSize, compressedSize });
-          } else {
-            let errorMsg = 'فشل ضغط الملف';
-            try {
-              const errorData = JSON.parse(xhr.responseText);
-              errorMsg = errorData.error || errorMsg;
-            } catch {}
-            reject(new Error(errorMsg));
-          }
+          if (xhr.status >= 200 && xhr.status < 300) resolve(JSON.parse(xhr.responseText));
+          else reject(new Error(`فشل الرفع لـ iLovePDF: ${xhr.status}`));
         });
-        xhr.addEventListener('error', () => reject(new Error('خطأ في الاتصال')));
-        xhr.open('POST', '/api/compress-pdf');
-        xhr.responseType = 'arraybuffer';
+        xhr.addEventListener('error', () => reject(new Error('خطأ في الاتصال بالرفع')));
+        xhr.open('POST', `https://${server}/v1/upload`);
+        
+        // Add Authorization header with the JWT token
+        if (token) {
+            xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+        }
+        
         xhr.send(formData);
       });
 
-      setStatus(prev => ({ ...prev, stage: 'compressing', progress: 80, message: 'جاري معالجة الملف...' }));
-      
-      const { blob, originalSize, compressedSize } = await uploadPromise;
+      const uploadData = await uploadPromise as any;
 
-      const finalOriginalSize = originalSize || file.size;
-      const finalCompressedSize = compressedSize || blob.size;
-      const reduction = ((finalOriginalSize - finalCompressedSize) / finalOriginalSize * 100).toFixed(1);
+      // Stage 3: Server-side processing
+      setStatus(prev => ({ ...prev, stage: 'compressing', progress: 80, message: 'جاري الضغط والمعالجة...' }));
       
+      const processRes = await fetch('/api/ilovepdf/process', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          task, 
+          server, 
+          fileName: file.name,
+          serverFilename: uploadData.server_filename 
+        }),
+      });
+
+      const processData = await processRes.json();
+
+      if (!processRes.ok || processData.success === false) {
+        throw new Error(processData.error || 'فشل معالجة الملف');
+      }
+
+      const { url, size } = processData;
+
+      // Stage 4: Completed
+      const reduction = ((file.size - size) / file.size * 100).toFixed(1);
       setStatus({
         stage: 'completed',
         progress: 100,
         message: `تم الضغط بنجاح! بنسبة ${reduction}%`,
         originalSize: file.size,
-        compressedSize: finalCompressedSize,
+        compressedSize: size,
       });
 
-      const url = URL.createObjectURL(blob);
-      
+      // Pass completion to parent
       setTimeout(() => {
-        onComplete(blob, url, { originalSize: finalOriginalSize, compressedSize: finalCompressedSize });
+        // We fetch the blob for local UI preview compatibility, although it's now primarily stored in Cloudinary
+        fetch(url).then(r => r.blob()).then(blob => {
+            onComplete(blob, url, { originalSize: file.size, compressedSize: size });
+        });
       }, 1000);
 
     } catch (error: any) {

@@ -19,7 +19,12 @@ export function generateId(prefix = 'id'): string {
 }
 
 // Format date in Arabic
-export function formatDateAr(date: string | number | Date): string {
+export function formatDateAr(date: string | number | Date, short = false): string {
+  if (short) {
+    return new Date(date).toLocaleDateString('ar-EG', {
+      month: 'numeric', day: 'numeric'
+    });
+  }
   return new Date(date).toLocaleDateString('ar-EG', {
     year: 'numeric', month: 'long', day: 'numeric'
   });
@@ -71,17 +76,33 @@ export function getViewerUrl(url: string | undefined): string {
   // Clean URL to handle potential double slashes or Cloudinary issues
   const cleanUrl = url.trim();
 
-  // If it's a Cloudinary PDF, we need to ensure it's delivered correctly
-  if (cleanUrl.includes('cloudinary.com')) {
-    // Ensure we don't have double flags or attachments
-    let viewableUrl = cleanUrl
-      .replace('/upload/fl_attachment:false/', '/upload/')
-      .replace('/upload/fl_attachment/', '/upload/')
-      .replace('/upload/', '/upload/fl_attachment:false/');
-    
-    return `https://docs.google.com/gview?url=${encodeURIComponent(viewableUrl)}&embedded=true`;
-  }
+  // For Google Docs Viewer, we just need the encoded URL
+  // We handle specific deliver flags (like fl_attachment) in the directUrl logic of components
   return `https://docs.google.com/gview?url=${encodeURIComponent(cleanUrl)}&embedded=true`;
+}
+
+// Helper to get download URL (forces attachment for Cloudinary)
+export function getDownloadUrl(url: string | undefined, fileName?: string): string {
+  if (!url) return '';
+  const cleanUrl = url.trim();
+  
+  // For Cloudinary, we can force attachment
+  if (cleanUrl.includes('cloudinary.com')) {
+    const isRaw = cleanUrl.includes('/raw/upload/') || cleanUrl.includes('/files/upload/');
+    if (!isRaw) {
+      const parts = cleanUrl.split('/upload/');
+      if (parts.length === 2) {
+        let safeName = fileName ? fileName.replace(/[/\\?%*:|"<>]/g, '_') : 'file';
+        // Ensure .pdf extension if it's likely a PDF but missing extension in name
+        if (cleanUrl.toLowerCase().includes('.pdf') && !safeName.toLowerCase().endsWith('.pdf')) {
+          safeName += '.pdf';
+        }
+        return `${parts[0]}/upload/fl_attachment:${encodeURIComponent(safeName)}/${parts[1]}`;
+      }
+    }
+  }
+  
+  return cleanUrl;
 }
 
 
