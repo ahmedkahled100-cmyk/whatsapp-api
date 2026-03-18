@@ -407,7 +407,7 @@ export default function ResultsPage() {
 
       {/* Print-only Layout - Used by html2pdf */}
       <div className="absolute top-[200vh] left-[-9999px]">
-        <div id="report-container" className="relative bg-white p-6 text-black font-cairo" style={{ direction: 'rtl', width: '200mm', minHeight: '290mm' }}>
+        <div id="report-container" className="relative bg-white p-6 text-black font-cairo" style={{ direction: 'rtl', width: '200mm', minHeight: '290mm', boxSizing: 'border-box' }}>
         
         {/* Semi-transparent Watermark */}
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0 overflow-hidden" style={{ top: '20vh', opacity: 0.04 }}>
@@ -445,12 +445,12 @@ export default function ResultsPage() {
           <table className="w-full border-collapse bg-white text-right">
             <thead>
               <tr style={{ background: '#1A1A25', color: '#ffffff' }}>
-                <th className="p-2.5 font-bold text-[9px] border-b border-gray-300" style={{ width: 'auto', whiteSpace: 'nowrap' }}>الكود</th>
-                <th className="p-2.5 font-bold text-[9px] border-b border-gray-300">اسم الطالب</th>
-                <th className="p-2.5 font-bold text-[9px] border-b border-gray-300">الاختبار</th>
-                <th className="p-2.5 text-center font-bold text-[9px] border-b border-gray-300" style={{ whiteSpace: 'nowrap' }}>الدرجة</th>
-                <th className="p-2.5 text-center font-bold text-[9px] border-b border-gray-300" style={{ whiteSpace: 'nowrap' }}>النسبة</th>
-                <th className="p-2.5 text-center font-bold text-[9px] border-b border-gray-300" style={{ whiteSpace: 'nowrap' }}>الحالة</th>
+                <th className="p-2.5 font-bold text-[9px] border-b border-gray-300" style={{ width: '1%', whiteSpace: 'nowrap' }}>الكود</th>
+                <th className="p-2.5 font-bold text-[9px] border-b border-gray-300 text-right">اسم الطالب</th>
+                <th className="p-2.5 font-bold text-[9px] border-b border-gray-300 text-right">الاختبار</th>
+                <th className="p-2.5 text-center font-bold text-[9px] border-b border-gray-300" style={{ width: '1%', whiteSpace: 'nowrap' }}>الدرجة</th>
+                <th className="p-2.5 text-center font-bold text-[9px] border-b border-gray-300" style={{ width: '1%', whiteSpace: 'nowrap' }}>النسبة</th>
+                <th className="p-2.5 text-center font-bold text-[9px] border-b border-gray-300" style={{ width: '1%', whiteSpace: 'nowrap' }}>الحالة</th>
               </tr>
             </thead>
             <tbody>
@@ -462,13 +462,13 @@ export default function ResultsPage() {
                 
                 return (
                   <tr key={att.id} style={{ background: isEven ? '#ffffff' : '#f8fafc' }}>
-                    <td className="p-2.5 font-mono text-[9px] text-gray-500 border-b border-gray-100 truncate">{att.studentCode}</td>
-                    <td className="p-2.5 font-bold text-[10px] text-gray-900 border-b border-gray-100 leading-tight ">{att.studentName}</td>
-                    <td className="p-2.5 text-[9px] text-gray-700 border-b border-gray-100 leading-tight ">{att.examTitle}</td>
-                    <td className="p-2.5 text-center font-bold text-[9px] border-b border-gray-100" style={{ color: '#b8860b' }}>
+                    <td className="p-2.5 font-mono text-[9px] text-gray-500 border-b border-gray-100" style={{ whiteSpace: 'nowrap' }}>{att.studentCode}</td>
+                    <td className="p-2.5 font-bold text-[10px] text-gray-900 border-b border-gray-100 leading-tight">{att.studentName}</td>
+                    <td className="p-2.5 text-[9px] text-gray-700 border-b border-gray-100 leading-tight">{att.examTitle}</td>
+                    <td className="p-2.5 text-center font-bold text-[9px] border-b border-gray-100" style={{ color: '#b8860b', whiteSpace: 'nowrap' }}>
                       <span dir="ltr">{Math.round((mcqP + essayP)*10)/10}/{totalP}</span>
                     </td>
-                    <td className="p-2.5 text-center font-bold text-[10px] border-b border-gray-100" dir="ltr">{att.finalScore ?? att.mcqScore}%</td>
+                    <td className="p-2.5 text-center font-bold text-[10px] border-b border-gray-100" dir="ltr" style={{ whiteSpace: 'nowrap' }}>{att.finalScore ?? att.mcqScore}%</td>
                     <td className="p-2.5 text-center border-b border-gray-100">
                        <span style={{ 
                          color: att.passed ? '#059669' : '#dc2626', 

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { AlertCircle, X, Download, ExternalLink, FileText, Image as ImageIcon, File } from 'lucide-react';
+import { AlertCircle, X, Download, ExternalLink, FileText, Image as ImageIcon, File, Eye } from 'lucide-react';
 import { getViewerUrl } from '@/lib/utils';
 
 interface FilePreviewModalProps {
@@ -13,6 +13,7 @@ interface FilePreviewModalProps {
 export function FilePreviewModal({ url, fileName, onClose }: FilePreviewModalProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
+  const [useGoogleViewer, setUseGoogleViewer] = useState(false);
   const [key, setKey] = useState(0); // For reloading
 
   useEffect(() => {
@@ -109,6 +110,17 @@ export function FilePreviewModal({ url, fileName, onClose }: FilePreviewModalPro
           >
             <ExternalLink size={16} />
           </button>
+          
+          {isPdf && (
+            <button 
+              onClick={() => setUseGoogleViewer(!useGoogleViewer)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs md:text-sm transition-all border ${useGoogleViewer ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' : 'bg-white/5 text-white border-white/10'}`}
+              title={useGoogleViewer ? "استخدام العرض المباشر" : "استخدام عرض Google"}
+            >
+              <Eye size={16} />
+              <span className="hidden sm:inline">{useGoogleViewer ? 'عرض مباشر' : 'عرض Google'}</span>
+            </button>
+          )}
 
           <a 
             href={downloadUrl} 
@@ -185,22 +197,30 @@ export function FilePreviewModal({ url, fileName, onClose }: FilePreviewModalPro
         {/* Viewer */}
         <div className="w-full h-full">
           {isPdf ? (
-            <div className="w-full h-full bg-white">
+            <div className="w-full h-full bg-white relative">
               <iframe
-                key={key}
-                src={googleViewerUrl}
-                className="w-full h-full border-0"
+                key={key + (useGoogleViewer ? '_g' : '_d')}
+                src={useGoogleViewer ? googleViewerUrl : directUrl}
+                className="w-full h-full border-0 absolute inset-0"
                 title="PDF Preview"
                 onLoad={() => {
-                  // Wait a bit to ensure it actually rendered (especially for Google viewer)
-                  setTimeout(() => setIsLoading(false), 800);
+                  // Wait a bit to ensure it actually rendered
+                  setTimeout(() => setIsLoading(false), 1000);
                 }}
                 onError={() => {
                   setIsLoading(false);
                   setLoadError(true);
                 }}
-                sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-top-navigation"
+                // Remove sandbox or allow-top-navigation to ensure direct PDFs work
+                // sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
               />
+              {!useGoogleViewer && isLoading && (
+                <div className="absolute inset-x-0 bottom-4 px-4 text-center z-20 pointer-events-none">
+                  <p className="text-[10px] text-gray-500 bg-black/60 py-1 px-3 rounded-full inline-block">
+                    إذا لم يظهر الملف، جرب زر "عرض Google" بالأعلى
+                  </p>
+                </div>
+              )}
             </div>
           ) : isImage ? (
             <div className="w-full h-full flex items-center justify-center p-4">

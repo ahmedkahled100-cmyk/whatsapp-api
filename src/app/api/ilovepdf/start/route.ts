@@ -8,11 +8,16 @@ export const maxDuration = 60;
 const PUBLIC_KEY = process.env.ILOVEPDF_PUBLIC_KEY || '';
 const SECRET_KEY = process.env.ILOVEPDF_SECRET_KEY || '';
 
+const TOOL_MAPPING: Record<string, string> = {
+  'ocr': 'pdfocr',
+};
+
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
-  const tool = searchParams.get('tool') || 'compress';
+  const rawTool = searchParams.get('tool') || 'compress';
+  const tool = TOOL_MAPPING[rawTool] || rawTool;
   
-  console.log(`[iLovePDF Start] Initializing task: ${tool} with SDK`);
+  console.log(`[iLovePDF Start] Initializing task: ${tool} (raw: ${rawTool}) with SDK`);
 
   try {
     if (!PUBLIC_KEY || !SECRET_KEY) {
@@ -25,7 +30,32 @@ export async function GET(req: Request) {
     }
 
     const instance = new ILovePDFApi(PUBLIC_KEY, SECRET_KEY);
-    const task = instance.newTask(tool as any);
+    let task;
+    try {
+      task = instance.newTask(tool as any);
+    } catch (e: any) {
+      if (e.name === 'TaskTypeNotExistsError' && tool === 'organize') {
+        // Polyfill Organize task which is missing from SDK 0.3.1 TaskFactory
+        try {
+          // @ts-ignore
+          const TaskBaseProcess = require('@ilovepdf/ilovepdf-js-core/tasks/TaskBaseProcess').default;
+          // @ts-ignore
+          task = new TaskBaseProcess(instance.auth, instance.xhr);
+          task.type = 'organize';
+        } catch (polyfillErr) {
+          console.error('[iLovePDF Polyfill Error]:', polyfillErr);
+          throw e; // Throw original error if polyfill fails
+        }
+      } else if (e.name === 'TaskTypeNotExistsError') {
+        return NextResponse.json({
+          success: false,
+          error: `الأداة "${rawTool}" غير مدعومة حالياً في هذا النظام.`,
+          code: 'TOOL_NOT_SUPPORTED'
+        }, { status: 200 });
+      } else {
+        throw e;
+      }
+    }
     
     // Start task (internal server-side auth)
     await task.start();

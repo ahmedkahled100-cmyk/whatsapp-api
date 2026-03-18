@@ -61,6 +61,7 @@ export interface Exam {
   questions: Question[];
   essayQuestions?: Question[];
   shuffle: boolean;
+  randomPickCount?: number; // Number of questions to randomly pick for each student (0 or undefined means all)
   allowRetake: boolean;
   allowResume: boolean;
   showAnswers: boolean;

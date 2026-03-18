@@ -413,10 +413,14 @@ export default function ILovePDFPage() {
         <div className="lg:col-span-3 space-y-4">
           <h3 className="text-sm font-bold text-muted px-4 mb-1 uppercase tracking-[0.2em]">الأدوات المتاحة</h3>
           <div className="grid grid-cols-1 gap-2 max-h-[70vh] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-gold/20">
-            {tools.map((t) => (
+            {tools.map((t: any) => (
               <button
                 key={t.id}
                 onClick={() => {
+                  if (t.status === 'COMING_SOON') {
+                    showToast('هذه الأداة ستتوفر قريباً');
+                    return;
+                  }
                   if (status.stage !== 'idle' && status.stage !== 'completed' && status.stage !== 'error') {
                     showToast('يرجى الانتظار حتى اكتمال المهمة الحالية');
                     return;
@@ -424,14 +428,21 @@ export default function ILovePDFPage() {
                   setTool(t.id);
                   if (status.stage === 'completed' || status.stage === 'error') reset();
                 }}
-                className={`w-full group/item flex items-center gap-4 p-4 rounded-2xl border transition-all text-right relative overflow-hidden ${tool === t.id ? 'bg-gold/10 border-gold/40 gold-text shadow-glow ring-1 ring-gold/20' : 'bg-white/5 border-white/10 text-muted hover:bg-white/10 hover:border-white/20'}`}
+                className={`w-full group/item flex items-center gap-4 p-4 rounded-2xl border transition-all text-right relative overflow-hidden ${tool === t.id ? 'bg-gold/10 border-gold/40 gold-text shadow-glow ring-1 ring-gold/20' : 'bg-white/5 border-white/10 text-muted hover:bg-white/10 hover:border-white/20'} ${t.status === 'COMING_SOON' ? 'opacity-60 cursor-not-allowed' : ''}`}
               >
                 <div className={`w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center shrink-0 transition-transform group-hover/item:scale-110 ${tool === t.id ? t.color + ' bg-gold/5' : 'text-muted'}`}>
                   <t.icon size={20} />
                 </div>
                 <div className="flex-1">
-                  <div className="font-black text-sm tracking-tight">{t.label}</div>
-                  <div className="text-[10px] opacity-40 font-bold hidden group-hover/item:block transition-all">انقر للاختيار</div>
+                  <div className="font-black text-sm tracking-tight flex items-center gap-2">
+                    {t.label}
+                    {t.status === 'COMING_SOON' && (
+                      <span className="text-[8px] bg-white/10 text-white/40 px-1.5 py-0.5 rounded-full border border-white/5">قريباً</span>
+                    )}
+                  </div>
+                  <div className="text-[10px] opacity-40 font-bold hidden group-hover/item:block transition-all">
+                    {t.status === 'COMING_SOON' ? 'غير متوفر حالياً' : 'انقر للاختيار'}
+                  </div>
                 </div>
                 {tool === t.id && (
                   <div className="absolute left-4 w-1.5 h-1.5 rounded-full bg-gold shadow-[0_0_8px_var(--gold)]" />

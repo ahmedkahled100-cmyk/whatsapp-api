@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useTeacherStore } from '@/lib/store';
 import { saveExam, getExam } from '@/lib/db';
+import { showToast } from '@/lib/toast';
 import { generateId } from '@/lib/utils';
 import type { Question, Exam } from '@/types';
 import { PlusCircle, Trash2, Save, ChevronDown, ChevronUp, ArrowRight } from 'lucide-react';
@@ -34,6 +35,7 @@ export default function EditExamPage() {
   const [startTime, setStartTime] = useState('');
   const [endTime, setEndTime] = useState('');
   const [desc, setDesc] = useState('');
+  const [randomPickCount, setRandomPickCount] = useState<number>(0);
 
   // Questions
   const [questions, setQuestions] = useState<QForm[]>([]);
@@ -61,6 +63,7 @@ export default function EditExamPage() {
         setStartTime(e.startTime || '');
         setEndTime(e.endTime || '');
         setDesc(e.desc || '');
+        setRandomPickCount(e.randomPickCount || 0);
         setQuestions(e.questions.map(q => ({ ...q, expanded: false })));
       } catch (err) {
         showToast('حدث خطأ أثناء تحميل البيانات');
@@ -136,7 +139,8 @@ export default function EditExamPage() {
         id,
         title, subject, desc, duration, passScore,
         questions: validQs.map(({ expanded, ...q }) => q as Question),
-        shuffle, allowRetake, allowResume: true, showAnswers, published,
+        shuffle, randomPickCount: randomPickCount > 0 ? randomPickCount : undefined,
+        allowRetake, allowResume: true, showAnswers, published,
         startTime: scheduleType === 'scheduled' ? startTime : null,
         endTime: scheduleType === 'scheduled' ? endTime : null,
         createdAt: new Date().toISOString(), // Keeping created at or should we track updated?
@@ -243,6 +247,26 @@ export default function EditExamPage() {
               </button>
             </div>
           ))}
+          <div className="sm:col-span-2 p-3 rounded-xl bg-white/5 border border-white/5"
+            style={{ background: 'rgba(255,197,24,0.05)', border: '1px solid rgba(245,197,24,0.1)' }}>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-bold text-gold">🎲 عدد الأسئلة العشوائية لكل طالب</span>
+              <span className="text-[10px] bg-gold/10 text-gold px-2 py-0.5 rounded-md">ميزة متقدمة</span>
+            </div>
+            <p className="text-[11px] text-gray-400 mb-2">
+              إذا تم تحديد رقم (مثلاً 10)، سيقوم النظام باختيار 10 أسئلة عشوائية من إجمالي الأسئلة المضافة ({questions.length}) لكل طالب عند دخوله الامتحان.
+              (اتركه 0 أو فارغ لعرض جميع الأسئلة).
+            </p>
+            <input 
+              type="number" 
+              min={0} 
+              max={questions.length}
+              value={randomPickCount || ''} 
+              onChange={e => setRandomPickCount(+e.target.value)}
+              className="input-base text-sm py-2"
+              placeholder="مثال: 10"
+            />
+          </div>
           <div className="sm:col-span-2">
             <label className="block text-sm mb-1.5 text-muted">وصف الاختبار (اختياري)</label>
             <textarea value={desc} onChange={e => setDesc(e.target.value)}

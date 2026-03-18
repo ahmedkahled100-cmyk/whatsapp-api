@@ -26,6 +26,10 @@ export default function QBankPage() {
   // Selection
   const [selectedQuestions, setSelectedQuestions] = useState<Set<string>>(new Set());
   
+  // Quick Exam
+  const [showQuickExamModal, setShowQuickExamModal] = useState(false);
+  const [quickExamCount, setQuickExamCount] = useState(5);
+  
   const [showAddForm, setShowAddForm] = useState(false);
   const [newQuestion, setNewQuestion] = useState<any>({
     type: 'mcq',
@@ -124,6 +128,24 @@ export default function QBankPage() {
 
   const handleCreateExamFromSelection = () => {
     const selected = questions.filter(q => selectedQuestions.has(q.id));
+    createExamFromQuestions(selected);
+  };
+
+  const handleQuickExam = () => {
+    if (filtered.length === 0) {
+      showToast("لا توجد أسئلة مطابقة للفلترة الحالية");
+      return;
+    }
+    
+    // Pick random N questions from filtered
+    const shuffled = [...filtered].sort(() => 0.5 - Math.random());
+    const selected = shuffled.slice(0, Math.min(quickExamCount, filtered.length));
+    
+    createExamFromQuestions(selected);
+    setShowQuickExamModal(false);
+  };
+
+  const createExamFromQuestions = (selected: any[]) => {
     if (setTempExamQuestions) {
       // Map to standard Question format
       const formatted = selected.map((q, i) => ({
@@ -159,6 +181,9 @@ export default function QBankPage() {
               إنشاء اختبار ({selectedQuestions.size})
             </button>
           )}
+          <button onClick={() => setShowQuickExamModal(true)} className="btn-accent flex items-center gap-2 px-4">
+               <PlusCircle size={18} /> اختبار سريع عشوائي
+          </button>
           <button onClick={() => setShowAddForm(!showAddForm)} className="btn-gold flex items-center gap-2">
             {showAddForm ? 'إلغاء' : <><PlusCircle size={18} /> إضافة سؤال</>}
           </button>
@@ -365,6 +390,46 @@ export default function QBankPage() {
           ))
         )}
       </div>
+
+      {/* Quick Exam Modal */}
+      {showQuickExamModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="card-base p-6 w-full max-w-sm animate-scale-in border border-gold/30">
+            <h3 className="text-xl font-bold mb-4 font-cairo">إنشاء اختبار سريع</h3>
+            <p className="text-sm text-gray-400 mb-4">
+               سيتم اختيار أسئلة عشوائية من النتائج المفلترة حالياً ({filtered.length} سؤال متاح).
+            </p>
+            
+            <div className="mb-6">
+              <label className="block text-sm mb-2 opacity-70">عدد الأسئلة المطلوبة</label>
+              <input 
+                type="number" 
+                className="input-base w-full text-center text-lg font-bold" 
+                min="1" 
+                max={filtered.length}
+                value={quickExamCount}
+                onChange={e => setQuickExamCount(Number(e.target.value))}
+              />
+            </div>
+
+            <div className="flex gap-3">
+              <button 
+                onClick={() => setShowQuickExamModal(false)} 
+                className="btn-outline flex-1"
+              >
+                إلغاء
+              </button>
+              <button 
+                onClick={handleQuickExam} 
+                className="btn-gold flex-1"
+                disabled={filtered.length === 0}
+              >
+                إنشاء الآن
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

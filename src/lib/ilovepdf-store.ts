@@ -88,7 +88,9 @@ export const useILovePDFStore = create<ILovePDFStore>()(
             'ocr': 'التعرف الضوئي (OCR)',
             'rotate': 'تدوير الصفحات',
             'protect': 'حماية بكلمة مرور',
-            'unlock': 'فك التشفير'
+            'unlock': 'فك التشفير',
+            'organize': 'تنظيم الصفحات',
+            'editpdf': 'تعديل PDF'
           };
           const label = toolLabels[tool] || 'المعالجة';
           const totalSize = files.reduce((sum, f) => sum + f.size, 0);
@@ -104,7 +106,9 @@ export const useILovePDFStore = create<ILovePDFStore>()(
           // 1. Init
           const initRes = await fetch(`/api/ilovepdf/start?tool=${tool}`);
           const initData = await initRes.json();
-          if (!initRes.ok || !initData.success) throw new Error(initData.error || 'فشل بدء الجلسة');
+          if (!initRes.ok || !initData.success) {
+            throw new Error(initData.error || 'فشل بدء الجلسة');
+          }
 
           const { task, server, token } = initData;
 

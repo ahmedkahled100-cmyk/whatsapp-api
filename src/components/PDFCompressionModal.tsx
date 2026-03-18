@@ -4,15 +4,17 @@ import { showToast } from '@/lib/toast';
 
 interface PDFCompressionModalProps {
   file: File;
+  showSelection?: boolean; // New: allow selection in teacher pages
   onClose: () => void;
   onComplete: (blob: Blob, url: string, stats: { originalSize: number; compressedSize: number }) => void;
   onCancel: () => void;
 }
 
-type CompressionStage = 'preparing' | 'uploading' | 'compressing' | 'completed' | 'error';
+type CompressionStage = 'selecting' | 'preparing' | 'uploading' | 'compressing' | 'completed' | 'error';
 
 interface CompressionStatus {
   stage: CompressionStage;
+  level: 'extreme' | 'recommended' | 'low';
   progress: number;
   message: string;
   originalSize: number;
@@ -20,11 +22,12 @@ interface CompressionStatus {
   error?: string;
 }
 
-export function PDFCompressionModal({ file, onClose, onComplete, onCancel }: PDFCompressionModalProps) {
+export function PDFCompressionModal({ file, showSelection = false, onClose, onComplete, onCancel }: PDFCompressionModalProps) {
   const [status, setStatus] = useState<CompressionStatus>({
-    stage: 'preparing',
+    stage: showSelection ? 'selecting' : 'preparing',
+    level: 'recommended',
     progress: 0,
-    message: 'جاري التحضير...',
+    message: showSelection ? 'اختر مستوى الضغط' : 'جاري التحضير...',
     originalSize: file.size,
   });
 
@@ -92,7 +95,8 @@ export function PDFCompressionModal({ file, onClose, onComplete, onCancel }: PDF
           task, 
           server, 
           fileName: file.name,
-          serverFilename: uploadData.server_filename 
+          serverFilename: uploadData.server_filename,
+          compression_level: status.level // Pass the selected level
         }),
       });
 
@@ -106,13 +110,14 @@ export function PDFCompressionModal({ file, onClose, onComplete, onCancel }: PDF
 
       // Stage 4: Completed
       const reduction = ((file.size - size) / file.size * 100).toFixed(1);
-      setStatus({
+      setStatus(prev => ({
+        ...prev,
         stage: 'completed',
         progress: 100,
         message: `تم الضغط بنجاح! بنسبة ${reduction}%`,
         originalSize: file.size,
         compressedSize: size,
-      });
+      }));
 
       // Pass completion to parent
       setTimeout(() => {
@@ -135,11 +140,14 @@ export function PDFCompressionModal({ file, onClose, onComplete, onCancel }: PDF
   }, [file, onComplete]);
 
   useEffect(() => {
-    compressPDF();
-  }, [compressPDF]);
+    if (status.stage === 'preparing' || (!showSelection && status.stage === 'preparing')) {
+        compressPDF();
+    }
+  }, [compressPDF, status.stage, showSelection]);
 
   const getStageIcon = () => {
     switch (status.stage) {
+      case 'selecting': return <Activity className="text-gold" size={56} />;
       case 'preparing': return <Activity className="text-blue-400 animate-pulse" size={56} />;
       case 'uploading': return <Loader2 className="text-orange-400 animate-spin" size={56} />;
       case 'compressing': return <Zap className="text-gold animate-bounce" size={56} />;
@@ -206,6 +214,32 @@ export function PDFCompressionModal({ file, onClose, onComplete, onCancel }: PDF
                 <p className="text-muted text-xs font-medium opacity-60 max-w-[280px] truncate">{file.name}</p>
             </div>
 
+            {/* Selection UI */}
+            {status.stage === 'selecting' && (
+                <div className="grid grid-cols-1 gap-3 mb-10 animate-in fade-in slide-in-from-bottom-4">
+                    {[
+                        { id: 'extreme', title: 'ضغط فائق', desc: 'أقصى ضغط، جودة أقل قليلاً', icon: Zap, color: 'text-orange-400' },
+                        { id: 'recommended', title: 'ضغط متوسط', desc: 'توازن مثالي بين الحجم والجودة', icon: ShieldCheck, color: 'text-green-400' },
+                        { id: 'low', title: 'ضغط ضعيف', desc: 'جودة عالية، ضغط أقل', icon: FileText, color: 'text-blue-400' },
+                    ].map(lvl => (
+                        <button
+                            key={lvl.id}
+                            onClick={() => setStatus(prev => ({ ...prev, level: lvl.id as any }))}
+                            className={`flex items-center gap-4 p-4 rounded-2xl border-2 transition-all text-right ${status.level === lvl.id ? 'border-gold bg-gold/5 shadow-glow' : 'border-white/5 bg-white/5 hover:border-white/10'}`}
+                        >
+                            <div className={`w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center border border-white/10 ${lvl.color}`}>
+                                <lvl.icon size={24} />
+                            </div>
+                            <div className="flex-1">
+                                <h4 className="font-bold text-sm">{lvl.title}</h4>
+                                <p className="text-[10px] text-muted">{lvl.desc}</p>
+                            </div>
+                            {status.level === lvl.id && <CheckCircle size={20} className="text-gold" />}
+                        </button>
+                    ))}
+                </div>
+            )}
+
             {/* Stats Comparison */}
             <div className="grid grid-cols-1 gap-4 mb-10">
                 <div className="bg-white/5 rounded-3xl p-5 flex items-center justify-between border border-white/5 relative overflow-hidden group">
@@ -262,7 +296,17 @@ export function PDFCompressionModal({ file, onClose, onComplete, onCancel }: PDF
 
             {/* Footer Actions */}
             <div className="flex gap-4">
-                {status.stage === 'error' ? (
+                {status.stage === 'selecting' ? (
+                    <>
+                        <button onClick={onCancel} className="flex-1 py-4 px-6 rounded-2xl bg-white/5 hover:bg-white/10 font-black text-sm transition-all text-muted">إلغاء</button>
+                        <button 
+                            onClick={() => setStatus(prev => ({ ...prev, stage: 'preparing', message: 'جاري التحضير...' }))} 
+                            className="flex-1 py-4 px-6 rounded-2xl bg-gold text-dark font-black text-sm hover:shadow-glow transition-all flex items-center justify-center gap-2"
+                        >
+                            بدء الضغط <ArrowRight size={16} />
+                        </button>
+                    </>
+                ) : status.stage === 'error' ? (
                     <>
                         <button onClick={onCancel} className="flex-1 py-4 px-6 rounded-2xl bg-white/5 hover:bg-white/10 font-black text-sm transition-all text-muted">تجاهل</button>
                         <button onClick={compressPDF} className="flex-1 py-4 px-6 rounded-2xl bg-gold text-dark font-black text-sm hover:shadow-glow transition-all">إعادة المحاولة</button>
@@ -290,14 +334,15 @@ export function PDFCompressionModal({ file, onClose, onComplete, onCancel }: PDF
 }
 
 // Hook to manage compression modal
-export function usePDFCompression() {
+export function usePDFCompression(options?: { showSelection?: boolean }) {
   const [compressionData, setCompressionData] = useState<{
     file: File | null;
     isOpen: boolean;
+    onComplete?: (blob: Blob, url: string, stats: { originalSize: number; compressedSize: number }) => void;
   }>({ file: null, isOpen: false });
 
-  const openCompression = (file: File) => {
-    setCompressionData({ file, isOpen: true });
+  const openCompression = (file: File, onComplete?: (blob: Blob, url: string, stats: { originalSize: number; compressedSize: number }) => void) => {
+    setCompressionData({ file, isOpen: true, onComplete });
   };
 
   const closeCompression = () => {
@@ -307,9 +352,10 @@ export function usePDFCompression() {
   const CompressionModal = compressionData.isOpen && compressionData.file ? (
     <PDFCompressionModal
       file={compressionData.file}
+      showSelection={options?.showSelection}
       onClose={closeCompression}
-      onComplete={(blob, url) => {
-        // The parent component should handle the compressed file
+      onComplete={(blob, url, stats) => {
+        compressionData.onComplete?.(blob, url, stats);
         closeCompression();
       }}
       onCancel={() => {

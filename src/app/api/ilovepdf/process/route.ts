@@ -16,9 +16,14 @@ cloudinary.config({
 const PUBLIC_KEY = process.env.ILOVEPDF_PUBLIC_KEY || '';
 const SECRET_KEY = process.env.ILOVEPDF_SECRET_KEY || '';
 
+const TOOL_MAPPING: Record<string, string> = {
+  'ocr': 'pdfocr',
+};
+
 export async function POST(req: Request) {
   try {
-    const { task, server, fileName, serverFilename, serverFilenames, mode, tool = 'compress', settings } = await req.json();
+    const { task, server, fileName, serverFilename, serverFilenames, mode, tool: rawTool = 'compress', settings, compression_level } = await req.json();
+    const tool = TOOL_MAPPING[rawTool] || rawTool;
 
     if (!task || !server || (!serverFilename && !serverFilenames)) {
       return NextResponse.json({ 
@@ -27,11 +32,25 @@ export async function POST(req: Request) {
       }, { status: 200 });
     }
 
-    console.log(`[iLovePDF Process] Reconstructing task: ${task} (${tool}) on server: ${server} (Mode: ${mode || 'default'})`);
+    console.log(`[iLovePDF Process] Reconstructing task: ${task} (${tool}) (raw: ${rawTool}) on server: ${server} (Mode: ${mode || 'default'})`);
     
     const instance = new ILovePDFApi(PUBLIC_KEY, SECRET_KEY);
     // @ts-ignore - access internal properties to reconstruct task
-    const taskInstance = instance.newTask(tool as any) as any;
+    let taskInstance: any;
+    try {
+      taskInstance = instance.newTask(tool as any);
+    } catch (e: any) {
+      if (e.name === 'TaskTypeNotExistsError' && tool === 'organize') {
+        // Polyfill Organize task which is missing from SDK 0.3.1 TaskFactory
+        const TaskBaseProcess = require('@ilovepdf/ilovepdf-js-core/tasks/TaskBaseProcess').default;
+        // @ts-ignore - access private properties for emergency polyfill
+        taskInstance = new TaskBaseProcess(instance.auth, instance.xhr);
+        taskInstance.type = 'organize';
+      } else {
+        throw e;
+      }
+    }
+    
     taskInstance.server = server;
     taskInstance._id = task;
     
@@ -51,7 +70,7 @@ export async function POST(req: Request) {
     const s = settings || {};
     
     if (tool === 'compress') {
-      processParams = { compression_level: s.compression_level || 'recommended' };
+      processParams = { compression_level: compression_level || s.compression_level || 'recommended' };
     } else if (tool === 'watermark') {
       processParams = {
         mode: s.type === 'image' ? 'image' : 'text',
@@ -92,7 +111,7 @@ export async function POST(req: Request) {
       });
     } else if (tool === 'organize') {
         processParams = {}; // Organize uses file params mostly
-    } else if (tool === 'ocr') {
+    } else if (tool === 'pdfocr') {
       processParams = {
         language: s.language || 'ara'
       };

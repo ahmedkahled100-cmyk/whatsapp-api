@@ -60,8 +60,17 @@ export default function ExamPage() {
       }
 
       setExam(e);
-      // Removed MCQ filter to show all questions
-      const qs = e.shuffle ? shuffleArray(e.questions) : e.questions;
+      
+      // Randomization Logic
+      let qs = [...(e.questions || [])];
+      if (e.randomPickCount && e.randomPickCount > 0) {
+        // Shuffle ALL and pick N
+        qs = shuffleArray(qs).slice(0, e.randomPickCount);
+      } else if (e.shuffle) {
+        // Just shuffle all
+        qs = shuffleArray(qs);
+      }
+      
       setQuestions(qs);
 
       setPhase(student ? 'intro' : 'login');

@@ -744,6 +744,7 @@ export default function CoursesPage() {
       {compressionModal.isOpen && compressionModal.file && (
         <PDFCompressionModal
           file={compressionModal.file}
+          showSelection={true}
           onClose={() => setCompressionModal({ isOpen: false, file: null })}
           onComplete={(blob, url, stats) => {
             compressionModal.onComplete?.(blob, url, stats);

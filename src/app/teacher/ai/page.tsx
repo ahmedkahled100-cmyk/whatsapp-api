@@ -34,7 +34,7 @@ export default function AIPage() {
   });
 
   // iLovePDF Compression Hook
-  const { openCompression, CompressionModal } = usePDFCompression();
+  const { openCompression, CompressionModal } = usePDFCompression({ showSelection: true });
 
   const handleGenerate = async () => {
     if (!topic && !fileData) {
@@ -128,7 +128,7 @@ export default function AIPage() {
     
     if (file.size > maxSize) {
       if (isPDF) {
-        openCompression(file);
+        openCompression(file, handleCompressed);
       } else {
         showToast(`حجم الملف كبير جداً. الحد الأقصى للصور هو 5 ميجابايت.`);
       }
@@ -521,14 +521,7 @@ export default function AIPage() {
         </div>
       )}
 
-      {CompressionModal && CompressionModal.props && (
-        <PDFCompressionModal 
-          file={CompressionModal.props.file}
-          onClose={CompressionModal.props.onClose}
-          onCancel={CompressionModal.props.onCancel}
-          onComplete={handleCompressed}
-        />
-      )}
+      {CompressionModal}
     </div>
   );
 }
