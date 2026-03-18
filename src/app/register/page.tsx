@@ -1,10 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { getSettings, saveRegistrationRequest, uploadFileToStorage } from '@/lib/db';
+import { getSettings, saveRegistrationRequest, uploadFileToStorage, dispatchNotification, getTeachers } from '@/lib/db';
 import { FileProcessor } from '@/lib/file-processor';
 import { useFileProcessingStore } from '@/lib/store';
-import type { Settings } from '@/types';
+import type { Settings, TeacherUser } from '@/types';
 import { showToast } from '@/lib/toast';
 import { GraduationCap, ShieldCheck, Mail, Phone, Calculator, CheckCircle2, User, FileText, Upload, Image as ImageIcon, Loader2 } from 'lucide-react';
 import { PDFCompressionModal } from '@/components/PDFCompressionModal';
@@ -13,6 +13,8 @@ export default function RegisterPage() {
   const { queue } = useFileProcessingStore();
   const [settings, setSettings] = useState<Settings | null>(null);
   const [loading, setLoading] = useState(true);
+  const [teachers, setTeachers] = useState<TeacherUser[]>([]);
+  const [selectedTeacherId, setSelectedTeacherId] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
@@ -36,11 +38,27 @@ export default function RegisterPage() {
   }>({ isOpen: false, file: null });
 
   useEffect(() => {
-    getSettings().then(s => {
-      setSettings(s);
-      setLoading(false);
+    getTeachers().then(ts => {
+      setTeachers(ts);
+      if (ts.length > 0) {
+        // Find super_admin or first teacher
+        const defaultT = ts.find(t => t.role === 'super_admin') || ts[0];
+        setSelectedTeacherId(defaultT.id);
+      } else {
+        setLoading(false);
+      }
     });
   }, []);
+
+  useEffect(() => {
+    if (selectedTeacherId) {
+      setLoading(true);
+      getSettings(selectedTeacherId).then(s => {
+        setSettings(s);
+        setLoading(false);
+      });
+    }
+  }, [selectedTeacherId]);
 
   // Listen for background upload completion
   useEffect(() => {
@@ -64,8 +82,8 @@ export default function RegisterPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.name || !form.phone || !form.parentPhone) {
-      showToast('يرجى ملء جميع الحقول المطلوبة');
+    if (!form.name || !form.phone || !form.parentPhone || !selectedTeacherId) {
+      showToast('يرجى ملء جميع الحقول المطلوبة واختيار المعلم');
       return;
     }
 
@@ -73,11 +91,32 @@ export default function RegisterPage() {
     try {
       const requestData: any = {
         ...form,
+        teacherId: selectedTeacherId,
         status: 'pending',
         createdAt: Date.now(),
       };
       
       await saveRegistrationRequest(requestData);
+      
+      try {
+        await dispatchNotification({
+          teacherId: selectedTeacherId,
+          msg: `طلب اشتراك جديد: ${form.name} (${form.subType})`,
+          targetRoles: ['admin'],
+          channels: { inApp: true, whatsapp: false }
+        });
+        if (form.phone) {
+          await dispatchNotification({
+            teacherId: selectedTeacherId,
+            msg: `أهلاً بك ${form.name} في منصتنا! تم استلام طلبك وبانتظار تفعيله من الإدارة.`,
+            whatsappNumbers: [form.phone],
+            channels: { inApp: false, whatsapp: true }
+          });
+        }
+      } catch (e) {
+        console.error('Failed to dispatch notifications:', e);
+      }
+
       setSuccess(true);
     } catch (error: any) {
       console.error(error);
@@ -167,6 +206,20 @@ export default function RegisterPage() {
                   onChange={e => setForm({...form, name: e.target.value})}
                   required
                 />
+              </div>
+              <div className="relative">
+                <label className="block text-sm mb-2 text-gray-300 font-bold px-1">المعلم المطلوب التسجيل معه</label>
+                <select 
+                  className="input-base w-full text-sm sm:text-base"
+                  value={selectedTeacherId}
+                  onChange={e => setSelectedTeacherId(e.target.value)}
+                  required
+                >
+                  <option value="" disabled>اختر المعلم...</option>
+                  {teachers.map(t => (
+                    <option key={t.id} value={t.id}>{t.name} (@{t.username})</option>
+                  ))}
+                </select>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="relative">

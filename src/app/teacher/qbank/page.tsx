@@ -3,10 +3,10 @@
 
 import { useState, useEffect } from 'react';
 import { useTeacherStore } from '@/lib/store';
-import { getQBank, addToQBank, deleteFromQBank } from '@/lib/db';
+import { getQBank, addToQBank, deleteFromQBank, uploadFileToStorage } from '@/lib/db';
 import { showToast } from '@/lib/toast';
 import { QuestionBankItem } from '@/types';
-import { Database, PlusCircle, Search, Trash2, Filter } from 'lucide-react';
+import { Database, PlusCircle, Search, Trash2, Filter, Image as ImageIcon, FileText, Upload, X } from 'lucide-react';
 
 import { useRouter } from 'next/navigation';
 
@@ -39,8 +39,12 @@ export default function QBankPage() {
     difficulty: 'medium',
     subject: '',
     unit: '',
-    points: 1
+    points: 1,
+    imageUrl: '',
+    pdfUrl: ''
   });
+
+  const [uploadingMedia, setUploadingMedia] = useState<'image' | 'pdf' | null>(null);
 
   const loadQuestions = async () => {
     setLoading(true);
@@ -90,6 +94,21 @@ export default function QBankPage() {
       console.error(error);
     }
   };
+
+  const handleMediaUpload = async (file: File, type: 'image' | 'pdf') => {
+    setUploadingMedia(type);
+    try {
+      const path = `qbank/media/${Date.now()}_${file.name}`;
+      const url = await uploadFileToStorage(file, path);
+      setNewQuestion({ ...newQuestion, [type === 'image' ? 'imageUrl' : 'pdfUrl']: url });
+      showToast('✅ تم رفع الملف');
+    } catch (err: any) {
+      showToast('❌ فشل الرفع');
+    } finally {
+      setUploadingMedia(null);
+    }
+  };
+
 
   const handleDelete = async (id: string) => {
     if (!confirm('هل أنت متأكد من حذف هذا السؤال؟')) return;
@@ -156,6 +175,8 @@ export default function QBankPage() {
         correct: q.correct,
         explanation: q.explanation || '',
         maxScore: (q as any).points || 1,
+        imageUrl: q.imageUrl || '',
+        pdfUrl: q.pdfUrl || '',
       }));
       setTempExamQuestions(formatted as import('@/types').Question[]);
       router.push('/teacher/exams/create');
@@ -243,10 +264,49 @@ export default function QBankPage() {
             <label className="block text-sm mb-1 opacity-70">نص السؤال</label>
             <textarea 
               className="input-base w-full resize-none h-24" 
-              placeholder="اكتب نص السؤال هنا..."
               value={newQuestion.text}
               onChange={e => setNewQuestion({...newQuestion, text: e.target.value})}
             />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4 mb-6">
+            <div className="space-y-2">
+              <label className="block text-xs font-bold text-gold uppercase">صورة السؤال</label>
+              {newQuestion.imageUrl ? (
+                <div className="relative aspect-video rounded-xl overflow-hidden border border-gold/30 bg-black/20">
+                  <img src={newQuestion.imageUrl} alt="Q" className="w-full h-full object-contain" />
+                  <button onClick={() => setNewQuestion({...newQuestion, imageUrl: ''})} className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 shadow-lg">
+                    <X size={14} />
+                  </button>
+                </div>
+              ) : (
+                <label className="flex flex-col items-center justify-center border-2 border-dashed border-white/10 rounded-xl p-6 cursor-pointer hover:border-gold/40 hover:bg-gold/5 transition-all h-32">
+                  <ImageIcon size={24} className="text-muted mb-2" />
+                  <span className="text-xs font-bold">رفع صورة</span>
+                  <input type="file" accept="image/*" className="hidden" onChange={e => e.target.files?.[0] && handleMediaUpload(e.target.files[0], 'image')} />
+                </label>
+              )}
+            </div>
+            <div className="space-y-2">
+              <label className="block text-xs font-bold text-blue-400 uppercase">ملف PDF للسؤال</label>
+              {newQuestion.pdfUrl ? (
+                <div className="flex items-center justify-between bg-blue-500/10 border border-blue-500/20 p-4 rounded-xl h-32">
+                  <div className="flex flex-col items-center gap-2 flex-1">
+                    <FileText size={24} className="text-blue-400" />
+                    <span className="text-[10px] font-bold truncate max-w-full italic">ملف مرفق جاهز</span>
+                  </div>
+                  <button onClick={() => setNewQuestion({...newQuestion, pdfUrl: ''})} className="text-red-400 hover:text-red-300 ml-2">
+                    <X size={20} />
+                  </button>
+                </div>
+              ) : (
+                <label className="flex flex-col items-center justify-center border-2 border-dashed border-white/10 rounded-xl p-6 cursor-pointer hover:border-blue-400/40 hover:bg-blue-400/5 transition-all h-32">
+                  <Upload size={24} className="text-muted mb-2" />
+                  <span className="text-xs font-bold">رفع PDF</span>
+                  <input type="file" accept=".pdf" className="hidden" onChange={e => e.target.files?.[0] && handleMediaUpload(e.target.files[0], 'pdf')} />
+                </label>
+              )}
+            </div>
           </div>
 
           {newQuestion.type === 'mcq' && (

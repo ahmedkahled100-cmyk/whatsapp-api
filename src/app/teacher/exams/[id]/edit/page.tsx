@@ -4,11 +4,11 @@
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useTeacherStore } from '@/lib/store';
-import { saveExam, getExam } from '@/lib/db';
+import { saveExam, getExam, uploadFileToStorage } from '@/lib/db';
 import { showToast } from '@/lib/toast';
 import { generateId } from '@/lib/utils';
 import type { Question, Exam } from '@/types';
-import { PlusCircle, Trash2, Save, ChevronDown, ChevronUp, ArrowRight } from 'lucide-react';
+import { PlusCircle, Trash2, Save, ChevronDown, ChevronUp, ArrowRight, Image as ImageIcon, FileText, Upload, X, Loader2 } from 'lucide-react';
 
 type QForm = Question & { expanded?: boolean };
 
@@ -36,6 +36,9 @@ export default function EditExamPage() {
   const [endTime, setEndTime] = useState('');
   const [desc, setDesc] = useState('');
   const [randomPickCount, setRandomPickCount] = useState<number>(0);
+  const [examImageUrl, setExamImageUrl] = useState('');
+  const [examPdfUrl, setExamPdfUrl] = useState('');
+  const [uploadingExamMedia, setUploadingExamMedia] = useState<'image' | 'pdf' | null>(null);
 
   // Questions
   const [questions, setQuestions] = useState<QForm[]>([]);
@@ -64,6 +67,8 @@ export default function EditExamPage() {
         setEndTime(e.endTime || '');
         setDesc(e.desc || '');
         setRandomPickCount(e.randomPickCount || 0);
+        setExamImageUrl(e.imageUrl || '');
+        setExamPdfUrl(e.pdfUrl || '');
         setQuestions(e.questions.map(q => ({ ...q, expanded: false })));
       } catch (err) {
         showToast('حدث خطأ أثناء تحميل البيانات');
@@ -144,6 +149,8 @@ export default function EditExamPage() {
         startTime: scheduleType === 'scheduled' ? startTime : null,
         endTime: scheduleType === 'scheduled' ? endTime : null,
         createdAt: new Date().toISOString(), // Keeping created at or should we track updated?
+        imageUrl: examImageUrl || undefined,
+        pdfUrl: examPdfUrl || undefined,
       };
       if (targetGroup) examData.targetGroup = targetGroup;
 
@@ -154,6 +161,31 @@ export default function EditExamPage() {
       showToast('فشل الحفظ - تحقق من الاتصال');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleMediaUpload = async (file: File, type: 'exam-image' | 'exam-pdf' | { qId: string, type: 'image' | 'pdf' }) => {
+    try {
+      const isExam = typeof type === 'string';
+      const qId = !isExam ? type.qId : '';
+      const mediaType = isExam ? (type === 'exam-image' ? 'image' : 'pdf') : type.type;
+
+      if (isExam) setUploadingExamMedia(mediaType as any);
+      
+      const path = isExam ? `exams/media/${Date.now()}_${file.name}` : `exams/questions/${qId}/${file.name}`;
+      const url = await uploadFileToStorage(file, path);
+      
+      if (isExam) {
+        if (mediaType === 'image') setExamImageUrl(url);
+        else setExamPdfUrl(url);
+      } else {
+        updateQ(qId, { [mediaType === 'image' ? 'imageUrl' : 'pdfUrl']: url });
+      }
+      showToast('✅ تم رفع الملف بنجاح');
+    } catch (err: any) {
+      showToast('❌ فشل الرفع: ' + err.message);
+    } finally {
+      setUploadingExamMedia(null);
     }
   };
 
@@ -272,6 +304,50 @@ export default function EditExamPage() {
             <textarea value={desc} onChange={e => setDesc(e.target.value)}
               placeholder="تعليمات أو وصف للطلاب..." rows={2} className="input-base resize-none" />
           </div>
+
+          <div className="sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+            <div className="space-y-2">
+              <label className="block text-xs font-bold text-gold uppercase tracking-wider">صورة الغلاف / توضيحية للاختبار</label>
+              <div className="flex items-center gap-3">
+                {examImageUrl ? (
+                  <div className="relative w-20 h-20 rounded-xl overflow-hidden border border-gold/30">
+                    <img src={examImageUrl} alt="Exam" className="w-full h-full object-cover" />
+                    <button onClick={() => setExamImageUrl('')} className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-0.5 shadow-lg">
+                      <X size={12} />
+                    </button>
+                  </div>
+                ) : (
+                  <label className="flex-1 flex flex-col items-center justify-center border-2 border-dashed border-white/10 rounded-xl p-4 cursor-pointer hover:border-gold/40 hover:bg-gold/5 transition-all">
+                    <ImageIcon size={20} className="text-muted mb-1" />
+                    <span className="text-[10px] font-bold">رفع صورة</span>
+                    <input type="file" accept="image/*" className="hidden" onChange={e => e.target.files?.[0] && handleMediaUpload(e.target.files[0], 'exam-image')} />
+                  </label>
+                )}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label className="block text-xs font-bold text-blue-400 uppercase tracking-wider">ملف PDF مرفق (مرجع)</label>
+              <div className="flex items-center gap-3">
+                {examPdfUrl ? (
+                  <div className="flex-1 flex items-center justify-between bg-blue-500/10 border border-blue-500/20 p-3 rounded-xl">
+                    <div className="flex items-center gap-2 truncate">
+                      <FileText size={16} className="text-blue-400" />
+                      <span className="text-xs truncate font-bold">ملف مرفق</span>
+                    </div>
+                    <button onClick={() => setExamPdfUrl('')} className="text-red-400 hover:text-red-300">
+                      <X size={14} />
+                    </button>
+                  </div>
+                ) : (
+                  <label className="flex-1 flex flex-col items-center justify-center border-2 border-dashed border-white/10 rounded-xl p-4 cursor-pointer hover:border-blue-400/40 hover:bg-blue-400/5 transition-all">
+                    <Upload size={20} className="text-muted mb-1" />
+                    <span className="text-[10px] font-bold">رفع PDF</span>
+                    <input type="file" accept=".pdf" className="hidden" onChange={e => e.target.files?.[0] && handleMediaUpload(e.target.files[0], 'exam-pdf')} />
+                  </label>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -312,9 +388,43 @@ export default function EditExamPage() {
               {q.expanded && (
                 <div className="p-4 space-y-3">
                   <div>
-                    <label className="block text-xs mb-1 text-muted">نص السؤال *</label>
                     <textarea value={q.text} onChange={e => updateQ(q.id, { text: e.target.value })}
                       rows={2} placeholder="أكتب نص السؤال هنا..." className="input-base resize-none text-sm" />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <label className="block text-[10px] font-black text-gold uppercase">صورة السؤال</label>
+                      {q.imageUrl ? (
+                        <div className="relative w-full aspect-video rounded-lg overflow-hidden border border-white/10">
+                          <img src={q.imageUrl} alt="Q" className="w-full h-full object-cover" />
+                          <button onClick={() => updateQ(q.id, { imageUrl: '' })} className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-0.5">
+                            <X size={10} />
+                          </button>
+                        </div>
+                      ) : (
+                        <label className="w-full h-12 flex items-center justify-center border border-dashed border-white/10 rounded-lg cursor-pointer hover:bg-white/5 transition-colors">
+                          <ImageIcon size={14} className="text-muted" />
+                          <input type="file" accept="image/*" className="hidden" onChange={e => e.target.files?.[0] && handleMediaUpload(e.target.files[0], { qId: q.id, type: 'image' })} />
+                        </label>
+                      )}
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="block text-[10px] font-black text-blue-400 uppercase">ملف PDF للسؤال</label>
+                      {q.pdfUrl ? (
+                        <div className="h-12 flex items-center justify-between bg-blue-500/10 border border-blue-500/20 px-3 rounded-lg">
+                          <FileText size={14} className="text-blue-400" />
+                          <button onClick={() => updateQ(q.id, { pdfUrl: '' })} className="text-red-400">
+                            <X size={12} />
+                          </button>
+                        </div>
+                      ) : (
+                        <label className="w-full h-12 flex items-center justify-center border border-dashed border-white/10 rounded-lg cursor-pointer hover:bg-white/5 transition-colors">
+                          <Upload size={14} className="text-muted" />
+                          <input type="file" accept=".pdf" className="hidden" onChange={e => e.target.files?.[0] && handleMediaUpload(e.target.files[0], { qId: q.id, type: 'pdf' })} />
+                        </label>
+                      )}
+                    </div>
                   </div>
 
                   <div>

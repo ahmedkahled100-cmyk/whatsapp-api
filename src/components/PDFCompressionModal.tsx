@@ -140,10 +140,10 @@ export function PDFCompressionModal({ file, showSelection = false, onClose, onCo
   }, [file, onComplete]);
 
   useEffect(() => {
-    if (status.stage === 'preparing' || (!showSelection && status.stage === 'preparing')) {
+    if (status.stage === 'preparing') {
         compressPDF();
     }
-  }, [compressPDF, status.stage, showSelection]);
+  }, [compressPDF, status.stage]);
 
   const getStageIcon = () => {
     switch (status.stage) {
@@ -158,113 +158,119 @@ export function PDFCompressionModal({ file, showSelection = false, onClose, onCo
   };
 
   return (
-    <div className="fixed inset-0 z-[10000] bg-black/40 backdrop-blur-2xl flex items-center justify-center p-4 animate-fade-in" dir="rtl">
-      <div className="bg-[#11111a]/80 border border-white/10 rounded-[32px] max-w-lg w-full overflow-hidden shadow-[0_40px_100px_rgba(0,0,0,0.5)] backdrop-saturate-150 relative">
+    <div className="fixed inset-0 z-[10000] bg-black/60 backdrop-blur-2xl flex items-center justify-center p-4 animate-fade-in" dir="rtl">
+      <style jsx global>{`
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,191,0,0.1); border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,191,0,0.2); }
+      `}</style>
+      <div className="bg-[#11111a]/95 border border-white/10 rounded-[32px] max-w-md w-full overflow-hidden shadow-[0_40px_100px_rgba(0,0,0,0.5)] backdrop-saturate-150 flex flex-col max-h-[90vh]">
         <div className="absolute inset-0 bg-gradient-to-br from-gold/5 via-transparent to-accent/5 pointer-events-none" />
         
         {/* iLovePDF Style Header */}
-        <div className="bg-gradient-to-r from-gold/20 via-gold/10 to-transparent p-10 flex items-center justify-between text-white relative">
-          <div className="flex items-center gap-6 relative z-10">
-             <div className="bg-gold/10 p-4 rounded-3xl border border-gold/20 shadow-glow group-hover:scale-110 transition-transform">
-                <FileText className="text-gold" size={32} />
+        <div className="bg-gradient-to-r from-gold/20 via-gold/10 to-transparent p-5 flex items-center justify-between text-white relative flex-shrink-0">
+          <div className="flex items-center gap-4 relative z-10">
+             <div className="bg-gold/10 p-3 rounded-2xl border border-gold/20 shadow-glow">
+                <FileText className="text-gold" size={24} />
              </div>
              <div>
-                <h2 className="font-cairo font-black text-3xl leading-none gold-text">
+                <h2 className="font-cairo font-black text-xl leading-none gold-text">
                   iLovePDF <span className="text-white/40 font-light mx-1">|</span> سمارت
                 </h2>
-                <p className="text-[10px] text-muted font-black mt-2 uppercase tracking-[0.3em]">تحويل الملفات التلقائي والمعالجة الذكية</p>
+                <p className="text-[8px] text-muted font-black mt-1 uppercase tracking-[0.2em]">المعالجة الذكية للملفات</p>
              </div>
           </div>
-          <button onClick={onCancel} className="hover:bg-white/5 p-3 rounded-2xl transition-all hover:rotate-90 group">
-            <X size={20} className="text-muted group-hover:text-white" />
+          <button onClick={onCancel} className="hover:bg-white/5 p-2 rounded-xl transition-all">
+            <X size={18} className="text-muted" />
           </button>
         </div>
 
-        <div className="p-10 relative z-10">
+        {/* Scrollable Content */}
+        <div className="p-6 pt-2 pb-0 overflow-y-auto custom-scrollbar flex-1 relative z-10">
             {/* Main Visual */}
-            <div className="flex flex-col items-center text-center mb-10">
-                <div className="relative mb-12">
-                     <div className="w-32 h-32 rounded-full border border-white/5 flex items-center justify-center relative">
+            <div className="flex flex-col items-center text-center mb-6 pt-4">
+                <div className="relative mb-6">
+                     <div className="w-24 h-24 rounded-full border border-white/5 flex items-center justify-center relative">
                         {/* Interactive Circle Progress */}
                         <svg className="w-full h-full -rotate-90">
                           <circle
-                            cx="64" cy="64" r="60"
+                            cx="48" cy="48" r="44"
                             fill="none"
                             stroke="currentColor"
                             strokeWidth="3"
                             className="text-white/5"
                           />
                           <circle
-                            cx="64" cy="64" r="60"
+                            cx="48" cy="48" r="44"
                             fill="none"
                             stroke="currentColor"
                             strokeWidth="3"
-                            strokeDasharray={377}
-                            strokeDashoffset={377 - (377 * status.progress) / 100}
+                            strokeDasharray={276}
+                            strokeDashoffset={276 - (276 * status.progress) / 100}
                             className={`transition-all duration-700 ${status.stage === 'completed' ? 'text-green-500' : status.stage === 'error' ? 'text-red-500' : 'text-gold'}`}
                             strokeLinecap="round"
                           />
                         </svg>
-                        <div className={`absolute inset-0 flex items-center justify-center rounded-full animate-pulse-glow ${status.stage === 'completed' ? 'shadow-[0_0_40px_rgba(34,197,94,0.1)] text-green-500' : 'text-gold'}`}>
+                        <div className={`absolute inset-0 flex items-center justify-center rounded-full animate-pulse-glow ${status.stage === 'completed' ? 'shadow-[0_0_30px_rgba(34,197,94,0.1)] text-green-500' : 'text-gold'}`}>
                             {getStageIcon()}
                         </div>
                     </div>
                 </div>
-                <h3 className="text-2xl font-black font-cairo mb-3">{status.message}</h3>
-                <p className="text-muted text-xs font-medium opacity-60 max-w-[280px] truncate">{file.name}</p>
+                <h3 className="text-xl font-black font-cairo mb-2 leading-tight">{status.message}</h3>
+                <p className="text-muted text-[10px] font-medium opacity-60 max-w-[240px] truncate">{file.name}</p>
             </div>
 
             {/* Selection UI */}
             {status.stage === 'selecting' && (
-                <div className="grid grid-cols-1 gap-3 mb-10 animate-in fade-in slide-in-from-bottom-4">
+                <div className="grid grid-cols-1 gap-2.5 mb-6 animate-in fade-in slide-in-from-bottom-4">
                     {[
-                        { id: 'extreme', title: 'ضغط فائق', desc: 'أقصى ضغط، جودة أقل قليلاً', icon: Zap, color: 'text-orange-400' },
-                        { id: 'recommended', title: 'ضغط متوسط', desc: 'توازن مثالي بين الحجم والجودة', icon: ShieldCheck, color: 'text-green-400' },
+                        { id: 'extreme', title: 'ضغط فائق', desc: 'أقصى ضغط، جودة أقل', icon: Zap, color: 'text-orange-400' },
+                        { id: 'recommended', title: 'ضغط متوسط', desc: 'توازن مثالي', icon: ShieldCheck, color: 'text-green-400' },
                         { id: 'low', title: 'ضغط ضعيف', desc: 'جودة عالية، ضغط أقل', icon: FileText, color: 'text-blue-400' },
                     ].map(lvl => (
                         <button
                             key={lvl.id}
                             onClick={() => setStatus(prev => ({ ...prev, level: lvl.id as any }))}
-                            className={`flex items-center gap-4 p-4 rounded-2xl border-2 transition-all text-right ${status.level === lvl.id ? 'border-gold bg-gold/5 shadow-glow' : 'border-white/5 bg-white/5 hover:border-white/10'}`}
+                            className={`flex items-center gap-3 p-3.5 rounded-2xl border-2 transition-all text-right ${status.level === lvl.id ? 'border-gold bg-gold/5 shadow-glow' : 'border-white/5 bg-white/5 hover:border-white/10'}`}
                         >
-                            <div className={`w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center border border-white/10 ${lvl.color}`}>
-                                <lvl.icon size={24} />
+                            <div className={`w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center border border-white/10 ${lvl.color}`}>
+                                <lvl.icon size={20} />
                             </div>
                             <div className="flex-1">
-                                <h4 className="font-bold text-sm">{lvl.title}</h4>
-                                <p className="text-[10px] text-muted">{lvl.desc}</p>
+                                <h4 className="font-bold text-xs">{lvl.title}</h4>
+                                <p className="text-[9px] text-muted leading-none">{lvl.desc}</p>
                             </div>
-                            {status.level === lvl.id && <CheckCircle size={20} className="text-gold" />}
+                            {status.level === lvl.id && <CheckCircle size={18} className="text-gold" />}
                         </button>
                     ))}
                 </div>
             )}
 
             {/* Stats Comparison */}
-            <div className="grid grid-cols-1 gap-4 mb-10">
-                <div className="bg-white/5 rounded-3xl p-5 flex items-center justify-between border border-white/5 relative overflow-hidden group">
-                    <div className="absolute inset-0 bg-gradient-to-r from-gold/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                    <div className="flex items-center gap-4 relative z-10">
-                        <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center border border-white/10">
-                            <FileText size={20} className="text-muted" />
+            <div className="mb-6">
+                <div className="bg-white/5 rounded-2xl p-4 flex items-center justify-between border border-white/5 group">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center border border-white/10">
+                            <FileText size={18} className="text-muted" />
                         </div>
                         <div>
-                            <p className="text-[10px] text-muted font-black uppercase tracking-widest mb-1 opacity-40">الحجم الأصلي</p>
-                            <p className="font-black text-lg">{formatSize(file.size)}</p>
+                            <p className="text-[9px] text-muted font-black uppercase mb-0.5 opacity-40">الأصلي</p>
+                            <p className="font-black text-sm">{formatSize(file.size)}</p>
                         </div>
                     </div>
                     {status.compressedSize && (
                         <>
-                            <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center">
-                                <ArrowRight className="text-muted/30" size={16} />
+                            <div className="w-6 h-6 rounded-full bg-white/5 flex items-center justify-center">
+                                <ArrowRight className="text-muted/30" size={14} />
                             </div>
-                            <div className="flex items-center gap-4 text-right relative z-10">
+                            <div className="flex items-center gap-3 text-right">
                                 <div>
-                                    <p className="text-[10px] text-green-500 font-black uppercase tracking-widest mb-1 opacity-60">الحجم النهائي</p>
-                                    <p className="font-black text-lg text-green-400">{formatSize(status.compressedSize)}</p>
+                                    <p className="text-[9px] text-green-500 font-black uppercase mb-0.5 opacity-60">النهائي</p>
+                                    <p className="font-black text-sm text-green-400">{formatSize(status.compressedSize)}</p>
                                 </div>
-                                <div className="w-12 h-12 rounded-2xl bg-green-500/10 flex items-center justify-center border border-green-500/10">
-                                    <ShieldCheck size={20} className="text-green-400" />
+                                <div className="w-10 h-10 rounded-xl bg-green-500/10 flex items-center justify-center border border-green-500/10">
+                                    <ShieldCheck size={18} className="text-green-400" />
                                 </div>
                             </div>
                         </>
@@ -273,12 +279,12 @@ export function PDFCompressionModal({ file, showSelection = false, onClose, onCo
             </div>
 
             {/* Progress Wrapper */}
-            <div className="mb-10">
-                <div className="flex justify-between items-end text-[11px] mb-3 font-black text-muted uppercase tracking-widest">
-                    <span>تحليل الجزيئات</span>
+            <div className="mb-6">
+                <div className="flex justify-between items-end text-[9px] mb-2 font-black text-muted uppercase">
+                    <span>نسبة الإنجاز</span>
                     <span className="text-gold">{status.progress}%</span>
                 </div>
-                <div className="h-2 bg-white/5 rounded-full overflow-hidden p-0.5">
+                <div className="h-1.5 bg-white/5 rounded-full overflow-hidden p-0.5">
                     <div 
                         className={`h-full rounded-full transition-all duration-1000 ease-out shadow-glow ${status.stage === 'completed' ? 'bg-green-500 shadow-green-500/30' : 'bg-gold shadow-gold/30'}`}
                         style={{ width: `${status.progress}%` }}
@@ -288,49 +294,50 @@ export function PDFCompressionModal({ file, showSelection = false, onClose, onCo
 
             {/* Error Message */}
             {status.stage === 'error' && (
-                <div className="bg-red-500/5 border border-red-500/20 rounded-2xl p-5 mb-10 flex items-start gap-4 text-red-400 animate-shake">
-                    <AlertCircle size={20} className="shrink-0 mt-0.5" />
-                    <p className="text-xs font-bold leading-relaxed">{status.error || 'حدث خطأ غير متوقع أثناء معالجة الملف'}</p>
+                <div className="bg-red-500/5 border border-red-500/20 rounded-2xl p-4 mb-6 flex items-start gap-3 text-red-400 animate-shake">
+                    <AlertCircle size={18} className="shrink-0 mt-0.5" />
+                    <p className="text-[11px] font-bold leading-relaxed">{status.error || 'فشل ضغط الملف'}</p>
                 </div>
             )}
+        </div>
 
-            {/* Footer Actions */}
-            <div className="flex gap-4">
+        {/* Footer Actions - Sticky */}
+        <div className="p-6 pt-4 bg-[#11111a]/80 backdrop-blur-md border-t border-white/5 relative z-20 flex-shrink-0">
+            <div className="flex gap-3">
                 {status.stage === 'selecting' ? (
                     <>
-                        <button onClick={onCancel} className="flex-1 py-4 px-6 rounded-2xl bg-white/5 hover:bg-white/10 font-black text-sm transition-all text-muted">إلغاء</button>
+                        <button onClick={onCancel} className="flex-1 py-3 px-4 rounded-xl bg-white/5 hover:bg-white/10 font-bold text-xs transition-all text-muted">إلغاء</button>
                         <button 
                             onClick={() => setStatus(prev => ({ ...prev, stage: 'preparing', message: 'جاري التحضير...' }))} 
-                            className="flex-1 py-4 px-6 rounded-2xl bg-gold text-dark font-black text-sm hover:shadow-glow transition-all flex items-center justify-center gap-2"
+                            className="flex-1 py-3 px-4 rounded-xl bg-gold text-dark font-black text-xs hover:shadow-glow transition-all flex items-center justify-center gap-2"
                         >
-                            بدء الضغط <ArrowRight size={16} />
+                            بدء الضغط <ArrowRight size={14} />
                         </button>
                     </>
                 ) : status.stage === 'error' ? (
                     <>
-                        <button onClick={onCancel} className="flex-1 py-4 px-6 rounded-2xl bg-white/5 hover:bg-white/10 font-black text-sm transition-all text-muted">تجاهل</button>
-                        <button onClick={compressPDF} className="flex-1 py-4 px-6 rounded-2xl bg-gold text-dark font-black text-sm hover:shadow-glow transition-all">إعادة المحاولة</button>
+                        <button onClick={onCancel} className="flex-1 py-3 px-4 rounded-xl bg-white/5 hover:bg-white/10 font-bold text-xs transition-all text-muted">تجاهل</button>
+                        <button onClick={compressPDF} className="flex-1 py-3 px-4 rounded-xl bg-gold text-dark font-black text-xs hover:shadow-glow transition-all">إعادة المحاولة</button>
                     </>
                 ) : status.stage === 'completed' ? (
-                    <div className="w-full flex flex-col gap-4 animate-in fade-in slide-in-from-bottom-4">
-                         <button onClick={onClose} className="w-full py-5 px-6 rounded-2xl bg-gold text-dark font-black transition-all shadow-glow hover:scale-[1.02] active:scale-[0.98] text-lg">إكمال عملية النشر</button>
-                         <p className="text-center text-[10px] text-green-500 font-bold opacity-60">تم التأمين والرفع بنجاح لـ AN Cloud</p>
+                    <div className="w-full flex flex-col gap-2 animate-in fade-in slide-in-from-bottom-4">
+                         <button onClick={onClose} className="w-full py-4 px-6 rounded-xl bg-gold text-dark font-black transition-all shadow-glow hover:scale-[1.01] active:scale-[0.99] text-sm">إكمال عملية النشر</button>
+                         <p className="text-center text-[9px] text-green-500 font-bold opacity-60 italic">تم التأمين والرفع بنجاح لـ AN Cloud</p>
                     </div>
                 ) : (
-                    <button onClick={onCancel} className="w-full py-4 px-6 rounded-2xl bg-white/5 hover:bg-white/10 font-bold transition-all border border-white/5 flex items-center justify-center gap-3 text-muted">
-                         <Loader2 size={16} className="animate-spin" />
-                         <span className="text-xs uppercase tracking-widest">إلغاء المعالجة</span>
+                    <button onClick={onCancel} className="w-full py-3 px-4 rounded-xl bg-white/5 hover:bg-white/10 font-bold transition-all border border-white/5 flex items-center justify-center gap-2 text-muted">
+                         <Loader2 size={14} className="animate-spin" />
+                         <span className="text-[10px] uppercase tracking-widest font-black">إلغاء المعالجة</span>
                     </button>
                 )}
             </div>
-            
-            <p className="text-[9px] text-muted/30 text-center mt-8 uppercase tracking-[0.4em] font-black">
+            <p className="text-[7px] text-muted/30 text-center mt-4 uppercase tracking-[0.4em] font-black">
                 AN SECURITY PROTOCOL • ILOVEPDF CORE
             </p>
         </div>
       </div>
     </div>
-  );
+    );
 }
 
 // Hook to manage compression modal

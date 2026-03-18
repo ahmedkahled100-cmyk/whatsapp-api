@@ -289,6 +289,38 @@ export default function ExamPage() {
           <h2 className="font-cairo font-black text-xl sm:text-2xl gold-text mb-1">{exam.title}</h2>
           {exam.subject && <span className="text-[10px] sm:text-xs px-3 py-1 bg-white/5 rounded-full text-muted">{exam.subject}</span>}
         </div>
+
+        {/* Exam Media */}
+        {(exam.imageUrl || exam.pdfUrl) && (
+          <div className="grid grid-cols-1 gap-3 mb-6">
+            {exam.imageUrl && (
+              <div className="relative aspect-video rounded-2xl overflow-hidden border border-white/10 shadow-inner group">
+                <img src={exam.imageUrl} alt="Exam Illustration" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-4">
+                  <button onClick={() => openPreview(exam.imageUrl!, 'توضيح الاختبار')} className="btn-accent py-1.5 px-3 text-[10px] flex items-center gap-1.5 backdrop-blur-sm">
+                    <Eye size={12} /> تكبير الصورة
+                  </button>
+                </div>
+              </div>
+            )}
+            {exam.pdfUrl && (
+              <button 
+                onClick={() => openPreview(exam.pdfUrl!, 'ملف مرجع الاختبار')}
+                className="flex items-center gap-3 p-4 rounded-2xl bg-blue-500/10 border border-blue-500/20 hover:bg-blue-500/20 transition-all group"
+              >
+                <div className="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center text-blue-400 group-hover:scale-110 transition-transform">
+                  <FileText size={20} />
+                </div>
+                <div className="text-right">
+                  <div className="text-sm font-bold text-blue-300">ملف مرجع (PDF)</div>
+                  <div className="text-[10px] text-blue-400/70">اضغط للمعاينة أثناء الاختبار</div>
+                </div>
+                <Eye size={16} className="mr-auto text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+              </button>
+            )}
+          </div>
+        )}
+
         <div className="space-y-2.5 sm:space-y-3 mb-8">
           {[
             { label: 'الطالب', value: student?.name, icon: '👤' },
@@ -383,6 +415,36 @@ export default function ExamPage() {
                   </div>
                   <h3 className="text-base sm:text-lg md:text-xl leading-relaxed font-medium flex-1 pt-0.5">{q.text}</h3>
                 </div>
+
+                {/* Question Media */}
+                {(q.imageUrl || q.pdfUrl) && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-2 animate-fade-in">
+                    {q.imageUrl && (
+                      <div className="relative aspect-video rounded-xl overflow-hidden border border-white/10 group bg-black/20">
+                        <img src={q.imageUrl} alt="Question Illustration" className="w-full h-full object-contain" />
+                        <div className="absolute inset-x-0 bottom-0 p-2 bg-black/40 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button onClick={() => openPreview(q.imageUrl!, 'صورة السؤال')} className="w-full btn-accent py-1 px-2 text-[10px] flex items-center justify-center gap-1">
+                            <ImageIcon size={12} /> معاينة الصورة
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    {q.pdfUrl && (
+                      <button 
+                        onClick={() => openPreview(q.pdfUrl!, 'ملف السؤال')}
+                        className="flex items-center gap-3 p-3 rounded-xl bg-blue-500/5 border border-blue-500/10 hover:bg-blue-500/10 transition-all group"
+                      >
+                        <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center text-blue-400">
+                          <FileText size={16} />
+                        </div>
+                        <div className="text-right">
+                          <div className="text-xs font-bold text-blue-300">مرفق PDF</div>
+                        </div>
+                        <Eye size={14} className="mr-auto text-blue-400 opacity-50 group-hover:opacity-100" />
+                      </button>
+                    )}
+                  </div>
+                )}
 
                 {/* Option Rendering based on type */}
                 <div className="space-y-2.5 sm:space-y-3 mt-2 sm:mt-4">

@@ -226,20 +226,35 @@ export default function ResultsPage() {
 
   const sendWhatsAppWithImage = async () => {
     if (!resultImagePreview) return;
-    
+
     const { attempt } = resultImagePreview;
     const student = students.find(s => s.id === attempt.studentId);
-    if (!student?.parentPhone) return;
+    if (!student?.parentPhone) {
+      showToast('لا يوجد رقم هاتف لولي أمر هذا الطالب');
+      return;
+    }
+
+    const studentName = student?.name || attempt.studentName || 'الطالب';
+    const examTitle = exams.find(e => e.id === attempt.examId)?.title || attempt.examTitle || 'الاختبار';
+    const score = typeof attempt.finalScore === 'number' ? attempt.finalScore :
+      typeof attempt.mcqScore === 'number' ? attempt.mcqScore : 0;
+    const isPassed = attempt.passed ?? false;
+
+    const mcqPoints = (attempt.mcqScore * attempt.mcqTotal) / 100;
+    const essayPoints = attempt.essayAnswers?.reduce((sum: number, ea: any) => sum + (ea.score || 0), 0) || 0;
+    const rawScore = Math.round((mcqPoints + essayPoints) * 10) / 10;
+    const maxScore = attempt.mcqTotal + (attempt.essayAnswers?.reduce((sum: number, ea: any) => sum + (ea.maxScore || 0), 0) || 0);
 
     try {
       const res = await fetch('/api/generate-whatsapp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          studentName: student.name,
-          examTitle: exams.find(e => e.id === attempt.examId)?.title || attempt.examTitle,
-          score: attempt.finalScore ?? attempt.mcqScore ?? 0,
-          isPassed: attempt.passed,
+          studentName,
+          examTitle,
+          score: rawScore,
+          maxScore,
+          isPassed,
         }),
       });
 
@@ -410,9 +425,17 @@ export default function ResultsPage() {
         <div id="report-container" className="relative bg-white p-6 text-black font-cairo" style={{ direction: 'rtl', width: '200mm', minHeight: '290mm', boxSizing: 'border-box' }}>
         
         {/* Semi-transparent Watermark */}
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0 overflow-hidden" style={{ top: '20vh', opacity: 0.04 }}>
-          <img src={settings?.logoUrl || '/logo.png'} alt="Watermark" className="w-[60%] object-contain grayscale" crossOrigin="anonymous" />
-        </div>
+        {settings?.logoUrl ? (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0 overflow-hidden" style={{ top: '20vh', opacity: 0.04 }}>
+            <img src={settings.logoUrl} alt="Watermark" className="w-[60%] object-contain grayscale" crossOrigin="anonymous" />
+          </div>
+        ) : (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0 overflow-hidden" style={{ top: '20vh', opacity: 0.04 }}>
+            <span className="text-[120px] font-black opacity-10 rotate-[-30deg] tracking-widest text-[#1A1A25]">
+              {settings?.acadName || 'A-N'}
+            </span>
+          </div>
+        )}
 
         {/* Header with Logo */}
         <div className="relative z-10 w-full mb-6 pb-6" style={{ borderBottom: '2px solid #d4af37' }}>

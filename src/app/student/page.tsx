@@ -4,12 +4,12 @@
 
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useStudentStore, useFileProcessingStore } from '@/lib/store';
-import { getStudentByCode, getPublishedExams, getAttemptsByStudent, getSettings, getMaterials, getAssignments, getStudentSubmissions, uploadFileToStorage, submitAssignment } from '@/lib/db';
+import { getStudentByCode, getPublishedExams, getAttemptsByStudent, getSettings, getMaterials, getAssignments, getStudentSubmissions, uploadFileToStorage, submitAssignment, subscribeToNotifications, dispatchNotification } from '@/lib/db';
 import { FileProcessor } from '@/lib/file-processor';
 import { showToast } from '@/lib/toast';
 import type { Settings } from '@/types';
-import type { Exam, Attempt, CourseMaterial, Assignment, AssignmentSubmission } from '@/types';
-import { GraduationCap, LogOut, BookOpen, BarChart2, ClipboardList, Download, Award, Video, FileText, Link as LinkIcon, BookMarked, Globe, Lock, Upload, MessageCircle, Loader2 } from 'lucide-react';
+import type { Exam, Attempt, CourseMaterial, Assignment, AssignmentSubmission, Notification } from '@/types';
+import { GraduationCap, LogOut, BookOpen, BarChart2, ClipboardList, Download, Award, Video, FileText, Link as LinkIcon, BookMarked, Globe, Lock, Upload, MessageCircle, Loader2, Bell } from 'lucide-react';
 import { PDFCompressionModal } from '@/components/PDFCompressionModal';
 import Link from 'next/link';
 import { formatDateAr, gradeColor, scoreLabel, getViewerUrl, getDownloadUrl } from '@/lib/utils';
@@ -42,6 +42,8 @@ export default function StudentPortal() {
   }>({ isOpen: false, file: null });
 
   const [activeTab, setActiveTab] = useState<'exams' | 'courses' | 'assignments' | 'results'>('exams');
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [showNotifs, setShowNotifs] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [certData, setCertData] = useState<{ attempt: Attempt, exam: Exam } | null>(null);
   const [siteSettings, setSiteSettings] = useState<Settings | null>(null);
@@ -50,10 +52,18 @@ export default function StudentPortal() {
   // File Preview Hook
   const { openPreview, PreviewModal } = useFilePreview();
 
-  useEffect(() => { setMounted(true); getSettings().then(s => setSiteSettings(s)); }, []);
+  useEffect(() => { setMounted(true); }, []);
 
   useEffect(() => {
-    if (student) loadStudentData();
+    if (student) {
+      getSettings(student.teacherId).then(s => setSiteSettings(s));
+      loadStudentData();
+      const unsub = subscribeToNotifications(student.teacherId, (allNotifs) => {
+        const myNotifs = allNotifs.filter(n => !n.targetUsers || n.targetUsers.length === 0 || n.targetUsers.includes(student.id) || (n as any).targetRoles?.includes('student'));
+        setNotifications(myNotifs);
+      });
+      return () => unsub();
+    }
   }, [student]);
 
   // Listen for background upload completion
@@ -79,10 +89,10 @@ export default function StudentPortal() {
     if (!student) return;
     try {
       const [allExams, myAtts, allMaterials, allAssignments, mySubs] = await Promise.all([
-        getPublishedExams().catch(e => { console.error('Failed to load exams:', e); return [] as Exam[]; }),
+        getPublishedExams(student.teacherId).catch(e => { console.error('Failed to load exams:', e); return [] as Exam[]; }),
         getAttemptsByStudent(student.id).catch(e => { console.error('Failed to load attempts:', e); return [] as Attempt[]; }),
-        getMaterials().catch(e => { console.error('Failed to load materials:', e); return [] as CourseMaterial[]; }),
-        getAssignments().catch(e => { console.error('Failed to load assignments:', e); return [] as Assignment[]; }),
+        getMaterials(student.teacherId).catch(e => { console.error('Failed to load materials:', e); return [] as CourseMaterial[]; }),
+        getAssignments(student.teacherId).catch(e => { console.error('Failed to load assignments:', e); return [] as Assignment[]; }),
         getStudentSubmissions(student.id).catch(e => { console.error('Failed to load submissions:', e); return [] as AssignmentSubmission[]; }),
       ]);
 
@@ -154,6 +164,7 @@ export default function StudentPortal() {
         assignmentId: assignId,
         studentId: student!.id,
         studentName: student!.name,
+        teacherId: student!.teacherId,
         textAnswer: submitText,
         fileUrl: uploadedFileUrl,
         maxScore: assignments.find(a => a.id === assignId)?.maxScore || 10,
@@ -163,6 +174,18 @@ export default function StudentPortal() {
 
       await submitAssignment(sub);
       
+      try {
+        const assign = assignments.find(a => a.id === assignId);
+        await dispatchNotification({
+          teacherId: student!.teacherId,
+          msg: `قام الطالب ${student!.name} بتسليم واجب: ${assign?.title || 'غير معروف'}`,
+          targetRoles: ['admin'],
+          channels: { inApp: true, whatsapp: false }
+        });
+      } catch (e) {
+        console.error('Failed to notify admin:', e);
+      }
+
       setSubmitText('');
       setSubmitFile(null);
       setUploadedFileUrl('');
@@ -263,6 +286,40 @@ export default function StudentPortal() {
               <MessageCircle size={13} /> واتساب
             </a>
           )}
+          
+          <div className="relative">
+            <button 
+              onClick={() => setShowNotifs(!showNotifs)}
+              className="relative p-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors"
+            >
+              <Bell size={18} />
+              {notifications.filter(n => !n.read).length > 0 && (
+                <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+              )}
+            </button>
+            
+            {showNotifs && (
+              <div className="absolute left-0 mt-2 w-72 max-h-96 overflow-y-auto bg-dark border border-white/10 rounded-xl shadow-xl z-50 p-2">
+                <h3 className="text-sm font-bold p-2 border-b border-white/10 mb-2">الإشعارات</h3>
+                {notifications.length === 0 ? (
+                  <div className="p-4 text-center text-xs text-text-muted">لا توجد إشعارات حالياً</div>
+                ) : (
+                  <div className="space-y-1">
+                    {notifications.map(notif => (
+                      <div key={notif.id} className="p-2.5 rounded-lg text-xs hover:bg-white/5 transition-colors border border-transparent hover:border-white/5 flex flex-col gap-1">
+                        <div className="flex items-center gap-2">
+                          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${notif.read ? 'bg-gray-500' : 'bg-gold'}`} />
+                          <span className={`${notif.read ? 'text-gray-400' : 'text-white font-bold'}`}>{notif.msg}</span>
+                        </div>
+                        <span className="text-[10px] text-gray-500 mr-3.5">{notif.time || new Date(notif.createdAt).toLocaleString('ar-EG')}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
           <button onClick={logout} className="btn-outline text-xs py-1.5 px-3">
             <LogOut size={13} /> خروج
           </button>

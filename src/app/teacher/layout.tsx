@@ -16,6 +16,7 @@ import {
 
 const NAV_ITEMS = [
   { href: '/teacher/dashboard', icon: LayoutDashboard, label: 'الرئيسية', section: 'main' },
+  { href: '/teacher/notifications', icon: Bell, label: 'الإشعارات', section: 'main' },
   { href: '/teacher/analytics', icon: TrendingUp, label: 'التحليلات', section: 'main' },
   { href: '/teacher/exams/create', icon: PlusCircle, label: 'اختبار جديد', section: 'exams' },
   { href: '/teacher/exams', icon: FileText, label: 'الاختبارات', section: 'exams' },
@@ -44,29 +45,29 @@ const SECTION_LABELS: Record<string, string> = {
 export default function TeacherLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { isAuthenticated, logout, setExams, setStudents, setAttempts, setGroups, setNotifications, setRegistrationRequests, setMaterials, setAssignments, notifications, settings } = useTeacherStore();
+  const { user, logout, setExams, setStudents, setAttempts, setGroups, setNotifications, setRegistrationRequests, setMaterials, setAssignments, notifications, settings } = useTeacherStore();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mounted, setMounted] = useState(false);
   const [syncStatus, setSyncStatus] = useState<'syncing' | 'synced' | 'offline'>('syncing');
 
   useEffect(() => {
     setMounted(true);
-    if (!isAuthenticated) { router.replace('/auth'); return; }
+    if (!user) { router.replace('/auth'); return; }
 
     // Real-time subscriptions
     setSyncStatus('syncing');
     const unsubs = [
-      subscribeToExams(data => { setExams(data); setSyncStatus('synced'); }),
-      subscribeToStudents(setStudents),
-      subscribeToAttempts(setAttempts),
-      subscribeToGroups(setGroups),
-      subscribeToNotifications(setNotifications),
-      subscribeToRegistrationRequests(setRegistrationRequests),
-      subscribeToMaterials(setMaterials),
-      subscribeToAssignments(setAssignments),
+      subscribeToExams(user.id, data => { setExams(data); setSyncStatus('synced'); }),
+      subscribeToStudents(user.id, setStudents),
+      subscribeToAttempts(user.id, setAttempts),
+      subscribeToGroups(user.id, setGroups),
+      subscribeToNotifications(user.id, setNotifications),
+      subscribeToRegistrationRequests(user.id, setRegistrationRequests),
+      subscribeToMaterials(user.id, setMaterials),
+      subscribeToAssignments(user.id, setAssignments),
     ];
     return () => unsubs.forEach(u => u());
-  }, [isAuthenticated]);
+  }, [user]);
 
   useEffect(() => {
     const handleResize = () => {
@@ -88,7 +89,7 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
-  if (!mounted || !isAuthenticated) return null;
+  if (!mounted || !user) return null;
 
   const grouped = NAV_ITEMS.reduce((acc, item) => {
     if (!acc[item.section]) acc[item.section] = [];
@@ -218,7 +219,7 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
           </div>
 
           <div className="flex items-center gap-2">
-            <Link href="/teacher/settings" className="w-10 h-10 rounded-xl flex items-center justify-center relative transition-all hover:bg-white/5"
+            <Link href="/teacher/notifications" className="w-10 h-10 rounded-xl flex items-center justify-center relative transition-all hover:bg-white/5"
                style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
               <Bell size={20} className="text-text-muted" />
               {unreadCount > 0 && (

@@ -8,7 +8,7 @@ import { ClipboardList, PlusCircle, Trash2, Users, CheckCircle, X, Download, Eye
 import { useFilePreview, FilePreviewModal } from '@/components/FilePreviewModal';
 
 export default function AssignmentsPage() {
-  const { groups, students } = useTeacherStore();
+  const { groups, students, user } = useTeacherStore();
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -39,7 +39,8 @@ export default function AssignmentsPage() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const data = await getAssignments();
+      if (!user) return;
+      const data = await getAssignments(user.id);
       setAssignments(data);
     } catch (e) {
       console.error(e);
@@ -60,6 +61,7 @@ export default function AssignmentsPage() {
     setSaving(true);
     try {
       await saveAssignment({
+        teacherId: user!.id,
         title: newAssign.title,
         description: newAssign.description || '',
         dueDate: newAssign.dueDate,

@@ -1,7 +1,20 @@
 // src/types/index.ts
 
+export interface TeacherUser {
+  id: string;
+  name: string;
+  username: string; // Used for login
+  password?: string; // Stored hashed or plain based on current setup
+  role: 'super_admin' | 'teacher';
+  subject?: string;
+  phone?: string;
+  isActive: boolean;
+  createdAt: number;
+}
+
 export interface Student {
   id: string;
+  teacherId: string;
   name: string;
   code: string;
   email?: string;
@@ -19,6 +32,7 @@ export interface Student {
 
 export interface Group {
   id: string;
+  teacherId: string;
   name: string;
   desc?: string;
   studentIds: string[];
@@ -40,19 +54,14 @@ export interface Question {
   allowWord?: boolean; // Word document upload
   gradingNote?: string;
   imageUrl?: string;
+  pdfUrl?: string;
 }
 
-// Assuming EssayQuestion is similar to Question but specifically for essays,
-// or it might be a subset/extension. For now, let's define it simply
-// or assume it's the same as Question if no other definition is provided.
-// If EssayQuestion is meant to be different, it should be defined elsewhere.
-// For the purpose of this edit, we'll assume it's a type that can be used here.
-// If EssayQuestion is not defined, this will cause a TS error.
-// Based on the context of EssayAnswer, it seems EssayQuestion might be similar to Question.
-export type EssayQuestion = Question; // Placeholder definition if not explicitly defined
+export type EssayQuestion = Question; 
 
 export interface Exam {
   id: string;
+  teacherId: string;
   title: string;
   subject?: string;
   desc?: string;
@@ -61,7 +70,7 @@ export interface Exam {
   questions: Question[];
   essayQuestions?: Question[];
   shuffle: boolean;
-  randomPickCount?: number; // Number of questions to randomly pick for each student (0 or undefined means all)
+  randomPickCount?: number; 
   allowRetake: boolean;
   allowResume: boolean;
   showAnswers: boolean;
@@ -71,7 +80,10 @@ export interface Exam {
   endTime?: string | null;
   createdAt: string;
   createdBy?: string;
+  imageUrl?: string;
+  pdfUrl?: string;
 }
+
 
 export interface EssayAnswer {
   questionId: string;
@@ -87,6 +99,7 @@ export interface EssayAnswer {
 
 export interface Attempt {
   id: string;
+  teacherId: string;
   examId: string;
   examTitle: string;
   studentId: string;
@@ -107,18 +120,35 @@ export interface Attempt {
 
 export interface Notification {
   id: string;
+  teacherId: string;
   msg: string;
   type: 'info' | 'success' | 'warning' | 'error';
   read: boolean;
   time: string;
   createdAt: number;
+  targetUsers?: string[]; 
+  targetRoles?: ('admin' | 'student')[];
+}
+
+export interface NotificationLog {
+  id: string;
+  teacherId: string;
+  type: 'whatsapp' | 'in_app' | 'both';
+  target: string; 
+  status: 'pending' | 'sent' | 'failed';
+  error?: string;
+  message: string;
+  createdAt: number;
+  updatedAt: number;
 }
 
 export interface Settings {
+  id?: string;
+  teacherId: string;
   acadName: string;
   teacherName: string;
   logoUrl?: string;
-  teacherPassword: string;
+  teacherPassword?: string; // Legacy, might be removed later
   primaryColor: string;
   secTabSwitch: boolean;
   secCopyPaste: boolean;
@@ -126,19 +156,20 @@ export interface Settings {
   secShuffleOptions: boolean;
   certHeader?: string;
   certFooter?: string;
-  certSignatureUrl?: string; // صورة التوقيع/الختم في الشهادة
+  certSignatureUrl?: string; 
   paymentMethods?: string;
   monthlyPrice?: number;
   yearlyPrice?: number;
   halfYearlyPrice?: number;
   coursePrice?: number;
   sessionPrice?: number;
-  whatsappNumber?: string; // رقم واتساب المعلم للتواصل مع الطلاب
-  whatsappTemplate?: string; // قالب رسالة الواتساب لإبلاغ أولياء الأمور
+  whatsappNumber?: string; 
+  whatsappTemplate?: string; 
 }
 
 export interface RegistrationRequest {
   id: string;
+  teacherId: string;
   name: string;
   phone: string;
   parentPhone: string;
@@ -152,31 +183,33 @@ export interface RegistrationRequest {
 
 export interface CourseMaterial {
   id: string;
+  teacherId: string;
   title: string;
   type: 'video' | 'pdf' | 'link' | 'file' | 'image';
-  url: string; // الرابط الأساسي
-  additionalLinks?: { label: string; url: string }[]; // روابط إضافية
-  fileUrl?: string; // رابط ملف مرفوع مباشرة
-  grade: string; // Empty means all grades
-  targetGroups?: string[]; // List of specific group IDs. If empty or absent, falls back to 'grade' or all groups.
+  url: string; 
+  additionalLinks?: { label: string; url: string }[]; 
+  fileUrl?: string; 
+  grade: string; 
+  targetGroups?: string[]; 
   subject: string;
   sequence: number;
   isFree: boolean;
-  exceptionalStudents: string[]; // List of specific student IDs who can bypass the subscription requirement
-  linkedExamId?: string; // اختبار مرتبط بهذا الدرس
-  linkedAssignmentId?: string; // واجب مرتبط بهذا الدرس
+  exceptionalStudents: string[]; 
+  linkedExamId?: string; 
+  linkedAssignmentId?: string; 
   createdAt: number;
   createdBy?: string;
 }
 
 export interface Assignment {
   id: string;
+  teacherId: string;
   title: string;
   description: string;
   dueDate: string;
   maxScore: number;
-  targetGroup?: string; // Legacy
-  targetGroups?: string[]; // New: support multiple groups
+  targetGroup?: string; 
+  targetGroups?: string[]; 
   fileUrl?: string;
   createdAt: string;
   createdBy?: string;
@@ -184,6 +217,7 @@ export interface Assignment {
 
 export interface AssignmentSubmission {
   id: string;
+  teacherId: string;
   assignmentId: string;
   studentId: string;
   studentName: string;
@@ -198,25 +232,28 @@ export interface AssignmentSubmission {
 
 export interface CalendarEvent {
   id: string;
+  teacherId: string;
   title: string;
   description?: string;
-  date: string; // ISO string for the date/time
+  date: string; 
   type: 'exam' | 'assignment' | 'manual' | 'holiday' | 'live_session';
-  referenceId?: string; // id of exam or assignment if linked
+  referenceId?: string; 
   createdAt: string;
 }
 
 export interface AcademyDB {
+  teachers: TeacherUser[];
   exams: Exam[];
   students: Student[];
   attempts: Attempt[];
   groups: Group[];
   notifications: Notification[];
   materials: CourseMaterial[];
-  settings: Settings;
+  settings: Settings[]; // Now an array of settings per teacher
 }
 
 export interface QuestionBankItem extends Question {
+  teacherId: string;
   subject?: string;
   unit?: string;
   difficulty: 'easy' | 'medium' | 'hard';

@@ -3,13 +3,13 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { Student, Exam, Attempt, Group, Settings, Notification, Question, RegistrationRequest, CourseMaterial, Assignment } from '@/types';
+import type { Student, Exam, Attempt, Group, Settings, Notification, Question, RegistrationRequest, CourseMaterial, Assignment, TeacherUser } from '@/types';
 
 // ==========================================
 // TEACHER STORE
 // ==========================================
 interface TeacherStore {
-  isAuthenticated: boolean;
+  user: TeacherUser | null;
   exams: Exam[];
   students: Student[];
   attempts: Attempt[];
@@ -24,7 +24,7 @@ interface TeacherStore {
   tempExamQuestions: Question[] | null;
 
   // Actions
-  setAuth: (val: boolean) => void;
+  setUser: (user: TeacherUser | null) => void;
   setExams: (exams: Exam[]) => void;
   setStudents: (students: Student[]) => void;
   setAttempts: (attempts: Attempt[]) => void;
@@ -43,7 +43,7 @@ interface TeacherStore {
 export const useTeacherStore = create<TeacherStore>()(
   persist(
     (set) => ({
-      isAuthenticated: false,
+      user: null,
       exams: [],
       students: [],
       attempts: [],
@@ -57,7 +57,7 @@ export const useTeacherStore = create<TeacherStore>()(
       isLoading: false,
       tempExamQuestions: null,
 
-      setAuth: (val) => set({ isAuthenticated: val }),
+      setUser: (user) => set({ user }),
       setExams: (exams) => set({ exams }),
       setStudents: (students) => set({ students }),
       setAttempts: (attempts) => set({ attempts }),
@@ -70,11 +70,11 @@ export const useTeacherStore = create<TeacherStore>()(
       setActiveTab: (activeTab) => set({ activeTab }),
       setLoading: (isLoading) => set({ isLoading }),
       setTempExamQuestions: (tempExamQuestions) => set({ tempExamQuestions }),
-      logout: () => set({ isAuthenticated: false, tempExamQuestions: null }),
+      logout: () => set({ user: null, tempExamQuestions: null }),
     }),
     {
       name: 'an-academy-teacher',
-      partialize: (state) => ({ isAuthenticated: state.isAuthenticated, settings: state.settings }),
+      partialize: (state) => ({ user: state.user, settings: state.settings }),
     }
   )
 );

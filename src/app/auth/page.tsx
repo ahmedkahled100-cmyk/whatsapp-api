@@ -1,16 +1,18 @@
 'use client';
 // src/app/auth/page.tsx
-// صفحة تسجيل دخول المعلم
+// صفحة تسجيل دخول المعلم / الإدارة
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTeacherStore } from '@/lib/store';
-import { getSettings } from '@/lib/db';
-import { Eye, EyeOff, Lock, GraduationCap, AlertCircle } from 'lucide-react';
+import { getTeacherByUsername, getTeachers, saveTeacher, getSettings } from '@/lib/db';
+import { Eye, EyeOff, Lock, User, GraduationCap, AlertCircle } from 'lucide-react';
+import type { TeacherUser } from '@/types';
 
 export default function AuthPage() {
   const router = useRouter();
-  const { isAuthenticated, setAuth, setSettings, settings } = useTeacherStore();
+  const { user, setUser, setSettings } = useTeacherStore();
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
   const [error, setError] = useState('');
@@ -19,33 +21,72 @@ export default function AuthPage() {
 
   useEffect(() => {
     setMounted(true);
-    if (isAuthenticated) router.replace('/teacher/dashboard');
-  }, [isAuthenticated, router]);
+    if (user) {
+      if (user.role === 'super_admin') router.replace('/admin');
+      else router.replace('/teacher/dashboard');
+    }
+  }, [user, router]);
 
   const handleLogin = async () => {
-    if (!password.trim()) { setError('يرجى إدخال كلمة المرور'); return; }
+    if (!username.trim() || !password.trim()) { setError('يرجى إدخال اسم المستخدم وكلمة المرور'); return; }
     setLoading(true);
     setError('');
+    
     try {
-      let settings = null;
-      try {
-        settings = await getSettings();
-      } catch (dbError) {
-        console.error('Database connection error:', dbError);
-        // Fallback to default password if DB is unreachable
+      // 1. Check if any users exist to seed the default admin
+      const existingTeachers = await getTeachers();
+      let teacherToAuth: TeacherUser | null = null;
+      
+      if (existingTeachers.length === 0) {
+        // Seed default super_admin
+        const newAdminId = await saveTeacher({
+          name: 'المدير العام',
+          username: 'admin',
+          password: 'admin123', // In production, this should be hashed
+          role: 'super_admin',
+          isActive: true,
+          createdAt: Date.now()
+        });
+        if (username === 'admin' && password === 'admin123') {
+          teacherToAuth = {
+            id: newAdminId,
+            name: 'المدير العام',
+            username: 'admin',
+            role: 'super_admin',
+            isActive: true,
+            createdAt: Date.now()
+          };
+        }
+      } else {
+        teacherToAuth = await getTeacherByUsername(username);
       }
 
-      const correctPass = settings?.teacherPassword || 'admin123';
-      if (password === correctPass) {
-        setAuth(true);
-        if (settings) setSettings(settings);
-        router.replace('/teacher/dashboard');
-      } else {
+      if (!teacherToAuth) {
+        setError('❌ المستخدم غير موجود');
+      } else if (!teacherToAuth.isActive) {
+        setError('❌ هذا الحساب غير مفعل');
+      } else if (teacherToAuth.password !== password) {
         setError('❌ كلمة المرور غير صحيحة');
-        setPassword('');
+      } else {
+        // Success
+        setUser(teacherToAuth);
+        
+        // Try to load settings if regular teacher
+        try {
+          const s = await getSettings(teacherToAuth.id);
+          if (s) setSettings(s);
+        } catch (dbError) {
+          console.error('Settings not found or db error', dbError);
+        }
+        
+        if (teacherToAuth.role === 'super_admin') {
+          router.replace('/admin');
+        } else {
+          router.replace('/teacher/dashboard');
+        }
       }
-    } catch (error) {
-      console.error(error);
+    } catch (err) {
+      console.error(err);
       setError('حدث خطأ، يرجى المحاولة مرة أخرى');
     } finally {
       setLoading(false);
@@ -72,15 +113,30 @@ export default function AuthPage() {
           <div className="flex flex-col items-center mb-6 sm:mb-8">
             <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl flex items-center justify-center mb-4 overflow-hidden relative"
               style={{ background: 'linear-gradient(135deg, var(--gold), var(--accent))', boxShadow: '0 0 40px rgba(245,197,24,0.4)', animation: 'pulseGold 3s ease-in-out infinite' }}>
-              {settings?.logoUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={settings.logoUrl} alt="Logo" className="w-full h-full object-cover relative z-10" />
-              ) : (
-                <GraduationCap size={32} color="#000" className="relative z-10 sm:size-[40px]" />
-              )}
+              <GraduationCap size={32} color="#000" className="relative z-10 sm:size-[40px]" />
             </div>
-            <h1 className="text-2xl sm:text-3xl font-cairo font-black gold-text text-center">{settings?.acadName || 'A-N Academy'}</h1>
-            <p className="text-xs sm:text-sm mt-1" style={{ color: 'var(--text-muted)' }}>لوحة تحكم المعلم</p>
+            <h1 className="text-2xl sm:text-3xl font-cairo font-black gold-text text-center">أكاديمية A-N</h1>
+            <p className="text-xs sm:text-sm mt-1" style={{ color: 'var(--text-muted)' }}>تسجيل الدخول للإدارة والمعلمين</p>
+          </div>
+
+          {/* Username Input */}
+          <div className="mb-4">
+            <label className="block text-xs sm:text-sm mb-2" style={{ color: 'var(--text-muted)' }}>
+              <User size={13} className="inline ml-1" />
+              اسم المستخدم
+            </label>
+            <div className="relative">
+              <input
+                type="text"
+                value={username}
+                onChange={e => { setUsername(e.target.value); setError(''); }}
+                onKeyDown={e => e.key === 'Enter' && handleLogin()}
+                placeholder="اسم المستخدم..."
+                className="input-base text-center text-lg sm:text-xl px-10 sm:px-14"
+                dir="ltr"
+                autoFocus
+              />
+            </div>
           </div>
 
           {/* Password Input */}
@@ -97,7 +153,7 @@ export default function AuthPage() {
                 onKeyDown={e => e.key === 'Enter' && handleLogin()}
                 placeholder="كلمة المرور..."
                 className="input-base text-center text-lg sm:text-xl tracking-widest px-10 sm:px-14"
-                autoFocus
+                dir="ltr"
               />
               <button
                 type="button"
@@ -122,21 +178,15 @@ export default function AuthPage() {
           <button
             onClick={handleLogin}
             disabled={loading}
-            className="btn-gold w-full justify-center text-lg py-4 disabled:opacity-60"
+            className="btn-gold w-full justify-center text-lg py-4 disabled:opacity-60 mt-4"
           >
-            {loading ? '⏳ جاري التحقق...' : '🚀 دخول لوحة التحكم'}
+            {loading ? '⏳ جاري التحقق...' : '🚀 دخول'}
           </button>
-
-          {/* Hint */}
-          <p className="text-center text-xs mt-4" style={{ color: 'var(--text-muted)', opacity: 0.6 }}>
-            كلمة المرور الافتراضية: <span className="font-mono" style={{ color: 'var(--gold)' }}>admin123</span>
-            <br />يمكن تغييرها من الإعدادات
-          </p>
 
           {/* Student link */}
           <div className="mt-6 pt-4 text-center" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
             <a href="/student" className="text-sm hover:underline" style={{ color: 'var(--text-muted)' }}>
-              👤 أنت طالب؟ اضغط هنا للدخول
+              👤 أنت طالب؟ اضغط هنا للدخول بالكود
             </a>
           </div>
         </div>

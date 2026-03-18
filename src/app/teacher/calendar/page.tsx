@@ -1,11 +1,13 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { getExams, getAssignments, getCalendarEvents, saveCalendarEvent } from '@/lib/db';
+import { saveCalendarEvent, getExams, getAssignments, getCalendarEvents } from '@/lib/db';
+import { useTeacherStore } from '@/lib/store';
 import { CalendarEvent } from '@/types';
 import { showToast } from '@/lib/toast';
 import { Calendar as CalendarIcon, PlusCircle, Clock, BookOpen, ClipboardList } from 'lucide-react';
 
 export default function CalendarPage() {
+  const { user } = useTeacherStore();
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -21,8 +23,9 @@ export default function CalendarPage() {
   const loadAllEvents = async () => {
     setLoading(true);
     try {
+      if (!user) return;
       // 1. Get Exams
-      const exams = await getExams();
+      const exams = await getExams(user.id);
       const examEvents = exams
         .filter(e => e.startTime) // Only scheduled exams
         .map(e => ({
@@ -32,11 +35,12 @@ export default function CalendarPage() {
           date: e.startTime!,
           type: 'exam' as const,
           referenceId: e.id,
+          teacherId: user!.id,
           createdAt: e.createdAt
         }));
 
       // 2. Get Assignments
-      const assignments = await getAssignments();
+      const assignments = await getAssignments(user.id);
       const assignEvents = assignments
         .filter(a => a.dueDate)
         .map(a => ({
@@ -46,11 +50,12 @@ export default function CalendarPage() {
           date: a.dueDate,
           type: 'assignment' as const,
           referenceId: a.id,
+          teacherId: user!.id,
           createdAt: a.createdAt
         }));
 
       // 3. Get Manual Calendar Events
-      const manualEvents = await getCalendarEvents();
+      const manualEvents = await getCalendarEvents(user.id);
 
       // Merge and Sort
       const allEvents = [...examEvents, ...assignEvents, ...manualEvents]
@@ -75,7 +80,7 @@ export default function CalendarPage() {
     }
     setSaving(true);
     try {
-      await saveCalendarEvent(newEvent as Omit<CalendarEvent, 'id'>);
+      await saveCalendarEvent({ ...(newEvent as Omit<CalendarEvent, 'id'>), teacherId: user!.id });
       await loadAllEvents();
       setShowAddForm(false);
       setNewEvent({ title: '', description: '', date: '', type: 'manual' });

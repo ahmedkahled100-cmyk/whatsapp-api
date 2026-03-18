@@ -4,11 +4,21 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 // API Route for generating AI WhatsApp message
 export async function POST(req: Request) {
   try {
-    const { studentName, examTitle, score, isPassed, maxScore } = await req.json();
+    let { studentName, examTitle, score, isPassed, maxScore } = await req.json();
 
-    if (!studentName || !examTitle || score === undefined || maxScore === undefined) {
-      return NextResponse.json({ error: 'Missing required parameters' }, { status: 400 });
+    const missing: string[] = [];
+    if (!studentName) missing.push('studentName');
+    if (!examTitle) missing.push('examTitle');
+    if (score === undefined) missing.push('score');
+
+    if (missing.length) {
+      return NextResponse.json(
+        { error: `Missing required parameters: ${missing.join(', ')}` },
+        { status: 400 }
+      );
     }
+
+    maxScore = maxScore || 100;
 
     // Use environment variable for the API key, typically NEXT_PUBLIC_GEMINI_API_KEY
     const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
@@ -39,7 +49,8 @@ export async function POST(req: Request) {
     التعليمات:
     - إن كان ناجحاً: هنئه وأشعر ولي الأمر بالفخر.
     - إن كان راسباً أو درجته ضعيفة: كن مشجعاً ولطيفاً واطلب من ولي الأمر دعمه للتحسن في المرات القادمة، لا تستخدم ألفاظاً قاسية.
-    - لا تذكر النسبة المئوية أبداً، فقط اذكر الدرجة الفعلية (مثل 15 من 20).
+    - اذكر الدرجة الفعلية بالضبط كما هي (مثل ${score} من ${maxScore}).
+    - لا تذكر النسبة المئوية أبداً.
     - اجعل الرسالة قصيرة قدر الإمكان (حوالي 3-4 أسطر).
     `;
 
