@@ -5,10 +5,12 @@ export interface TeacherUser {
   name: string;
   username: string; // Used for login
   password?: string; // Stored hashed or plain based on current setup
+  code?: string; // Unique mode for login
   role: 'super_admin' | 'teacher';
   subject?: string;
   phone?: string;
   isActive: boolean;
+  permissions?: string[]; // Granular features
   createdAt: number;
 }
 

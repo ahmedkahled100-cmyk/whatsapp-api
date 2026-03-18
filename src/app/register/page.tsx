@@ -217,7 +217,7 @@ export default function RegisterPage() {
                 >
                   <option value="" disabled>اختر المعلم...</option>
                   {teachers.map(t => (
-                    <option key={t.id} value={t.id}>{t.name} (@{t.username})</option>
+                    <option key={t.id} value={t.id}>{t.name} {t.code ? `[${t.code}]` : `(@${t.username})`}</option>
                   ))}
                 </select>
               </div>

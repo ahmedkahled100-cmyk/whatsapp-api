@@ -11,27 +11,27 @@ import {
   LayoutDashboard, PlusCircle, FileText, Users, BookOpen,
   BarChart2, ClipboardList, Calendar, Bot, TrendingUp,
   CreditCard, BookMarked, Settings, LogOut, Bell, Menu, X,
-  GraduationCap, Database, ChevronLeft, Zap
+  GraduationCap, Database, ChevronLeft, Zap, ShieldCheck
 } from 'lucide-react';
 
 const NAV_ITEMS = [
-  { href: '/teacher/dashboard', icon: LayoutDashboard, label: 'الرئيسية', section: 'main' },
-  { href: '/teacher/notifications', icon: Bell, label: 'الإشعارات', section: 'main' },
-  { href: '/teacher/analytics', icon: TrendingUp, label: 'التحليلات', section: 'main' },
-  { href: '/teacher/exams/create', icon: PlusCircle, label: 'اختبار جديد', section: 'exams' },
-  { href: '/teacher/exams', icon: FileText, label: 'الاختبارات', section: 'exams' },
-  { href: '/teacher/essays', icon: ClipboardList, label: 'المقالي', section: 'exams' },
-  { href: '/teacher/results', icon: BarChart2, label: 'النتائج', section: 'exams' },
-  { href: '/teacher/qbank', icon: Database, label: 'بنك الأسئلة', section: 'exams' },
-  { href: '/teacher/ai', icon: Bot, label: 'الذكاء الاصطناعي', section: 'exams' },
-  { href: '/teacher/students', icon: Users, label: 'الطلاب', section: 'students' },
-  { href: '/teacher/groups', icon: BookOpen, label: 'الفصول', section: 'students' },
-  { href: '/teacher/subscriptions', icon: CreditCard, label: 'الاشتراكات', section: 'students' },
-  { href: '/teacher/courses', icon: BookMarked, label: 'المناهج', section: 'content' },
-  { href: '/teacher/assignments', icon: ClipboardList, label: 'الواجبات', section: 'content' },
-  { href: '/teacher/calendar', icon: Calendar, label: 'التقويم', section: 'content' },
-  { href: '/teacher/tools/ilovepdf', icon: Zap, label: 'أدوات iLovePDF', section: 'content' },
-  { href: '/teacher/settings', icon: Settings, label: 'الإعدادات', section: 'settings' },
+  { href: '/teacher/dashboard', icon: LayoutDashboard, label: 'الرئيسية', section: 'main', permission: 'dashboard' },
+  { href: '/teacher/notifications', icon: Bell, label: 'الإشعارات', section: 'main', permission: 'notifications' },
+  { href: '/teacher/analytics', icon: TrendingUp, label: 'التحليلات', section: 'main', permission: 'analytics' },
+  { href: '/teacher/exams/create', icon: PlusCircle, label: 'اختبار جديد', section: 'exams', permission: 'exams' },
+  { href: '/teacher/exams', icon: FileText, label: 'الاختبارات', section: 'exams', permission: 'exams' },
+  { href: '/teacher/essays', icon: ClipboardList, label: 'المقالي', section: 'exams', permission: 'analytics' },
+  { href: '/teacher/results', icon: BarChart2, label: 'النتائج', section: 'exams', permission: 'students' },
+  { href: '/teacher/qbank', icon: Database, label: 'بنك الأسئلة', section: 'exams', permission: 'exams' },
+  { href: '/teacher/ai', icon: Bot, label: 'الذكاء الاصطناعي', section: 'exams', permission: 'ai' },
+  { href: '/teacher/students', icon: Users, label: 'الطلاب', section: 'students', permission: 'students' },
+  { href: '/teacher/groups', icon: BookOpen, label: 'الفصول', section: 'students', permission: 'groups' },
+  { href: '/teacher/subscriptions', icon: CreditCard, label: 'الاشتراكات', section: 'students', permission: 'subscriptions' },
+  { href: '/teacher/courses', icon: BookMarked, label: 'المناهج', section: 'content', permission: 'courses' },
+  { href: '/teacher/assignments', icon: ClipboardList, label: 'الواجبات', section: 'content', permission: 'assignments' },
+  { href: '/teacher/calendar', icon: Calendar, label: 'التقويم', section: 'content', permission: 'calendar' },
+  { href: '/teacher/tools/ilovepdf', icon: Zap, label: 'أدوات iLovePDF', section: 'content', permission: 'exams' },
+  { href: '/teacher/settings', icon: Settings, label: 'الإعدادات', section: 'settings', permission: 'settings' },
 ];
 
 const SECTION_LABELS: Record<string, string> = {
@@ -91,7 +91,13 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
 
   if (!mounted || !user) return null;
 
-  const grouped = NAV_ITEMS.reduce((acc, item) => {
+  const filteredNavItems = NAV_ITEMS.filter(item => {
+    if (user.role === 'super_admin') return true;
+    if (item.permission === 'settings') return true; // Always allow settings
+    return user.permissions?.includes(item.permission as string);
+  });
+
+  const grouped = filteredNavItems.reduce((acc, item) => {
     if (!acc[item.section]) acc[item.section] = [];
     acc[item.section].push(item);
     return acc;
@@ -185,6 +191,12 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
                <div className="text-xs font-bold truncate">{syncStatus === 'synced' ? 'متصل ومحدث' : syncStatus === 'offline' ? 'غير متصل' : 'جاري المزامنة...'}</div>
             </div>
           </div>
+          {user.role === 'super_admin' && (
+            <Link href="/admin" className="flex items-center gap-3 px-4 py-3 mx-2 rounded-xl transition-all duration-200 text-sm font-bold bg-purple-500/10 text-purple-400 border border-purple-500/20 hover:bg-purple-500/20 mb-2">
+              <ShieldCheck size={18} />
+              <span>لوحة الإدارة الشاملة</span>
+            </Link>
+          )}
           <button onClick={handleLogout}
             className="btn-danger w-full justify-center text-sm py-3">
             <LogOut size={16} />

@@ -3,11 +3,12 @@ import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useTeacherStore } from '@/lib/store';
-import { LayoutDashboard, Users, Settings, LogOut, Menu, X, ShieldCheck } from 'lucide-react';
+import { LayoutDashboard, Users, Settings, LogOut, Menu, X, ShieldCheck, GraduationCap } from 'lucide-react';
 
 const NAV_ITEMS = [
-  { href: '/admin', icon: LayoutDashboard, label: 'لوحة التحكم' },
+  { href: '/admin', icon: LayoutDashboard, label: 'لوحة التحكم الشاملة' },
   { href: '/admin/teachers', icon: Users, label: 'إدارة المعلمين' },
+  { href: '/teacher/dashboard', icon: GraduationCap, label: 'لوحة المعلم الخاصة بي' },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

@@ -6,7 +6,9 @@ import {
   deleteDoc, onSnapshot, query, where, orderBy, limit,
   writeBatch, addDoc
 } from 'firebase/firestore';
-import { db, storage } from './firebase';
+import { db as firebaseDb, storage as firebaseStorage } from './firebase';
+const db = firebaseDb!;
+const storage = firebaseStorage!;
 import type { 
   Exam, Student, Attempt, Group, Settings, 
   QuestionBankItem, Notification, Assignment, 
@@ -38,29 +40,54 @@ const NOTIFICATION_LOGS = 'notificationLogs';
 // TEACHERS (USERS)
 // ========================================
 export const getTeachers = async (): Promise<TeacherUser[]> => {
+  if (!db) return [];
   const snap = await getDocs(collection(db, TEACHERS));
   return snap.docs.map(d => ({ ...d.data(), id: d.id } as TeacherUser));
 };
 
 export const getTeacherByUsername = async (username: string): Promise<TeacherUser | null> => {
+  if (!db) return null;
   const q = query(collection(db, TEACHERS), where('username', '==', username), limit(1));
   const snap = await getDocs(q);
   if (snap.empty) return null;
   return { ...snap.docs[0].data(), id: snap.docs[0].id } as TeacherUser;
 };
 
+export const getTeacherByCode = async (code: string): Promise<TeacherUser | null> => {
+  if (!db) return null;
+  const q = query(collection(db, TEACHERS), where('code', '==', code.trim().toUpperCase()), limit(1));
+  const snap = await getDocs(q);
+  if (snap.empty) return null;
+  return { ...snap.docs[0].data(), id: snap.docs[0].id } as TeacherUser;
+};
+
 export const getTeacherById = async (id: string): Promise<TeacherUser | null> => {
+  if (!db) return null;
   const snap = await getDoc(doc(db, TEACHERS, id));
   return snap.exists() ? { ...snap.data(), id: snap.id } as TeacherUser : null;
 };
 
 export const saveTeacher = async (teacher: Omit<TeacherUser, 'id'> & { id?: string }): Promise<string> => {
+  if (!db) throw new Error('Database not initialized');
+  const cleanTeacher = { 
+    ...teacher, 
+    code: teacher.code?.trim().toUpperCase(),
+    username: teacher.username.trim().toLowerCase() 
+  };
+  
   if (teacher.id) {
-    await setDoc(doc(db, TEACHERS, teacher.id), teacher, { merge: true });
+    await setDoc(doc(db, TEACHERS, teacher.id), cleanTeacher, { merge: true });
     return teacher.id;
   }
-  const ref = await addDoc(collection(db, TEACHERS), { ...teacher, createdAt: Date.now() });
+  const ref = await addDoc(collection(db, TEACHERS), { ...cleanTeacher, createdAt: Date.now(), isActive: true });
   return ref.id;
+};
+
+export const updateSuperAdminCredentials = async (id: string, username: string, password?: string) => {
+  if (!db) throw new Error('Database not initialized');
+  const data: any = { username: username.trim().toLowerCase() };
+  if (password) data.password = password;
+  await updateDoc(doc(db, TEACHERS, id), data);
 };
 
 export const deleteTeacher = async (id: string) => {

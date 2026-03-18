@@ -56,7 +56,9 @@ export default function StudentPortal() {
 
   useEffect(() => {
     if (student) {
-      getSettings(student.teacherId).then(s => setSiteSettings(s));
+      if (student.teacherId) {
+        getSettings(student.teacherId).then(s => setSiteSettings(s));
+      }
       loadStudentData();
       const unsub = subscribeToNotifications(student.teacherId, (allNotifs) => {
         const myNotifs = allNotifs.filter(n => !n.targetUsers || n.targetUsers.length === 0 || n.targetUsers.includes(student.id) || (n as any).targetRoles?.includes('student'));
@@ -88,12 +90,15 @@ export default function StudentPortal() {
   const loadStudentData = async () => {
     if (!student) return;
     try {
+      const tId = student.teacherId || 'unknown_teacher';
+      const sId = student.id || 'unknown_student';
+
       const [allExams, myAtts, allMaterials, allAssignments, mySubs] = await Promise.all([
-        getPublishedExams(student.teacherId).catch(e => { console.error('Failed to load exams:', e); return [] as Exam[]; }),
-        getAttemptsByStudent(student.id).catch(e => { console.error('Failed to load attempts:', e); return [] as Attempt[]; }),
-        getMaterials(student.teacherId).catch(e => { console.error('Failed to load materials:', e); return [] as CourseMaterial[]; }),
-        getAssignments(student.teacherId).catch(e => { console.error('Failed to load assignments:', e); return [] as Assignment[]; }),
-        getStudentSubmissions(student.id).catch(e => { console.error('Failed to load submissions:', e); return [] as AssignmentSubmission[]; }),
+        getPublishedExams(tId).catch(e => { console.error('Failed to load exams:', e); return [] as Exam[]; }),
+        getAttemptsByStudent(sId).catch(e => { console.error('Failed to load attempts:', e); return [] as Attempt[]; }),
+        getMaterials(tId).catch(e => { console.error('Failed to load materials:', e); return [] as CourseMaterial[]; }),
+        getAssignments(tId).catch(e => { console.error('Failed to load assignments:', e); return [] as Assignment[]; }),
+        getStudentSubmissions(sId).catch(e => { console.error('Failed to load submissions:', e); return [] as AssignmentSubmission[]; }),
       ]);
 
       // Filter exams for this student's group
@@ -240,14 +245,28 @@ export default function StudentPortal() {
             )}
 
             <button onClick={handleLogin} disabled={loading}
-              className="btn-gold w-full justify-center text-base py-3.5 mb-4 disabled:opacity-60">
-              {loading ? '⏳ جاري التحقق...' : '🚀 دخول'}
+              className="btn-gold w-full justify-center text-lg py-4 mb-6 shadow-xl shadow-gold/20 hover:scale-[1.02] active:scale-[0.98] transition-all">
+              {loading ? <><Loader2 className="animate-spin" size={20} /> جاري الدخول...</> : '🚀 دخول للمنصة'}
             </button>
 
-            <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '16px' }}>
-              <a href="/auth" className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                🔐 أنت معلم؟ اضغط هنا
-              </a>
+            <div className="space-y-4 pt-6 border-t border-white/5">
+              <div className="flex flex-col gap-3">
+                <Link href="/register" className="text-sm font-bold gold-text hover:brightness-125 transition-all">
+                  ✨ ليس لديك حساب؟ اطلب اشتراك الآن
+                </Link>
+                <div className="flex items-center justify-center gap-4">
+                  <a href="/auth" className="text-xs text-text-muted hover:text-white transition-colors flex items-center gap-1">
+                    🔐 بوابة المعلم
+                  </a>
+                  <span className="text-white/5">|</span>
+                  <button 
+                    onClick={() => showToast('يرجى التواصل مع معلمك للحصول على كود الدخول الخاص بك')}
+                    className="text-xs text-text-muted hover:text-white transition-colors flex items-center gap-1"
+                  >
+                    ❓ نسيت الكود؟
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>

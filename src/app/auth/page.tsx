@@ -5,8 +5,8 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTeacherStore } from '@/lib/store';
-import { getTeacherByUsername, getTeachers, saveTeacher, getSettings } from '@/lib/db';
-import { Eye, EyeOff, Lock, User, GraduationCap, AlertCircle } from 'lucide-react';
+import { getTeacherByUsername, getTeachers, saveTeacher, getSettings, getTeacherByCode } from '@/lib/db';
+import { Eye, EyeOff, Lock, User, GraduationCap, AlertCircle, KeySquare } from 'lucide-react';
 import type { TeacherUser } from '@/types';
 
 export default function AuthPage() {
@@ -14,6 +14,8 @@ export default function AuthPage() {
   const { user, setUser, setSettings } = useTeacherStore();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [code, setCode] = useState('');
+  const [loginMethod, setLoginMethod] = useState<'credentials' | 'code'>('credentials');
   const [showPass, setShowPass] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -28,46 +30,70 @@ export default function AuthPage() {
   }, [user, router]);
 
   const handleLogin = async () => {
-    if (!username.trim() || !password.trim()) { setError('يرجى إدخال اسم المستخدم وكلمة المرور'); return; }
     setLoading(true);
     setError('');
     
     try {
-      // 1. Check if any users exist to seed the default admin
-      const existingTeachers = await getTeachers();
       let teacherToAuth: TeacherUser | null = null;
-      
-      if (existingTeachers.length === 0) {
-        // Seed default super_admin
-        const newAdminId = await saveTeacher({
-          name: 'المدير العام',
-          username: 'admin',
-          password: 'admin123', // In production, this should be hashed
-          role: 'super_admin',
-          isActive: true,
-          createdAt: Date.now()
-        });
-        if (username === 'admin' && password === 'admin123') {
-          teacherToAuth = {
-            id: newAdminId,
+
+      if (loginMethod === 'credentials') {
+        if (!username.trim() || !password.trim()) { 
+          setError('يرجى إدخال اسم المستخدم وكلمة المرور'); 
+          setLoading(false); 
+          return; 
+        }
+        
+        // 1. Check if any users exist to seed the default admin
+        const existingTeachers = await getTeachers();
+        
+        if (existingTeachers.length === 0) {
+          // Seed default super_admin
+          const newAdminId = await saveTeacher({
             name: 'المدير العام',
             username: 'admin',
+            password: 'admin123', // In production, this should be hashed
             role: 'super_admin',
             isActive: true,
             createdAt: Date.now()
-          };
+          });
+          if (username === 'admin' && password === 'admin123') {
+            teacherToAuth = {
+              id: newAdminId,
+              name: 'المدير العام',
+              username: 'admin',
+              role: 'super_admin',
+              isActive: true,
+              createdAt: Date.now()
+            };
+          }
+        } else {
+          teacherToAuth = await getTeacherByUsername(username);
+        }
+
+        if (!teacherToAuth) {
+          setError('❌ المستخدم غير موجود');
+        } else if (!teacherToAuth.isActive) {
+          setError('❌ هذا الحساب غير مفعل');
+        } else if (teacherToAuth.password !== password) {
+          setError('❌ كلمة المرور غير صحيحة');
+          teacherToAuth = null;
         }
       } else {
-        teacherToAuth = await getTeacherByUsername(username);
+        if (!code.trim()) { 
+          setError('يرجى إدخال كود الدخول'); 
+          setLoading(false); 
+          return; 
+        }
+        teacherToAuth = await getTeacherByCode(code.trim());
+        if (!teacherToAuth) {
+          setError('❌ الكود غير صحيح');
+        } else if (!teacherToAuth.isActive) {
+          setError('❌ هذا الحساب غير مفعل');
+          teacherToAuth = null;
+        }
       }
 
-      if (!teacherToAuth) {
-        setError('❌ المستخدم غير موجود');
-      } else if (!teacherToAuth.isActive) {
-        setError('❌ هذا الحساب غير مفعل');
-      } else if (teacherToAuth.password !== password) {
-        setError('❌ كلمة المرور غير صحيحة');
-      } else {
+      if (teacherToAuth) {
         // Success
         setUser(teacherToAuth);
         
@@ -119,51 +145,93 @@ export default function AuthPage() {
             <p className="text-xs sm:text-sm mt-1" style={{ color: 'var(--text-muted)' }}>تسجيل الدخول للإدارة والمعلمين</p>
           </div>
 
-          {/* Username Input */}
-          <div className="mb-4">
-            <label className="block text-xs sm:text-sm mb-2" style={{ color: 'var(--text-muted)' }}>
-              <User size={13} className="inline ml-1" />
+          {/* Method Toggle */}
+          <div className="flex bg-white/5 rounded-xl p-1 mb-6 border border-white/10">
+            <button
+              onClick={() => { setLoginMethod('credentials'); setError(''); }}
+              className={`flex-1 py-3 text-sm font-bold rounded-lg transition-all ${loginMethod === 'credentials' ? 'bg-gold text-black shadow-lg shadow-yellow-500/20' : 'text-gray-400 hover:text-white'}`}
+            >
               اسم المستخدم
-            </label>
-            <div className="relative">
-              <input
-                type="text"
-                value={username}
-                onChange={e => { setUsername(e.target.value); setError(''); }}
-                onKeyDown={e => e.key === 'Enter' && handleLogin()}
-                placeholder="اسم المستخدم..."
-                className="input-base text-center text-lg sm:text-xl px-10 sm:px-14"
-                dir="ltr"
-                autoFocus
-              />
-            </div>
+            </button>
+            <button
+              onClick={() => { setLoginMethod('code'); setError(''); }}
+              className={`flex-1 py-3 text-sm font-bold rounded-lg transition-all ${loginMethod === 'code' ? 'bg-gold text-black shadow-lg shadow-yellow-500/20' : 'text-gray-400 hover:text-white'}`}
+            >
+              كود الدخول
+            </button>
           </div>
 
-          {/* Password Input */}
-          <div className="mb-4">
-            <label className="block text-xs sm:text-sm mb-2" style={{ color: 'var(--text-muted)' }}>
-              <Lock size={13} className="inline ml-1" />
-              كلمة المرور
-            </label>
-            <div className="relative">
-              <input
-                type={showPass ? 'text' : 'password'}
-                value={password}
-                onChange={e => { setPassword(e.target.value); setError(''); }}
-                onKeyDown={e => e.key === 'Enter' && handleLogin()}
-                placeholder="كلمة المرور..."
-                className="input-base text-center text-lg sm:text-xl tracking-widest px-10 sm:px-14"
-                dir="ltr"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPass(!showPass)}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-gold transition-colors"
-              >
-                {showPass ? <EyeOff size={18} /> : <Eye size={18} />}
-              </button>
-            </div>
-          </div>
+          {loginMethod === 'credentials' ? (
+            <>
+              {/* Username Input */}
+              <div className="mb-4">
+                <label className="block text-xs sm:text-sm mb-2" style={{ color: 'var(--text-muted)' }}>
+                  <User size={13} className="inline ml-1" />
+                  اسم المستخدم
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={username}
+                    onChange={e => { setUsername(e.target.value); setError(''); }}
+                    onKeyDown={e => e.key === 'Enter' && handleLogin()}
+                    placeholder="اسم المستخدم..."
+                    className="input-base text-center text-lg sm:text-xl px-10 sm:px-14 py-4"
+                    dir="ltr"
+                    autoFocus
+                  />
+                </div>
+              </div>
+
+              {/* Password Input */}
+              <div className="mb-4">
+                <label className="block text-xs sm:text-sm mb-2" style={{ color: 'var(--text-muted)' }}>
+                  <Lock size={13} className="inline ml-1" />
+                  كلمة المرور
+                </label>
+                <div className="relative">
+                  <input
+                    type={showPass ? 'text' : 'password'}
+                    value={password}
+                    onChange={e => { setPassword(e.target.value); setError(''); }}
+                    onKeyDown={e => e.key === 'Enter' && handleLogin()}
+                    placeholder="كلمة المرور..."
+                    className="input-base text-center text-lg sm:text-xl tracking-widest px-10 sm:px-14 py-4"
+                    dir="ltr"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPass(!showPass)}
+                    className="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted hover:text-gold transition-colors"
+                  >
+                    {showPass ? <EyeOff size={20} /> : <Eye size={20} />}
+                  </button>
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              {/* Code Input */}
+              <div className="mb-4">
+                <label className="block text-xs sm:text-sm mb-2" style={{ color: 'var(--text-muted)' }}>
+                  <KeySquare size={13} className="inline ml-1" />
+                  كود الدخول
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={code}
+                    onChange={e => { setCode(e.target.value.toUpperCase()); setError(''); }}
+                    onKeyDown={e => e.key === 'Enter' && handleLogin()}
+                    placeholder="أدخل كود المرور..."
+                    className="input-base text-center text-lg sm:text-xl px-10 sm:px-14 tracking-widest font-mono py-4"
+                    dir="ltr"
+                    autoFocus
+                  />
+                </div>
+              </div>
+            </>
+          )}
 
           {/* Error */}
           {error && (
