@@ -69,17 +69,25 @@ export const getTeacherById = async (id: string): Promise<TeacherUser | null> =>
 
 export const saveTeacher = async (teacher: Omit<TeacherUser, 'id'> & { id?: string }): Promise<string> => {
   if (!db) throw new Error('Database not initialized');
-  const cleanTeacher = { 
+  // Clean up undefined/null values before saving to Firestore
+  const cleanTeacher: any = { 
     ...teacher, 
-    code: teacher.code?.trim().toUpperCase(),
-    username: teacher.username.trim().toLowerCase() 
+    username: (teacher.username || '').trim().toLowerCase() 
   };
   
+  if (teacher.code !== undefined && teacher.code !== null) {
+    cleanTeacher.code = teacher.code.trim().toUpperCase();
+  }
+
   if (teacher.id) {
     await setDoc(doc(db, TEACHERS, teacher.id), cleanTeacher, { merge: true });
     return teacher.id;
   }
-  const ref = await addDoc(collection(db, TEACHERS), { ...cleanTeacher, createdAt: Date.now(), isActive: true });
+  const ref = await addDoc(collection(db, TEACHERS), { 
+    ...cleanTeacher, 
+    createdAt: Date.now(), 
+    isActive: teacher.isActive !== undefined ? teacher.isActive : true 
+  });
   return ref.id;
 };
 
@@ -109,6 +117,7 @@ export const subscribeToTeachers = (callback: (teachers: TeacherUser[]) => void)
 // SETTINGS
 // ========================================
 export const getSettings = async (teacherId: string): Promise<Settings | null> => {
+  if (!teacherId || teacherId === 'unknown_teacher') return null;
   const q = query(collection(db, SETTINGS), where('teacherId', '==', teacherId), limit(1));
   const snap = await getDocs(q);
   return snap.empty ? null : { ...snap.docs[0].data(), id: snap.docs[0].id } as Settings;
@@ -139,6 +148,7 @@ export const getExams = async (teacherId: string): Promise<Exam[]> => {
 };
 
 export const getPublishedExams = async (teacherId: string): Promise<Exam[]> => {
+  if (!teacherId || teacherId === 'unknown_teacher') return [];
   const q = query(collection(db, EXAMS), where('teacherId', '==', teacherId), where('published', '==', true));
   const snap = await getDocs(q);
   return snap.docs.map(d => ({ ...d.data(), id: d.id } as Exam));
@@ -177,6 +187,7 @@ export const subscribeToExams = (teacherId: string, callback: (exams: Exam[]) =>
 // STUDENTS
 // ========================================
 export const getStudents = async (teacherId: string): Promise<Student[]> => {
+  if (!teacherId || teacherId === 'unknown_teacher') return [];
   const q = query(collection(db, STUDENTS), where('teacherId', '==', teacherId));
   const snap = await getDocs(q);
   return snap.docs.map(d => ({ ...d.data(), id: d.id } as Student));
@@ -260,6 +271,7 @@ export const subscribeToRegistrationRequests = (teacherId: string, callback: (re
 // ATTEMPTS
 // ========================================
 export const getAttemptsByStudent = async (studentId: string): Promise<Attempt[]> => {
+  if (!studentId || studentId === 'unknown_student') return [];
   const q = query(collection(db, ATTEMPTS), where('studentId', '==', studentId));
   const snap = await getDocs(q);
   return snap.docs.map(d => ({ ...d.data(), id: d.id } as Attempt));
@@ -465,6 +477,7 @@ export const dispatchNotification = async (options: DispatchOptions) => {
 // ASSIGNMENTS
 // ========================================
 export const getAssignments = async (teacherId: string): Promise<Assignment[]> => {
+  if (!teacherId || teacherId === 'unknown_teacher') return [];
   const q = query(collection(db, ASSIGNMENTS), where('teacherId', '==', teacherId));
   const snap = await getDocs(q);
   const items = snap.docs.map(d => ({ ...d.data(), id: d.id } as Assignment));
@@ -516,6 +529,7 @@ export const gradeSubmission = async (submissionId: string, score: number, comme
 };
 
 export const getStudentSubmissions = async (studentId: string): Promise<AssignmentSubmission[]> => {
+  if (!studentId || studentId === 'unknown_student') return [];
   const q = query(collection(db, ASSIGN_SUBS), where('studentId', '==', studentId));
   const snap = await getDocs(q);
   return snap.docs.map(d => ({ ...d.data(), id: d.id } as AssignmentSubmission));
@@ -736,6 +750,7 @@ export const getPlatformStats = async () => {
 // MATERIALS
 // ========================================
 export const getMaterials = async (teacherId: string): Promise<CourseMaterial[]> => {
+  if (!teacherId || teacherId === 'unknown_teacher') return [];
   const q = query(collection(db, MATERIALS), where('teacherId', '==', teacherId));
   const snap = await getDocs(q);
   const items = snap.docs.map(d => ({ ...d.data(), id: d.id } as CourseMaterial));

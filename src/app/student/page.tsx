@@ -92,10 +92,15 @@ export default function StudentPortal() {
   }, []);
 
   const loadStudentData = async () => {
-    if (!student) return;
+    if (!student || !student.id || student.id === 'unknown_student') return;
     try {
       const tId = student.teacherId || 'unknown_teacher';
-      const sId = student.id || 'unknown_student';
+      const sId = student.id;
+
+      if (tId === 'unknown_teacher') {
+        console.warn('Student has no teacherId assigned');
+        return;
+      }
 
       const [allExams, myAtts, allMaterials, allAssignments, mySubs] = await Promise.all([
         getPublishedExams(tId).catch(e => { console.error('Failed to load exams:', e); return [] as Exam[]; }),
