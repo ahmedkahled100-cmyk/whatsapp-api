@@ -155,30 +155,30 @@ export default function AuthPage() {
       </div>
 
       {/* Login Card */}
-      <div className="relative w-full max-w-md animate-scale-in">
-        <div className="card-base p-6 sm:p-10" style={{ boxShadow: '0 25px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(245,197,24,0.15)' }}>
+      <div className="relative w-full max-w-sm animate-scale-in">
+        <div className="card-base p-5 sm:p-7" style={{ boxShadow: '0 25px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(245,197,24,0.15)' }}>
 
           {/* Logo */}
-          <div className="flex flex-col items-center mb-6 sm:mb-8">
-            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl flex items-center justify-center mb-4 overflow-hidden relative"
+          <div className="flex flex-col items-center mb-4 sm:mb-6">
+            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center mb-3 overflow-hidden relative"
               style={{ background: 'linear-gradient(135deg, var(--gold), var(--accent))', boxShadow: '0 0 40px rgba(245,197,24,0.4)', animation: 'pulseGold 3s ease-in-out infinite' }}>
-              <GraduationCap size={32} color="#000" className="relative z-10 sm:size-[40px]" />
+              <GraduationCap size={28} color="#000" className="relative z-10 sm:size-[32px]" />
             </div>
-            <h1 className="text-2xl sm:text-3xl font-cairo font-black gold-text text-center">أكاديمية A-N</h1>
-            <p className="text-xs sm:text-sm mt-1" style={{ color: 'var(--text-muted)' }}>تسجيل الدخول للإدارة والمعلمين</p>
+            <h1 className="text-xl sm:text-2xl font-cairo font-black gold-text text-center">أكاديمية A-N</h1>
+            <p className="text-[10px] sm:text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>تسجيل الدخول للإدارة والمعلمين</p>
           </div>
 
           {/* Method Toggle */}
-          <div className="flex bg-white/5 rounded-xl p-1 mb-6 border border-white/10">
+          <div className="flex bg-white/5 rounded-xl p-1 mb-4 border border-white/10">
             <button
               onClick={() => { setLoginMethod('credentials'); setError(''); }}
-              className={`flex-1 py-3 text-sm font-bold rounded-lg transition-all ${loginMethod === 'credentials' ? 'bg-gold text-black shadow-lg shadow-yellow-500/20' : 'text-gray-400 hover:text-white'}`}
+              className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${loginMethod === 'credentials' ? 'bg-gold text-black shadow-lg shadow-yellow-500/20' : 'text-gray-400 hover:text-white'}`}
             >
               اسم المستخدم
             </button>
             <button
               onClick={() => { setLoginMethod('code'); setError(''); }}
-              className={`flex-1 py-3 text-sm font-bold rounded-lg transition-all ${loginMethod === 'code' ? 'bg-gold text-black shadow-lg shadow-yellow-500/20' : 'text-gray-400 hover:text-white'}`}
+              className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${loginMethod === 'code' ? 'bg-gold text-black shadow-lg shadow-yellow-500/20' : 'text-gray-400 hover:text-white'}`}
             >
               كود الدخول
             </button>
@@ -187,9 +187,9 @@ export default function AuthPage() {
           {loginMethod === 'credentials' ? (
             <>
               {/* Username Input */}
-              <div className="mb-4">
-                <label className="block text-xs sm:text-sm mb-2" style={{ color: 'var(--text-muted)' }}>
-                  <User size={13} className="inline ml-1" />
+              <div className="mb-3">
+                <label className="block text-[10px] sm:text-xs mb-1.5" style={{ color: 'var(--text-muted)' }}>
+                  <User size={12} className="inline ml-1" />
                   اسم المستخدم
                 </label>
                 <div className="relative">
@@ -199,7 +199,7 @@ export default function AuthPage() {
                     onChange={e => { setUsername(e.target.value); setError(''); }}
                     onKeyDown={e => e.key === 'Enter' && handleLogin()}
                     placeholder="اسم المستخدم..."
-                    className="input-base text-center text-lg sm:text-xl px-10 sm:px-14 py-4"
+                    className="input-base text-center text-base sm:text-lg px-8 sm:px-10 py-2.5"
                     dir="ltr"
                     autoFocus
                   />
@@ -207,9 +207,9 @@ export default function AuthPage() {
               </div>
 
               {/* Password Input */}
-              <div className="mb-4">
-                <label className="block text-xs sm:text-sm mb-2" style={{ color: 'var(--text-muted)' }}>
-                  <Lock size={13} className="inline ml-1" />
+              <div className="mb-3">
+                <label className="block text-[10px] sm:text-xs mb-1.5" style={{ color: 'var(--text-muted)' }}>
+                  <Lock size={12} className="inline ml-1" />
                   كلمة المرور
                 </label>
                 <div className="relative">
@@ -219,15 +219,15 @@ export default function AuthPage() {
                     onChange={e => { setPassword(e.target.value); setError(''); }}
                     onKeyDown={e => e.key === 'Enter' && handleLogin()}
                     placeholder="كلمة المرور..."
-                    className="input-base text-center text-lg sm:text-xl tracking-widest px-10 sm:px-14 py-4"
+                    className="input-base text-center text-base sm:text-lg tracking-widest px-8 sm:px-10 py-2.5"
                     dir="ltr"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPass(!showPass)}
-                    className="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted hover:text-gold transition-colors"
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-gold transition-colors"
                   >
-                    {showPass ? <EyeOff size={20} /> : <Eye size={20} />}
+                    {showPass ? <EyeOff size={18} /> : <Eye size={18} />}
                   </button>
                 </div>
               </div>
@@ -235,9 +235,9 @@ export default function AuthPage() {
           ) : (
             <>
               {/* Code Input */}
-              <div className="mb-4">
-                <label className="block text-xs sm:text-sm mb-2" style={{ color: 'var(--text-muted)' }}>
-                  <KeySquare size={13} className="inline ml-1" />
+              <div className="mb-3">
+                <label className="block text-[10px] sm:text-xs mb-1.5" style={{ color: 'var(--text-muted)' }}>
+                  <KeySquare size={12} className="inline ml-1" />
                   كود الدخول
                 </label>
                 <div className="relative">
@@ -247,7 +247,7 @@ export default function AuthPage() {
                     onChange={e => { setCode(e.target.value.toUpperCase()); setError(''); }}
                     onKeyDown={e => e.key === 'Enter' && handleLogin()}
                     placeholder="أدخل كود المرور..."
-                    className="input-base text-center text-lg sm:text-xl px-10 sm:px-14 tracking-widest font-mono py-4"
+                    className="input-base text-center text-base sm:text-lg px-8 sm:px-10 tracking-widest font-mono py-2.5"
                     dir="ltr"
                     autoFocus
                   />
@@ -258,10 +258,10 @@ export default function AuthPage() {
 
           {/* Error */}
           {error && (
-            <div className="flex items-center gap-2 p-3 rounded-xl mb-4 animate-fade-in"
+            <div className="flex items-center gap-2 p-2.5 rounded-xl mb-3 animate-fade-in"
               style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)' }}>
-              <AlertCircle size={16} style={{ color: 'var(--red)', flexShrink: 0 }} />
-              <span className="text-sm" style={{ color: 'var(--red)' }}>{error}</span>
+              <AlertCircle size={14} style={{ color: 'var(--red)', flexShrink: 0 }} />
+              <span className="text-xs" style={{ color: 'var(--red)' }}>{error}</span>
             </div>
           )}
 
@@ -269,13 +269,13 @@ export default function AuthPage() {
           <button
             onClick={handleLogin}
             disabled={loading}
-            className="btn-gold w-full justify-center text-lg py-4 disabled:opacity-60 mt-4"
+            className="btn-gold w-full justify-center text-base py-3 disabled:opacity-60 mt-2"
           >
             {loading ? '⏳ جاري التحقق...' : '🚀 دخول'}
           </button>
 
           {/* Student link */}
-          <div className="mt-6 pt-4 text-center space-y-3" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+          <div className="mt-4 pt-3 text-center space-y-2" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
             <button 
               onClick={() => { setShowForgot(true); setError(''); }}
               className="text-sm block w-full hover:underline" style={{ color: 'var(--text-muted)' }}

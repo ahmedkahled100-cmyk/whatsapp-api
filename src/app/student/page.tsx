@@ -241,11 +241,11 @@ export default function StudentPortal() {
             style={{ background: 'radial-gradient(circle, var(--gold), transparent)', filter: 'blur(60px)' }} />
         </div>
         <div className="relative w-full max-w-sm animate-scale-in">
-          <div className="card-base p-6 sm:p-8 text-center"
+          <div className="card-base p-5 sm:p-7 text-center"
             style={{ boxShadow: '0 25px 80px rgba(0,0,0,0.5), 0 0 0 1px rgba(245,197,24,0.12)' }}>
-            <div className="text-5xl sm:text-6xl mb-4">🎓</div>
-            <h1 className="text-xl sm:text-2xl font-cairo font-black gold-text mb-1">بوابة الطالب</h1>
-            <p className="text-xs sm:text-sm mb-6" style={{ color: 'var(--text-muted)' }}>أدخل كودك للوصول إلى اختباراتك</p>
+            <div className="text-4xl sm:text-5xl mb-3">🎓</div>
+            <h1 className="text-lg sm:text-xl font-cairo font-black gold-text mb-1">بوابة الطالب</h1>
+            <p className="text-[10px] sm:text-xs mb-4" style={{ color: 'var(--text-muted)' }}>أدخل كودك للوصول إلى اختباراتك</p>
 
             <input
               type="text"
@@ -253,7 +253,7 @@ export default function StudentPortal() {
               onChange={e => { setCode(e.target.value.toUpperCase()); setError(''); }}
               onKeyDown={e => e.key === 'Enter' && handleLogin()}
               placeholder="أدخل الكود..."
-              className="input-base text-center text-xl sm:text-2xl font-mono tracking-[0.2em] sm:tracking-[0.3em] mb-4"
+              className="input-base text-center text-lg sm:text-xl font-mono tracking-[0.2em] sm:tracking-[0.3em] mb-3 py-3"
               style={{ border: '2px solid rgba(245,197,24,0.2)' }}
               maxLength={8}
               autoFocus
@@ -261,25 +261,25 @@ export default function StudentPortal() {
 
 
             {error && (
-              <div className="p-2.5 rounded-lg mb-3 text-sm" style={{ background: 'rgba(239,68,68,0.1)', color: 'var(--red)', border: '1px solid rgba(239,68,68,0.2)' }}>
+              <div className="p-2 rounded-lg mb-3 text-xs" style={{ background: 'rgba(239,68,68,0.1)', color: 'var(--red)', border: '1px solid rgba(239,68,68,0.2)' }}>
                 {error}
               </div>
             )}
 
             <button onClick={handleLogin} disabled={loading}
-              className="btn-gold w-full justify-center text-lg py-4 mb-6 shadow-xl shadow-gold/20 hover:scale-[1.02] active:scale-[0.98] transition-all">
-              {loading ? <><Loader2 className="animate-spin" size={20} /> جاري الدخول...</> : '🚀 دخول للمنصة'}
+              className="btn-gold w-full justify-center text-base py-3 mb-4 shadow-xl shadow-gold/20 hover:scale-[1.02] active:scale-[0.98] transition-all">
+              {loading ? <><Loader2 className="animate-spin" size={18} /> جاري...</> : '🚀 دخول للمنصة'}
             </button>
 
-            <div className="space-y-4 pt-6 border-t border-white/5">
-              <div className="flex flex-col gap-3">
-                <Link href="/register" className="text-sm font-bold gold-text hover:brightness-125 transition-all">
+            <div className="space-y-3 pt-4 border-t border-white/5">
+              <div className="flex flex-col gap-2">
+                <Link href="/register" className="text-xs font-bold gold-text hover:brightness-125 transition-all">
                   ✨ ليس لديك حساب؟ اطلب اشتراك الآن
                 </Link>
                 <div className="flex items-center justify-center gap-4">
                   <button 
                     onClick={() => setShowForgotCode(true)}
-                    className="text-xs text-text-muted hover:text-white transition-colors flex items-center gap-1"
+                    className="text-[10px] text-text-muted hover:text-white transition-colors flex items-center gap-1"
                   >
                     ❓ نسيت الكود؟
                   </button>
