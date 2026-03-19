@@ -79,7 +79,9 @@ export default function ManageTeachersPage() {
       await deleteTeacher(id);
       showToast('تم الحذف بنجاح');
       loadData();
-    } catch (e) { showToast('فشل الحذف'); }
+    } catch (e: any) { 
+      showToast(e.message || 'فشل الحذف'); 
+    }
   };
 
   const handleUpdateAdmin = async (e: React.FormEvent) => {
@@ -231,9 +233,11 @@ export default function ManageTeachersPage() {
                         }} className="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-400 hover:bg-blue-500 hover:text-white flex items-center justify-center transition-all">
                             <Edit2 size={14}/>
                         </button>
-                        <button onClick={() => handleDelete(t.id, t.name)} className="w-8 h-8 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white flex items-center justify-center transition-all">
-                            <Trash2 size={14}/>
-                        </button>
+                        {t.role !== 'super_admin' && (
+                          <button onClick={() => handleDelete(t.id, t.name)} className="w-8 h-8 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white flex items-center justify-center transition-all">
+                              <Trash2 size={14}/>
+                          </button>
+                        )}
                     </div>
                 </div>
               </div>

@@ -4,7 +4,7 @@
 
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useStudentStore, useFileProcessingStore } from '@/lib/store';
-import { getStudentByCode, getPublishedExams, getAttemptsByStudent, getSettings, getMaterials, getAssignments, getStudentSubmissions, uploadFileToStorage, submitAssignment, subscribeToNotifications, dispatchNotification } from '@/lib/db';
+import { getStudentByCode, getStudentByParentPhone, getPublishedExams, getAttemptsByStudent, getSettings, getMaterials, getAssignments, getStudentSubmissions, uploadFileToStorage, submitAssignment, subscribeToNotifications, dispatchNotification } from '@/lib/db';
 import { FileProcessor } from '@/lib/file-processor';
 import { showToast } from '@/lib/toast';
 import type { Settings } from '@/types';
@@ -47,6 +47,10 @@ export default function StudentPortal() {
   const [mounted, setMounted] = useState(false);
   const [certData, setCertData] = useState<{ attempt: Attempt, exam: Exam } | null>(null);
   const [siteSettings, setSiteSettings] = useState<Settings | null>(null);
+  const [showForgotCode, setShowForgotCode] = useState(false);
+  const [parentPhone, setParentPhone] = useState('');
+  const [recoveredCode, setRecoveredCode] = useState('');
+  const [findingCode, setFindingCode] = useState(false);
   const certRef = useRef<HTMLDivElement>(null);
 
   // File Preview Hook
@@ -157,6 +161,24 @@ export default function StudentPortal() {
     finally { setLoading(false); }
   };
 
+  const handleForgotCode = async () => {
+    if (!parentPhone.trim()) { showToast('أدخل رقم ولي الأمر أولاً'); return; }
+    setFindingCode(true);
+    setRecoveredCode('');
+    try {
+      const s = await getStudentByParentPhone(parentPhone.trim());
+      if (s) {
+        setRecoveredCode(s.code);
+      } else {
+        showToast('لم يتم العثور على طالب بهذا الرقم');
+      }
+    } catch (e) {
+      showToast('حدث خطأ أثناء البحث');
+    } finally {
+      setFindingCode(false);
+    }
+  };
+
   const handleAssignmentSubmit = async (assignId: string) => {
     if (!submitText.trim() && !uploadedFileUrl) {
       showToast('يرجى كتابة نص الإجابة أو الانتظار حتى اكتمال رفع الملف');
@@ -255,12 +277,8 @@ export default function StudentPortal() {
                   ✨ ليس لديك حساب؟ اطلب اشتراك الآن
                 </Link>
                 <div className="flex items-center justify-center gap-4">
-                  <a href="/auth" className="text-xs text-text-muted hover:text-white transition-colors flex items-center gap-1">
-                    🔐 بوابة المعلم
-                  </a>
-                  <span className="text-white/5">|</span>
                   <button 
-                    onClick={() => showToast('يرجى التواصل مع معلمك للحصول على كود الدخول الخاص بك')}
+                    onClick={() => setShowForgotCode(true)}
                     className="text-xs text-text-muted hover:text-white transition-colors flex items-center gap-1"
                   >
                     ❓ نسيت الكود؟
@@ -268,6 +286,49 @@ export default function StudentPortal() {
                 </div>
               </div>
             </div>
+
+            {/* Forgot Code Modal */}
+            {showForgotCode && (
+              <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+                <div className="card-base w-full max-w-sm p-6 border border-gold/30 animate-scale-in">
+                  <h3 className="text-xl font-bold mb-4 text-center">استرجاع كود الطالب</h3>
+                  <p className="text-xs text-text-muted mb-4 text-center">أدخل رقم هاتف ولي الأمر المسجل للحصول على الكود الخاص بك.</p>
+                  
+                  <input
+                    type="tel"
+                    placeholder="رقم هاتف ولي الأمر..."
+                    className="input-base w-full text-center mb-4"
+                    value={parentPhone}
+                    onChange={e => setParentPhone(e.target.value)}
+                  />
+
+                  {recoveredCode && (
+                    <div className="p-4 rounded-xl bg-green-500/10 border border-green-500/20 mb-4 text-center animate-bounce">
+                      <p className="text-xs text-green-400 mb-1">كود الطالب الخاص بك هو:</p>
+                      <p className="text-2xl font-black font-mono text-white tracking-widest">{recoveredCode}</p>
+                    </div>
+                  )}
+
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={() => { setShowForgotCode(false); setRecoveredCode(''); setParentPhone(''); }}
+                      className="btn-outline flex-1 py-3"
+                    >
+                      إغلاق
+                    </button>
+                    {!recoveredCode && (
+                      <button 
+                        onClick={handleForgotCode}
+                        disabled={findingCode}
+                        className="btn-gold flex-[2] py-3"
+                      >
+                        {findingCode ? 'جاري البحث...' : '🔍 عرض الكود'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

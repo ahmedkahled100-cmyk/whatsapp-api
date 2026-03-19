@@ -91,8 +91,12 @@ export const updateSuperAdminCredentials = async (id: string, username: string, 
 };
 
 export const deleteTeacher = async (id: string) => {
+  if (!db) throw new Error('Database not initialized');
+  const teacher = await getTeacherById(id);
+  if (teacher?.role === 'super_admin') {
+    throw new Error('لا يمكن حذف حساب المدير العام (Super Admin)');
+  }
   await deleteDoc(doc(db, TEACHERS, id));
-  // Note: in a production environment, you might also want to delete all their related documents.
 };
 
 export const subscribeToTeachers = (callback: (teachers: TeacherUser[]) => void) => {
@@ -183,6 +187,20 @@ export const getStudentByCode = async (code: string): Promise<Student | null> =>
   const snap = await getDocs(q);
   if (snap.empty) return null;
   return { ...snap.docs[0].data(), id: snap.docs[0].id } as Student;
+};
+
+export const getStudentByParentPhone = async (parentPhone: string): Promise<Student | null> => {
+  const q = query(collection(db, STUDENTS), where('parentPhone', '==', parentPhone.trim()), limit(1));
+  const snap = await getDocs(q);
+  if (snap.empty) return null;
+  return { ...snap.docs[0].data(), id: snap.docs[0].id } as Student;
+};
+
+export const getTeacherByPhone = async (phone: string): Promise<TeacherUser | null> => {
+  const q = query(collection(db, TEACHERS), where('phone', '==', phone.trim()), limit(1));
+  const snap = await getDocs(q);
+  if (snap.empty) return null;
+  return { ...snap.docs[0].data(), id: snap.docs[0].id } as TeacherUser;
 };
 
 export const saveStudent = async (student: Omit<Student, 'id'> & { id?: string }): Promise<string> => {

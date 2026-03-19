@@ -8,12 +8,17 @@ import { useTeacherStore } from '@/lib/store';
 
 export default function HomePage() {
   const router = useRouter();
-  const isAuthenticated = useTeacherStore(s => s.isAuthenticated);
+  const user = useTeacherStore(s => s.user);
+  const isAuthenticated = !!user;
 
   useEffect(() => {
+    // Check for student session in local storage (client-side)
+    const studentData = localStorage.getItem('an-academy-student');
+    const hasStudent = studentData ? JSON.parse(studentData).state?.student : null;
+
     // Check URL params for student route
     const params = new URLSearchParams(window.location.search);
-    if (params.has('student') || params.has('exam')) {
+    if (params.has('student') || params.has('exam') || hasStudent) {
       router.replace('/student');
       return;
     }
@@ -21,7 +26,8 @@ export default function HomePage() {
     if (isAuthenticated) {
       router.replace('/teacher/dashboard');
     } else {
-      router.replace('/auth');
+      // Default to student portal as it's the primary entry point for users
+      router.replace('/student');
     }
   }, [isAuthenticated, router]);
 

@@ -5,7 +5,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTeacherStore } from '@/lib/store';
-import { getTeacherByUsername, getTeachers, saveTeacher, getSettings, getTeacherByCode } from '@/lib/db';
+import { getTeacherByUsername, getTeachers, saveTeacher, getSettings, getTeacherByCode, getTeacherByPhone } from '@/lib/db';
 import { Eye, EyeOff, Lock, User, GraduationCap, AlertCircle, KeySquare } from 'lucide-react';
 import type { TeacherUser } from '@/types';
 
@@ -20,6 +20,10 @@ export default function AuthPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [showForgot, setShowForgot] = useState(false);
+  const [phone, setPhone] = useState('');
+  const [recoveredInfo, setRecoveredInfo] = useState<TeacherUser | null>(null);
+  const [finding, setFinding] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -116,6 +120,25 @@ export default function AuthPage() {
       setError('حدث خطأ، يرجى المحاولة مرة أخرى');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleForgotInfo = async () => {
+    if (!phone.trim()) { setError('أدخل رقم هاتفك المسجل أولاً'); return; }
+    setFinding(true);
+    setRecoveredInfo(null);
+    try {
+      const t = await getTeacherByPhone(phone.trim());
+      if (t) {
+        setRecoveredInfo(t);
+        setError('');
+      } else {
+        setError('❌ لم يتم العثور على حساب بهذا الرقم');
+      }
+    } catch (err) {
+      setError('حدث خطأ أثناء البحث');
+    } finally {
+      setFinding(false);
     }
   };
 
@@ -252,11 +275,79 @@ export default function AuthPage() {
           </button>
 
           {/* Student link */}
-          <div className="mt-6 pt-4 text-center" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-            <a href="/student" className="text-sm hover:underline" style={{ color: 'var(--text-muted)' }}>
+          <div className="mt-6 pt-4 text-center space-y-3" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+            <button 
+              onClick={() => { setShowForgot(true); setError(''); }}
+              className="text-sm block w-full hover:underline" style={{ color: 'var(--text-muted)' }}
+            >
+              ❓ نسيت بيانات الدخول؟ استرجاع بالهاتف
+            </button>
+            <a href="/student" className="text-sm block w-full hover:underline font-bold" style={{ color: 'var(--gold)' }}>
               👤 أنت طالب؟ اضغط هنا للدخول بالكود
             </a>
           </div>
+
+          {/* Forgot Credentials Modal */}
+          {showForgot && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-fade-in">
+              <div className="card-base w-full max-w-md p-6 sm:p-8 border border-gold/30 animate-scale-in">
+                <h3 className="text-xl font-bold mb-4 text-center gold-text">استرجاع بيانات المعلم</h3>
+                <p className="text-xs text-text-muted mb-6 text-center">أدخل رقم الهاتف المسجل في حسابك لاسترجاع بيانات الدخول.</p>
+                
+                <input
+                  type="tel"
+                  placeholder="رقم الهاتف..."
+                  className="input-base w-full text-center text-lg mb-4"
+                  value={phone}
+                  onChange={e => { setPhone(e.target.value); setError(''); }}
+                  dir="ltr"
+                />
+
+                {error && (
+                  <div className="p-3 rounded-lg mb-4 text-xs text-center" style={{ background: 'rgba(239,68,68,0.1)', color: 'var(--red)', border: '1px solid rgba(239,68,68,0.2)' }}>
+                    {error}
+                  </div>
+                )}
+
+                {recoveredInfo && (
+                  <div className="p-5 rounded-2xl bg-white/5 border border-gold/20 mb-6 space-y-3 animate-slide-up">
+                    <div className="flex justify-between items-center border-b border-white/5 pb-2">
+                      <span className="text-xs text-text-muted">اسم المستخدم:</span>
+                      <span className="font-bold text-white selection:bg-gold selection:text-black">{recoveredInfo.username}</span>
+                    </div>
+                    <div className="flex justify-between items-center border-b border-white/5 pb-2">
+                      <span className="text-xs text-text-muted">كلمة المرور:</span>
+                      <span className="font-bold text-white selection:bg-gold selection:text-black">{recoveredInfo.password}</span>
+                    </div>
+                    {recoveredInfo.code && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs text-text-muted">كود الدخول:</span>
+                        <span className="font-bold text-gold selection:bg-white selection:text-black">{recoveredInfo.code}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="flex gap-3">
+                  <button 
+                    onClick={() => { setShowForgot(false); setRecoveredInfo(null); setPhone(''); setError(''); }}
+                    className="btn-outline flex-1 py-3"
+                  >
+                    إغلاق
+                  </button>
+                  {!recoveredInfo && (
+                    <button 
+                      onClick={handleForgotInfo}
+                      disabled={finding}
+                      className="btn-gold flex-[2] py-3 shadow-lg shadow-gold/20"
+                    >
+                      {finding ? '⏳ جاري البحث...' : '🔍 استرجاع البيانات'}
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
