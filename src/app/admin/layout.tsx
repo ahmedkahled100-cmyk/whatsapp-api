@@ -8,6 +8,7 @@ import { LayoutDashboard, Users, Settings, LogOut, Menu, X, ShieldCheck, Graduat
 const NAV_ITEMS = [
   { href: '/admin', icon: LayoutDashboard, label: 'لوحة التحكم الشاملة' },
   { href: '/admin/teachers', icon: Users, label: 'إدارة المعلمين' },
+  { href: '/admin/settings', icon: Settings, label: 'إعدادات المنصة' },
   { href: '/teacher/dashboard', icon: GraduationCap, label: 'لوحة المعلم الخاصة بي' },
 ];
 

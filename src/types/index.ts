@@ -11,22 +11,29 @@ export interface TeacherUser {
   phone?: string;
   isActive: boolean;
   permissions?: string[]; // Granular features
+  subType?: 'free' | 'monthly' | 'yearly';
+  subExpiry?: number | null;
+  subLink?: string;
+  subPrice?: number;
   createdAt: number;
 }
 
 export interface Student {
   id: string;
   teacherId: string;
+  teacherCode?: string;
   name: string;
   code: string;
   email?: string;
   phone?: string;
   parentPhone?: string;
   grade?: string;
+  teacherName?: string; // Cache for easy UI/Messaging display
   groupIds: string[];
   notes?: string;
   imageUrl?: string;
   subType: 'none' | 'monthly' | 'yearly' | 'session' | 'halfYearly' | 'course';
+  subPrice?: number;
   subExpiry?: number | null;
   registeredAt: string;
   createdAt: number;
@@ -172,6 +179,7 @@ export interface Settings {
 export interface RegistrationRequest {
   id: string;
   teacherId: string;
+  teacherCode?: string;
   name: string;
   phone: string;
   parentPhone: string;
@@ -179,8 +187,10 @@ export interface RegistrationRequest {
   subType: 'monthly' | 'yearly' | 'halfYearly' | 'course' | 'session';
   paymentRef?: string;
   receiptUrl?: string;
+  type?: 'student' | 'teacher';
   status: 'pending' | 'approved' | 'rejected';
   createdAt: number;
+  subject?: string; // For teacher registration
 }
 
 export interface CourseMaterial {
@@ -230,6 +240,29 @@ export interface AssignmentSubmission {
   teacherComment?: string;
   submittedAt: string;
   status: 'pending' | 'graded';
+}
+
+export interface Message {
+  id: string;
+  senderId: string;
+  senderName: string;
+  receiverId: string;
+  receiverName: string;
+  content: string;
+  timestamp: number;
+  isRead: boolean;
+  teacherId: string; // Context for grouping
+  type?: 'text' | 'image' | 'file';
+  fileUrl?: string;
+}
+
+export interface Conversation {
+  id: string; // Typically minId_maxId
+  participants: string[];
+  participantNames: string[];
+  lastMessage?: Message;
+  updatedAt: number;
+  unreadCount?: number;
 }
 
 export interface CalendarEvent {

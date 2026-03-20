@@ -14,15 +14,15 @@ import { getFirestore } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 import { getStorage } from 'firebase/storage';
 
-// Firebase Configuration - Hardcoded for reliability
+// Firebase Configuration - Using environment variables for security and flexibility
 const firebaseConfig = {
-  apiKey: "AIzaSyDfHZ9DhHwnE03KfuCFP8Gul-3QoGGUV9A",
-  authDomain: "a-n-academy-2026.firebaseapp.com",
-  projectId: "a-n-academy-2026",
-  storageBucket: "a-n-academy-2026.appspot.com",
-  messagingSenderId: "991660062279",
-  appId: "1:991660062279:web:763011fc1776db624be362",
-  measurementId: "G-L8Q6EKSRKY",
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
 };
 
 // Prevent duplicate initialization with error handling
@@ -42,7 +42,11 @@ try {
 }
 
 // Only export if app is initialized
-export const db = app ? getFirestore(app) : null;
-export const auth = app ? getAuth(app) : null;
-export const storage = app ? getStorage(app) : null;
+if (!app) {
+  throw new Error('Firebase initialization failed. Check your environment variables.');
+}
+
+export const db = getFirestore(app);
+export const auth = getAuth(app);
+export const storage = getStorage(app);
 export default app;

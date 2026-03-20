@@ -1,0 +1,78 @@
+// src/lib/db/messages.ts
+import { 
+  collection, addDoc, getDocs, setDoc, onSnapshot, 
+  query, where, orderBy, limit, writeBatch, doc,
+  serverTimestamp, updateDoc, increment
+} from 'firebase/firestore';
+import { db } from '../firebase';
+import { MESSAGES, CONVERSATIONS } from './constants';
+import type { Message, Conversation } from '@/types';
+
+if (!db) throw new Error('Firebase Firestore not initialized');
+
+export const sendMessage = async (msg: Omit<Message, 'id' | 'timestamp' | 'isRead'>) => {
+  const convId = [msg.senderId, msg.receiverId].sort().join('_');
+  
+  const messageData = {
+    ...msg,
+    timestamp: Date.now(),
+    isRead: false,
+    conversationId: convId
+  };
+
+  const msgRef = await addDoc(collection(db, MESSAGES), messageData);
+  
+  // Update or create conversation
+  const convRef = doc(db, CONVERSATIONS, convId);
+  await setDoc(convRef, {
+    id: convId,
+    participants: [msg.senderId, msg.receiverId],
+    participantNames: [msg.senderName, msg.receiverName],
+    lastMessage: { ...messageData, id: msgRef.id },
+    updatedAt: Date.now(),
+    teacherId: msg.teacherId,
+    // We'll increment unread count for the receiver in a more complex setup, 
+    // but for now let's just update the timestamp
+  }, { merge: true });
+
+  return msgRef.id;
+};
+
+export const subscribeToConversations = (userId: string, callback: (convs: Conversation[]) => void) => {
+  const q = query(
+    collection(db, CONVERSATIONS),
+    where('participants', 'array-contains', userId),
+    orderBy('updatedAt', 'desc')
+  );
+
+  return onSnapshot(q, (snap) => {
+    callback(snap.docs.map(d => ({ ...d.data(), id: d.id } as Conversation)));
+  });
+};
+
+export const subscribeToMessages = (conversationId: string, callback: (msgs: Message[]) => void) => {
+  const q = query(
+    collection(db, MESSAGES),
+    where('conversationId', '==', conversationId),
+    orderBy('timestamp', 'asc'),
+    limit(100)
+  );
+
+  return onSnapshot(q, (snap) => {
+    callback(snap.docs.map(d => ({ ...d.data(), id: d.id } as Message)));
+  });
+};
+
+export const markMessagesAsRead = async (conversationId: string, userId: string) => {
+  const q = query(
+    collection(db, MESSAGES),
+    where('conversationId', '==', conversationId),
+    where('receiverId', '==', userId),
+    where('isRead', '==', false)
+  );
+
+  const snap = await getDocs(q);
+  const batch = writeBatch(db);
+  snap.docs.forEach(d => batch.update(d.ref, { isRead: true }));
+  await batch.commit();
+};

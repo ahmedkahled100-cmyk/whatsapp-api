@@ -3,7 +3,7 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { Student, Exam, Attempt, Group, Settings, Notification, Question, RegistrationRequest, CourseMaterial, Assignment, TeacherUser } from '@/types';
+import type { Student, Exam, Attempt, Group, Settings, Notification, Question, RegistrationRequest, CourseMaterial, Assignment, TeacherUser, Conversation } from '@/types';
 
 // ==========================================
 // TEACHER STORE
@@ -19,6 +19,7 @@ interface TeacherStore {
   registrationRequests: RegistrationRequest[];
   materials: CourseMaterial[];
   assignments: Assignment[];
+  conversations: Conversation[];
   activeTab: string;
   isLoading: boolean;
   tempExamQuestions: Question[] | null;
@@ -33,6 +34,7 @@ interface TeacherStore {
   setRegistrationRequests: (requests: RegistrationRequest[]) => void;
   setMaterials: (materials: CourseMaterial[]) => void;
   setAssignments: (assignments: Assignment[]) => void;
+  setConversations: (conversations: Conversation[]) => void;
   setSettings: (settings: Settings) => void;
   setActiveTab: (tab: string) => void;
   setLoading: (val: boolean) => void;
@@ -52,6 +54,7 @@ export const useTeacherStore = create<TeacherStore>()(
       registrationRequests: [],
       materials: [],
       assignments: [],
+      conversations: [],
       settings: null,
       activeTab: 'dashboard',
       isLoading: false,
@@ -66,6 +69,7 @@ export const useTeacherStore = create<TeacherStore>()(
       setRegistrationRequests: (registrationRequests) => set({ registrationRequests }),
       setMaterials: (materials) => set({ materials }),
       setAssignments: (assignments) => set({ assignments }),
+      setConversations: (conversations) => set({ conversations }),
       setSettings: (settings) => set({ settings }),
       setActiveTab: (activeTab) => set({ activeTab }),
       setLoading: (isLoading) => set({ isLoading }),
@@ -90,6 +94,7 @@ interface StudentStore {
   essayAnswers: Record<string, { text?: string; fileUrls?: string[] }>;
   timeLeft: number;
   examPhase: 'login' | 'dashboard' | 'intro' | 'taking' | 'results';
+  conversations: Conversation[];
 
   setStudent: (student: Student | null) => void;
   setCurrentExam: (exam: Exam | null) => void;
@@ -98,6 +103,7 @@ interface StudentStore {
   setEssayAnswer: (questionId: string, data: { text?: string; fileUrls?: string[] }) => void;
   setTimeLeft: (time: number) => void;
   setExamPhase: (phase: StudentStore['examPhase']) => void;
+  setConversations: (conversations: Conversation[]) => void;
   resetExam: () => void;
   logout: () => void;
 }
@@ -152,6 +158,7 @@ export const useStudentStore = create<StudentStore>()(
       essayAnswers: {},
       timeLeft: 0,
       examPhase: 'login',
+      conversations: [],
 
       setStudent: (student) => set({ student }),
       setCurrentExam: (currentExam) => set({ currentExam }),
@@ -165,6 +172,7 @@ export const useStudentStore = create<StudentStore>()(
         }),
       setTimeLeft: (timeLeft) => set({ timeLeft }),
       setExamPhase: (examPhase) => set({ examPhase }),
+      setConversations: (conversations) => set({ conversations }),
       resetExam: () => set({ currentExam: null, currentAttempt: null, answers: {}, essayAnswers: {}, timeLeft: 0, examPhase: 'dashboard' }),
       logout: () => set({ student: null, currentExam: null, currentAttempt: null, answers: {}, essayAnswers: {}, timeLeft: 0, examPhase: 'login' }),
     }),

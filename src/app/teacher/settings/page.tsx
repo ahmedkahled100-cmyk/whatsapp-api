@@ -4,11 +4,13 @@
 
 import { useState, useEffect } from 'react';
 import { useTeacherStore } from '@/lib/store';
-import { saveSettings, uploadFileToStorage, wipeAllData } from '@/lib/db';
+import { saveSettings, uploadFileToStorage, wipeAllData, saveTeacher, getSuperAdmin, getSettings } from '@/lib/db';
 import type { Settings } from '@/types';
 import { Save, Eye, EyeOff, Copy, Upload, Loader2, MessageCircle, Phone, Trash2, AlertTriangle } from 'lucide-react';
+import { showToast } from '@/lib/toast';
 
 const DEFAULT_SETTINGS: Settings = {
+  teacherId: '',
   acadName: 'A-N Academy',
   teacherName: 'الأستاذ أحمد خالد',
   teacherPassword: 'admin123',
@@ -23,8 +25,8 @@ const DEFAULT_SETTINGS: Settings = {
 };
 
 export default function SettingsPage() {
-  const { settings, setSettings } = useTeacherStore();
-  const [form, setForm] = useState<Settings>(settings || DEFAULT_SETTINGS);
+  const { user, settings, setSettings } = useTeacherStore();
+  const [form, setForm] = useState<Settings>(settings || { ...DEFAULT_SETTINGS, teacherId: user?.id || '' });
   const [showPass, setShowPass] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -38,21 +40,55 @@ export default function SettingsPage() {
   const [showWipeModal, setShowWipeModal] = useState(false);
   const [wipeConfirmText, setWipeConfirmText] = useState('');
   const [wiping, setWiping] = useState(false);
+  
+  // Teacher Profile State (for code editing)
+  const [teacherCode, setTeacherCode] = useState(user?.code || '');
+  
+  // Admin Contact State
+  const [adminWhatsApp, setAdminWhatsApp] = useState('');
 
   useEffect(() => {
-    if (settings) setForm(settings);
-  }, [settings]);
+    if (settings) {
+      setForm(prev => ({ ...prev, ...settings, teacherId: settings.teacherId || user?.id || '' }));
+    } else if (user?.id) {
+      setForm(prev => ({ ...prev, teacherId: user.id }));
+    }
+  }, [settings, user]);
+
+  useEffect(() => {
+    getSuperAdmin().then(admin => {
+      if (admin) {
+        getSettings(admin.id).then(s => {
+          if (s?.whatsappNumber) setAdminWhatsApp(s.whatsappNumber);
+        });
+      }
+    });
+  }, []);
 
   const update = (key: keyof Settings, value: any) => setForm(f => ({ ...f, [key]: value }));
 
   const handleSave = async () => {
+    if (!user?.id) { showToast('فشل الحصول على بيانات المعلم'); return; }
+    
     setSaving(true);
+    const finalForm = { ...form, teacherId: user.id };
     try {
-      await saveSettings(form);
-      setSettings(form);
+      // Save Settings
+      await saveSettings(finalForm);
+      setSettings(finalForm);
+
+      // Save Teacher Code if changed and user is super_admin
+      if (user.role === 'super_admin' && teacherCode !== user.code) {
+        await saveTeacher({ ...user, code: teacherCode.trim().toUpperCase() });
+      }
+
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
-    } catch { showToast('فشل الحفظ'); }
+      showToast('✅ تم حفظ الإعدادات');
+    } catch (err: any) { 
+      console.error(err);
+      showToast('فشل الحفظ: ' + (err.message || '')); 
+    }
     finally { setSaving(false); }
   };
 
@@ -194,6 +230,26 @@ export default function SettingsPage() {
         </p>
       </div>
 
+      {/* Teacher Code */}
+      <div className="card-base p-5">
+        <h2 className="font-cairo font-bold mb-4" style={{ color: 'var(--gold)' }}>🔑 كود دخول المعلم</h2>
+        <div className="relative">
+          <input 
+            type="text" 
+            value={teacherCode}
+            onChange={e => setTeacherCode(e.target.value.toUpperCase())} 
+            disabled={user?.role !== 'super_admin'}
+            className="input-base font-mono tracking-widest text-center text-lg disabled:opacity-70 disabled:cursor-not-allowed" 
+            placeholder="مثال: TEACHER123"
+          />
+        </div>
+        <p className="text-[10px] mt-2 leading-relaxed" style={{ color: 'var(--text-muted)' }}>
+          {user?.role === 'super_admin' 
+            ? '💡 بصفتك مديراً عاماً، يمكنك تعديل كود الدخول الخاص بك هنا.' 
+            : '🔒 كود الدخول الخاص بك هو معرف فريد ولا يمكن تعديله إلا من خلال المدير العام.'}
+        </p>
+      </div>
+
       {/* Student Portal Link */}
       <div className="card-base p-5">
         <h2 className="font-cairo font-bold mb-4" style={{ color: 'var(--gold)' }}>🔗 رابط بوابة الطلاب</h2>
@@ -230,7 +286,7 @@ export default function SettingsPage() {
               />
             </div>
             <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
-              سيظهر زر "تواصل مع المعلم" في صفحة الطالب يفتح واتساب مباشرة على هذا الرقم.
+              سيظهر زر &quot;تواصل مع المعلم&quot; في صفحة الطالب يفتح واتساب مباشرة على هذا الرقم.
             </p>
           </div>
 
@@ -258,7 +314,7 @@ export default function SettingsPage() {
               <span className="font-mono bg-black/20 px-1.5 py-0.5 rounded">{'{status}'}</span> ناجح/راسب
             </div>
             <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
-              سيُستخدم هذا القالب في صفحة النتائج عند الضغط على زر "إبلاغ ولي الأمر عبر واتساب".
+              سيُستخدم هذا القالب في صفحة النتائج عند الضغط على زر &quot;إبلاغ ولي الأمر عبر واتساب&quot;.
             </p>
           </div>
         </div>
@@ -402,21 +458,25 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      {/* Deployment info */}
-      <div className="card-base p-5" style={{ border: '1px solid rgba(79,70,229,0.2)', background: 'rgba(79,70,229,0.05)' }}>
-        <h2 className="font-cairo font-bold mb-3" style={{ color: '#818cf8' }}>🚀 معلومات النشر المجاني</h2>
-        <div className="space-y-2 text-sm" style={{ color: 'var(--text-muted)' }}>
-          <div className="flex items-start gap-2"><span>1.</span><span>ارفع الكود على GitHub (مجاناً)</span></div>
-          <div className="flex items-start gap-2"><span>2.</span><span>أنشئ حساباً على Vercel.com (مجاناً)</span></div>
-          <div className="flex items-start gap-2"><span>3.</span><span>اربط المشروع بـ Vercel - سيُنشر تلقائياً</span></div>
-          <div className="flex items-start gap-2"><span>4.</span><span>أضف متغيرات Firebase في إعدادات Vercel</span></div>
-          <div className="mt-3 p-3 rounded-lg text-xs" style={{ background: 'rgba(0,0,0,0.2)', fontFamily: 'monospace', direction: 'ltr', textAlign: 'left' }}>
-            NEXT_PUBLIC_FIREBASE_API_KEY=...<br/>
-            NEXT_PUBLIC_FIREBASE_PROJECT_ID=...<br/>
-            NEXT_PUBLIC_FIREBASE_APP_ID=...
-          </div>
+      {/* Admin Contact / Support */}
+      {adminWhatsApp && user?.role !== 'super_admin' && (
+        <div className="card-base p-5 border-purple-500/20 bg-purple-500/5">
+          <h2 className="font-cairo font-bold mb-4 flex items-center gap-2 text-purple-400">
+            <MessageCircle size={18} /> الدعم الفني وتجديد الاشتراك
+          </h2>
+          <p className="text-sm text-gray-400 mb-4">
+            إذا كنت تواجه مشكلة تقنية أو ترغب في الاستفسار عن تجديد اشتراك الأكاديمية الخاص بك، يمكنك التواصل مباشرة مع إدارة المنصة.
+          </p>
+          <a 
+            href={`https://wa.me/${adminWhatsApp.startsWith('2') ? adminWhatsApp : '2' + adminWhatsApp}`}
+            target="_blank"
+            className="btn-gold bg-green-600 w-full flex items-center justify-center gap-2"
+          >
+            <Phone size={16} /> تواصل مع الإدارة عبر واتساب
+          </a>
         </div>
-      </div>
+      )}
+
 
       {/* Dangerous Operations */}
       <div className="card-base p-5 border-red-500/20 bg-red-500/5">

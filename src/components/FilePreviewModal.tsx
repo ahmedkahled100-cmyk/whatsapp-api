@@ -217,7 +217,7 @@ export function FilePreviewModal({ url, fileName, onClose }: FilePreviewModalPro
               {!useGoogleViewer && isLoading && (
                 <div className="absolute inset-x-0 bottom-4 px-4 text-center z-20 pointer-events-none">
                   <p className="text-[10px] text-gray-500 bg-black/60 py-1 px-3 rounded-full inline-block">
-                    إذا لم يظهر الملف، جرب زر "عرض Google" بالأعلى
+                    إذا لم يظهر الملف، جرب زر &quot;عرض Google&quot; بالأعلى
                   </p>
                 </div>
               )}

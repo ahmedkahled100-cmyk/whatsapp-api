@@ -9,12 +9,17 @@ import {
   Zap, Upload, FileText, X, RefreshCw, 
   CheckCircle, Loader2, Download, AlertTriangle, Activity,
   Split, Merge, Image as ImageIcon, FileImage, Stamp, Hash, 
-  RotateCw, ShieldCheck, Lock, Languages, Settings2, Info
+  RotateCw, ShieldCheck, Lock, Languages, Settings2, Info,
+  Eye, ChevronUp, ChevronDown, Palette, Maximize2, Type, 
+  Layout, AlignCenter, AlignLeft, AlignRight, EyeOff
 } from 'lucide-react';
 
 export default function ILovePDFPage() {
   const { files, addFiles, removeFile, setFiles, tool, setTool, toolSettings, setToolSettings, status, setStatus, startTask, reset } = useILovePDFStore();
   const [mounted, setMounted] = useState(false);
+  const [previewFile, setPreviewFile] = useState<{ file: File; url: string; type: string } | null>(null);
+  const [showSettings, setShowSettings] = useState(true);
+  const [showPassword, setShowPassword] = useState(false);
 
   const tools = [
     { id: 'compress', label: 'ضغط PDF', icon: Zap, color: 'text-gold', desc: 'تقليل حجم الملف مع الحفاظ على الجودة العالية' },
@@ -60,6 +65,24 @@ export default function ILovePDFPage() {
     }
   };
 
+  const moveFile = (index: number, direction: 'up' | 'down') => {
+    const newFiles = [...files];
+    const newIndex = direction === 'up' ? index - 1 : index + 1;
+    if (newIndex < 0 || newIndex >= newFiles.length) return;
+    [newFiles[index], newFiles[newIndex]] = [newFiles[newIndex], newFiles[index]];
+    setFiles(newFiles);
+  };
+
+  const openPreview = (file: File) => {
+    const url = URL.createObjectURL(file);
+    setPreviewFile({ file, url, type: file.type });
+  };
+
+  const closePreview = () => {
+    if (previewFile) URL.revokeObjectURL(previewFile.url);
+    setPreviewFile(null);
+  };
+
   const renderAdvancedSettings = () => {
     const settings = toolSettings[tool] || {};
 
@@ -92,19 +115,25 @@ export default function ILovePDFPage() {
     if (tool === 'watermark') {
       return (
         <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
-          <div>
-            <label className="text-xs font-bold text-muted mb-2 block uppercase tracking-wider">نص العلامة المائية</label>
-            <input 
-              type="text" 
-              value={settings.text || ''} 
-              onChange={(e) => setToolSettings({ ...settings, text: e.target.value })}
-              className="input-base text-sm h-10 w-full"
-              placeholder="مثال: AN Academy"
-            />
+          <div className="grid grid-cols-1 gap-4">
+            <div>
+              <label className="text-xs font-bold text-muted mb-2 block uppercase tracking-wider flex items-center gap-2">
+                <Type size={14} className="text-gold" /> نص العلامة المائية
+              </label>
+              <input 
+                type="text" 
+                value={settings.text || ''} 
+                onChange={(e) => setToolSettings({ ...settings, text: e.target.value })}
+                className="input-base text-sm h-10 w-full"
+                placeholder="مثال: AN Academy"
+              />
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs font-bold text-muted mb-2 block uppercase tracking-wider">الشفافية ({settings.transparency || 50}%)</label>
+              <label className="text-xs font-bold text-muted mb-2 block uppercase tracking-wider flex items-center gap-2">
+                <Palette size={14} className="text-gold" /> الشفافية ({settings.transparency || 50}%)
+              </label>
               <input 
                 type="range" min="10" max="100" step="10"
                 value={settings.transparency || 50} 
@@ -113,7 +142,9 @@ export default function ILovePDFPage() {
               />
             </div>
             <div>
-              <label className="text-xs font-bold text-muted mb-2 block uppercase tracking-wider">حجم الخط ({settings.size || 40})</label>
+              <label className="text-xs font-bold text-muted mb-2 block uppercase tracking-wider flex items-center gap-2">
+                <Maximize2 size={14} className="text-gold" /> حجم الخط ({settings.size || 40})
+              </label>
               <input 
                 type="number" 
                 value={settings.size || 40} 
@@ -123,15 +154,23 @@ export default function ILovePDFPage() {
             </div>
           </div>
           <div>
-            <label className="text-xs font-bold text-muted mb-2 block uppercase tracking-wider">الموضع</label>
-            <div className="grid grid-cols-3 gap-1 max-w-[150px]">
-              {['Top Left', 'Top Center', 'Top Right', 'Center Left', 'Center', 'Center Right', 'Bottom Left', 'Bottom Center', 'Bottom Right'].map(pos => (
+            <label className="text-xs font-bold text-muted mb-2 block uppercase tracking-wider flex items-center gap-2">
+              <Layout size={14} className="text-gold" /> الموضع في الصفحة
+            </label>
+            <div className="grid grid-cols-3 gap-1.5 max-w-[180px] bg-black/40 p-2 rounded-xl border border-white/5">
+              {[
+                { id: 'Top Left', icon: AlignLeft }, { id: 'Top Center', icon: AlignCenter }, { id: 'Top Right', icon: AlignRight },
+                { id: 'Center Left', icon: AlignLeft }, { id: 'Center', icon: AlignCenter }, { id: 'Center Right', icon: AlignRight },
+                { id: 'Bottom Left', icon: AlignLeft }, { id: 'Bottom Center', icon: AlignCenter }, { id: 'Bottom Right', icon: AlignRight }
+              ].map((pos, idx) => (
                 <button 
-                  key={pos}
-                  onClick={() => setToolSettings({ ...settings, position: pos })}
-                  className={`aspect-square rounded border transition-all ${settings.position === pos ? 'bg-gold border-gold' : 'bg-white/5 border-white/10 hover:bg-white/10'}`}
-                  title={pos}
-                />
+                  key={idx}
+                  onClick={() => setToolSettings({ ...settings, position: pos.id })}
+                  className={`aspect-square rounded-lg border flex items-center justify-center transition-all ${settings.position === pos.id ? 'bg-gold border-gold text-dark' : 'bg-white/5 border-white/10 text-muted hover:bg-white/10'}`}
+                  title={pos.id}
+                >
+                   <pos.icon size={12} className={idx % 3 === 0 ? '' : idx % 3 === 1 ? '' : ''} />
+                </button>
               ))}
             </div>
           </div>
@@ -208,17 +247,25 @@ export default function ILovePDFPage() {
             <label className="text-xs font-bold text-muted mb-2 block uppercase tracking-wider">كلمة المرور</label>
             <div className="relative group">
               <input 
-                type="password" 
+                type={showPassword ? 'text' : 'password'} 
                 value={settings.password || ''} 
                 onChange={(e) => setToolSettings({ ...settings, password: e.target.value })}
-                className="input-base text-sm h-12 w-full pl-10"
+                className="input-base text-sm h-12 w-full pl-10 pr-10"
                 placeholder="أدخل كلمة مرور قوية..."
               />
               <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted group-hover:text-gold transition-colors" />
+              <button 
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-gold transition-colors"
+                title={showPassword ? 'إخفاء' : 'إظهار'}
+              >
+                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
             </div>
             <p className="text-[10px] text-red-400/60 mt-2 font-bold flex gap-1 items-center">
               <AlertTriangle size={10} />
-              تأكد من حفظ كلمة المرور جيداً
+              تأكد من حفظ كلمة المرور جيداً لحماية ملفك
             </p>
           </div>
         </div>
@@ -520,23 +567,40 @@ export default function ILovePDFPage() {
                   <h3 className="text-xs font-bold text-muted uppercase tracking-widest">الملفات المختارة ({files.length})</h3>
                   <button onClick={() => setFiles([])} className="text-[10px] font-bold text-red-400/60 hover:text-red-400 transition-colors uppercase">مسح الكل</button>
                 </div>
-                <div className="space-y-2 max-h-[250px] overflow-y-auto pr-1 scrollbar-thin">
+                <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-gold/20">
                   {files.map((f, i) => (
-                    <div key={i} className="bg-white/5 border border-white/10 rounded-2xl p-4 relative group/file hover:bg-white/10 transition-colors">
-                      <div className="flex items-center gap-4">
+                    <div key={i} className="bg-white/5 border border-white/10 rounded-2xl p-3 relative group/file hover:bg-white/10 transition-all hover:border-gold/30">
+                      <div className="flex items-center gap-3">
                         <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-sm ${f.type.startsWith('image/') ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
                           {f.type.startsWith('image/') ? <ImageIcon size={20} /> : <FileText size={20} />}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="font-black text-xs truncate mb-1">{f.name}</div>
-                          <div className="text-[10px] text-muted font-mono tracking-tighter">{(f.size / 1024 / 1024).toFixed(2)} MB</div>
+                          <div className="font-black text-xs truncate mb-0.5">{f.name}</div>
+                          <div className="text-[9px] text-muted font-mono tracking-tighter">{(f.size / 1024 / 1024).toFixed(2)} MB</div>
                         </div>
-                        <button 
-                          onClick={() => removeFile(i)}
-                          className="p-2 text-muted hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-all opacity-0 group-hover/file:opacity-100"
-                        >
-                          <X size={16} />
-                        </button>
+                        
+                        <div className="flex items-center gap-1 opacity-0 group-hover/file:opacity-100 transition-opacity">
+                          {tool === 'merge' && (
+                            <div className="flex flex-col gap-0.5 mr-2">
+                              <button onClick={() => moveFile(i, 'up')} disabled={i === 0} className="p-1 text-muted hover:text-gold disabled:opacity-20"><ChevronUp size={14} /></button>
+                              <button onClick={() => moveFile(i, 'down')} disabled={i === files.length - 1} className="p-1 text-muted hover:text-gold disabled:opacity-20"><ChevronDown size={14} /></button>
+                            </div>
+                          )}
+                          <button 
+                            onClick={() => openPreview(f)}
+                            className="p-2 text-muted hover:text-gold hover:bg-gold/10 rounded-lg transition-all"
+                            title="معاينة"
+                          >
+                            <Eye size={16} />
+                          </button>
+                          <button 
+                            onClick={() => removeFile(i)}
+                            className="p-2 text-muted hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
+                            title="حذف"
+                          >
+                            <X size={16} />
+                          </button>
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -551,12 +615,20 @@ export default function ILovePDFPage() {
                <div className="absolute top-0 right-0 w-64 h-64 bg-gold/5 blur-[100px] -mr-32 -mt-32 pointer-events-none" />
                <div className="absolute bottom-0 left-0 w-64 h-64 bg-accent/5 blur-[100px] -ml-32 -mb-32 pointer-events-none" />
                
-               <h2 className="text-xl font-black mb-10 flex items-center gap-3 font-cairo relative z-10">
-                <span className="w-8 h-8 rounded-xl bg-gold text-dark flex items-center justify-center text-sm font-black shadow-lg shadow-gold/20">2</span>
-                المساحة التفاعلية
-              </h2>
+                <h2 className="text-xl font-black mb-10 flex items-center justify-between gap-3 font-cairo relative z-10 w-full">
+                  <div className="flex items-center gap-3">
+                    <span className="w-8 h-8 rounded-xl bg-gold text-dark flex items-center justify-center text-sm font-black shadow-lg shadow-gold/20">2</span>
+                    المساحة التفاعلية
+                  </div>
+                  {files.length > 0 && (
+                    <div className="flex items-center gap-2 text-xs text-muted font-bold bg-white/5 px-4 py-2 rounded-2xl border border-white/5">
+                      <FileText size={14} className="text-gold" />
+                      {files[0].name.length > 20 ? files[0].name.slice(0, 20) + '...' : files[0].name}
+                    </div>
+                  )}
+                </h2>
 
-              <div className="flex-1 flex flex-col items-center justify-center text-center relative z-10">
+              <div className="flex-1 flex flex-col items-center justify-center text-center relative z-10 w-full px-4">
                 {status.stage !== 'idle' ? (
                   <div className="max-w-md w-full animate-fade-in flex flex-col items-center">
                     <div className="relative mb-12">
@@ -652,6 +724,48 @@ export default function ILovePDFPage() {
           </div>
         </div>
       </div>
+      {/* Preview Modal */}
+      {previewFile && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-10 animate-fade-in">
+          <div className="absolute inset-0 bg-black/90 backdrop-blur-xl" onClick={closePreview} />
+          <div className="relative w-full max-w-5xl h-full bg-[#0a0f1c] rounded-3xl border border-white/10 shadow-2xl flex flex-col overflow-hidden animate-scale-in">
+            {/* Modal Header */}
+            <div className="p-4 border-b border-white/5 flex items-center justify-between bg-white/5">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-gold/10 flex items-center justify-center text-gold">
+                   {previewFile.type.startsWith('image/') ? <ImageIcon size={20} /> : <FileText size={20} />}
+                </div>
+                <div>
+                  <h3 className="font-black text-sm text-white truncate max-w-[200px] sm:max-w-md">{previewFile.file.name}</h3>
+                  <p className="text-[10px] text-muted font-bold">{(previewFile.file.size / 1024 / 1024).toFixed(2)} MB • {previewFile.type}</p>
+                </div>
+              </div>
+              <button onClick={closePreview} className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center hover:bg-red-500/20 hover:text-red-400 transition-all border border-white/10">
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="flex-1 overflow-auto bg-black/40 flex items-center justify-center p-4 relative group">
+              {previewFile.type.startsWith('image/') ? (
+                <img src={previewFile.url} alt={previewFile.file.name} className="max-w-full max-h-full object-contain shadow-2xl rounded-lg" />
+              ) : previewFile.type === 'application/pdf' ? (
+                <iframe src={previewFile.url} className="w-full h-full rounded-lg border-none" title="PDF Preview" />
+              ) : (
+                <div className="text-center space-y-4">
+                  <EyeOff size={64} className="text-muted/20 mx-auto" />
+                  <p className="text-sm text-muted">عذراً، لا يمكن معاينة هذا النوع من الملفات بصرياً.</p>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 border-t border-white/5 flex justify-end bg-white/5">
+              <button onClick={closePreview} className="btn-gold px-8 py-2.5 text-xs font-black">إغلاق المعاينة</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

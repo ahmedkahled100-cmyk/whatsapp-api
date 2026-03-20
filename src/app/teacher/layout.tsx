@@ -3,21 +3,23 @@
 // تخطيط لوحة المعلم مع الشريط الجانبي
 
 import { useEffect, useState } from 'react';
+import Image from 'next/image';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useTeacherStore } from '@/lib/store';
-import { subscribeToExams, subscribeToStudents, subscribeToAttempts, subscribeToGroups, subscribeToNotifications, subscribeToRegistrationRequests, subscribeToMaterials, subscribeToAssignments } from '@/lib/db';
+import { subscribeToExams, subscribeToStudents, subscribeToAttempts, subscribeToGroups, subscribeToNotifications, subscribeToRegistrationRequests, subscribeToMaterials, subscribeToAssignments, subscribeToTeacherProfile, subscribeToConversations } from '@/lib/db';
 import {
   LayoutDashboard, PlusCircle, FileText, Users, BookOpen,
   BarChart2, ClipboardList, Calendar, Bot, TrendingUp,
   CreditCard, BookMarked, Settings, LogOut, Bell, Menu, X,
-  GraduationCap, Database, ChevronLeft, Zap, ShieldCheck
+  GraduationCap, Database, ChevronLeft, Zap, ShieldCheck, ExternalLink, MessageSquare
 } from 'lucide-react';
 
 const NAV_ITEMS = [
   { href: '/teacher/dashboard', icon: LayoutDashboard, label: 'الرئيسية', section: 'main', permission: 'dashboard' },
   { href: '/teacher/notifications', icon: Bell, label: 'الإشعارات', section: 'main', permission: 'notifications' },
   { href: '/teacher/analytics', icon: TrendingUp, label: 'التحليلات', section: 'main', permission: 'analytics' },
+  { href: '/teacher/messages', icon: MessageSquare, label: 'الرسائل', section: 'main', permission: 'dashboard' },
   { href: '/teacher/exams/create', icon: PlusCircle, label: 'اختبار جديد', section: 'exams', permission: 'exams' },
   { href: '/teacher/exams', icon: FileText, label: 'الاختبارات', section: 'exams', permission: 'exams' },
   { href: '/teacher/essays', icon: ClipboardList, label: 'المقالي', section: 'exams', permission: 'analytics' },
@@ -45,7 +47,7 @@ const SECTION_LABELS: Record<string, string> = {
 export default function TeacherLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { user, logout, setExams, setStudents, setAttempts, setGroups, setNotifications, setRegistrationRequests, setMaterials, setAssignments, notifications, settings } = useTeacherStore();
+  const { user, setUser, logout, setExams, setStudents, setAttempts, setGroups, setNotifications, setRegistrationRequests, setMaterials, setAssignments, setConversations, notifications, settings, registrationRequests, conversations } = useTeacherStore();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mounted, setMounted] = useState(false);
   const [syncStatus, setSyncStatus] = useState<'syncing' | 'synced' | 'offline'>('syncing');
@@ -65,9 +67,12 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
       subscribeToRegistrationRequests(user.id, setRegistrationRequests),
       subscribeToMaterials(user.id, setMaterials),
       subscribeToAssignments(user.id, setAssignments),
+      subscribeToTeacherProfile(user.id, setUser),
+      subscribeToConversations(user.id, setConversations),
     ];
+
     return () => unsubs.forEach(u => u());
-  }, [user]);
+  }, [user?.id]);
 
   useEffect(() => {
     const handleResize = () => {
@@ -131,8 +136,13 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
               animation: 'pulseGold 3s ease-in-out infinite' 
             }}>
             {settings?.logoUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={settings.logoUrl} alt="Logo" className="w-full h-full object-cover relative z-10" />
+              <Image 
+                src={settings.logoUrl} 
+                alt="Logo" 
+                width={40} 
+                height={40} 
+                className="w-full h-full object-cover relative z-10" 
+              />
             ) : (
               <GraduationCap size={20} color="#000" className="relative z-10" />
             )}
@@ -172,7 +182,12 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
                   >
                     <item.icon size={18} className={`flex-shrink-0 ${active ? 'scale-110' : 'opacity-70 group-hover:opacity-100'}`} />
                     <span>{item.label}</span>
-                    {active && <div className="mr-auto w-1.5 h-1.5 rounded-full bg-gold shadow-[0_0_8px_var(--gold)]" />}
+                    {item.href === '/teacher/students' && registrationRequests.length > 0 && (
+                      <span className="w-5 h-5 rounded-full bg-red-500 text-[10px] text-white flex items-center justify-center font-bold mr-auto">
+                        {registrationRequests.length}
+                      </span>
+                    )}
+                    {active && item.href !== '/teacher/students' && <div className="mr-auto w-1.5 h-1.5 rounded-full bg-gold shadow-[0_0_8px_var(--gold)]" />}
                   </Link>
                 );
               })}
@@ -231,6 +246,13 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
           </div>
 
           <div className="flex items-center gap-2">
+            <Link href="/teacher/messages" className="w-10 h-10 rounded-xl flex items-center justify-center relative transition-all hover:bg-white/5"
+               style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+              <MessageSquare size={20} className="text-text-muted" />
+              {conversations.some(c => c.lastMessage && !c.lastMessage.isRead && c.lastMessage.receiverId === user.id) && (
+                <span className="absolute top-2 right-2 w-2 h-2 bg-blue-500 rounded-full shadow-[0_0_8px_rgba(59,130,246,0.5)]" />
+              )}
+            </Link>
             <Link href="/teacher/notifications" className="w-10 h-10 rounded-xl flex items-center justify-center relative transition-all hover:bg-white/5"
                style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
               <Bell size={20} className="text-text-muted" />
@@ -242,8 +264,32 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
         </header>
 
         <div className="flex-1 p-4 lg:p-8 overflow-x-hidden">
+          {/* Subscription Banner */}
+          {user.role === 'teacher' && user.subType !== 'free' && user.subExpiry && user.subExpiry < Date.now() + (7 * 24 * 60 * 60 * 1000) && (
+            <div className={`mb-6 p-4 rounded-2xl border flex flex-col md:flex-row items-center justify-between gap-4 animate-pulse-subtle ${user.subExpiry < Date.now() ? 'bg-red-500/10 border-red-500/20 text-red-400' : 'bg-gold/10 border-gold/20 text-gold'}`}>
+              <div className="flex items-center gap-3">
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${user.subExpiry < Date.now() ? 'bg-red-500 text-white' : 'bg-gold text-black'}`}>
+                  <CreditCard size={20} />
+                </div>
+                <div>
+                   <h3 className="font-bold text-sm">
+                     {user.subExpiry < Date.now() ? 'انتهى اشتراك المنصة الخاص بك' : 'اشتراكك ينتهي قريباً'}
+                   </h3>
+                   <p className="text-xs opacity-80">
+                     {user.subExpiry < Date.now() ? 'يرجى تجديد الاشتراك لاستمرار الخدمة.' : `ينتهي في ${new Date(user.subExpiry).toLocaleDateString('ar-EG')}`}
+                   </p>
+                </div>
+              </div>
+              {user.subLink && (
+                <a href={user.subLink} target="_blank" rel="noopener noreferrer" className={`px-6 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${user.subExpiry < Date.now() ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-gold text-black hover:bg-gold/80'}`}>
+                  تجديد الاشتراك الآن <ExternalLink size={14} />
+                </a>
+              )}
+            </div>
+          )}
           {children}
         </div>
+
       </main>
     </div>
   );

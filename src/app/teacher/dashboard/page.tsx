@@ -8,7 +8,7 @@ import { formatDateAr, scoreLabel, gradeColor } from '@/lib/utils';
 import { Users, FileText, TrendingUp, Clock, PlusCircle, Eye, Share2, ChevronLeft } from 'lucide-react';
 
 export default function DashboardPage() {
-  const { exams, students, attempts, groups, notifications } = useTeacherStore();
+  const { user, exams, students, attempts, groups, notifications } = useTeacherStore();
 
   const stats = useMemo(() => {
     const completed = attempts.filter(a => a.completed);
@@ -19,8 +19,15 @@ export default function DashboardPage() {
     const passRate = completed.length > 0
       ? Math.round((completed.filter(a => a.passed).length / completed.length) * 100)
       : 0;
-    return { pendingEssays, avgScore, passRate };
-  }, [attempts]);
+    
+    // Calculate total revenue from students (ignore those who didn't pay)
+    const totalRevenue = students.reduce((sum, s) => {
+      const price = s.subPrice ? Number(s.subPrice) : 0;
+      return sum + (isNaN(price) ? 0 : price);
+    }, 0);
+    
+    return { pendingEssays, avgScore, passRate, totalRevenue };
+  }, [attempts, students]);
 
   const recentExams = useMemo(() => [...exams].reverse().slice(0, 5), [exams]);
   const recentAttempts = useMemo(() =>
@@ -36,6 +43,8 @@ export default function DashboardPage() {
     alert('✅ تم نسخ رابط بوابة الطلاب!');
   };
 
+  const hasPermission = (p: string) => user?.role === 'super_admin' || user?.permissions?.includes(p);
+
   return (
     <div className="space-y-6">
       {/* Welcome */}
@@ -43,31 +52,36 @@ export default function DashboardPage() {
         <div>
           <h1 className="text-2xl font-cairo font-black gold-text">🏠 لوحة التحكم</h1>
           <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>
-            مرحباً بك — {new Date().toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+            مرحباً بك {user?.name} — {new Date().toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
           </p>
         </div>
         <div className="flex gap-2">
-          <button onClick={copyStudentLink} className="btn-outline text-sm py-2 px-3">
-            <Share2 size={14} /> رابط بوابة الطلاب
-          </button>
-          <Link href="/teacher/exams/create" className="btn-gold text-sm py-2 px-4">
-            <PlusCircle size={15} /> اختبار جديد
-          </Link>
+          {hasPermission('students') && (
+            <button onClick={copyStudentLink} className="btn-outline text-sm py-2 px-3">
+              <Share2 size={14} /> رابط بوابة الطلاب
+            </button>
+          )}
+          {hasPermission('exams') && (
+            <Link href="/teacher/exams/create" className="btn-gold text-sm py-2 px-4">
+              <PlusCircle size={15} /> اختبار جديد
+            </Link>
+          )}
         </div>
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
         {[
-          { label: 'اختبار', value: exams.length, icon: '📋', color: 'var(--accent)', sub: `${exams.filter(e => e.published).length} منشور`, href: '/teacher/exams' },
-          { label: 'طالب', value: students.length, icon: '👥', color: 'var(--green)', sub: `${groups.length} فصل`, href: '/teacher/students' },
-          { label: 'محاولة', value: attempts.length, icon: '📝', color: 'var(--gold)', sub: `${attempts.filter(a => a.completed).length} مكتملة`, href: '/teacher/results' },
-          { label: 'مقالي ينتظر', value: stats.pendingEssays, icon: '⏳', color: 'var(--red)', sub: `معدل النجاح ${stats.passRate}%`, href: '/teacher/essays' },
-        ].map((s, i) => (
+          { id: 'exams', label: 'اختبار', value: exams.length, icon: '📋', color: 'var(--accent)', sub: `${exams.filter(e => e.published).length} منشور`, href: '/teacher/exams' },
+          { id: 'students', label: 'طالب', value: students.length, icon: '👥', color: 'var(--green)', sub: `${groups.length} فصل`, href: '/teacher/students' },
+          { id: 'results', label: 'محاولة', value: attempts.length, icon: '📝', color: 'var(--gold)', sub: `${attempts.filter(a => a.completed).length} مكتملة`, href: '/teacher/results' },
+          { id: 'analytics', label: 'مقالي ينتظر', value: stats.pendingEssays, icon: '⏳', color: 'var(--red)', sub: `معدل النجاح ${stats.passRate}%`, href: '/teacher/essays' },
+          { id: 'subscriptions', label: 'إجمالي الاشتراكات', value: `${stats.totalRevenue} ج.م`, icon: '💰', color: '#10B981', sub: 'إيرادات الطلاب', href: '/teacher/subscriptions' },
+        ].filter(s => hasPermission(s.id)).map((s, i) => (
           <Link href={s.href} key={i} className="stat-card hover:-translate-y-1 hover:shadow-lg transition-all duration-300 block cursor-pointer">
             <div className="flex items-start justify-between">
               <div>
-                <div className="text-3xl font-cairo font-black mb-1" style={{ color: s.color }}>{s.value}</div>
+                <div className="text-2xl xl:text-3xl font-cairo font-black mb-1" style={{ color: s.color }}>{s.value}</div>
                 <div className="text-sm font-medium" style={{ color: 'var(--text-muted)' }}>{s.label}</div>
                 <div className="text-xs mt-1 opacity-60" style={{ color: 'var(--text-muted)' }}>{s.sub}</div>
               </div>
@@ -78,73 +92,77 @@ export default function DashboardPage() {
       </div>
 
       {/* Score Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div className="stat-card text-center">
-          <div className="text-4xl font-cairo font-black" style={{ color: gradeColor(stats.avgScore, 50) }}>
-            {stats.avgScore}%
+      {hasPermission('analytics') && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="stat-card text-center">
+            <div className="text-4xl font-cairo font-black" style={{ color: gradeColor(stats.avgScore, 50) }}>
+              {stats.avgScore}%
+            </div>
+            <div className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>متوسط الدرجات</div>
+            <div className="badge mt-2" style={{ background: 'rgba(16,185,129,0.1)', color: 'var(--green)' }}>
+              {scoreLabel(stats.avgScore)}
+            </div>
           </div>
-          <div className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>متوسط الدرجات</div>
-          <div className="badge mt-2" style={{ background: 'rgba(16,185,129,0.1)', color: 'var(--green)' }}>
-            {scoreLabel(stats.avgScore)}
+          <div className="stat-card text-center">
+            <div className="text-4xl font-cairo font-black" style={{ color: stats.passRate >= 50 ? 'var(--green)' : 'var(--red)' }}>
+              {stats.passRate}%
+            </div>
+            <div className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>معدل النجاح</div>
+            <div className="text-xs mt-2 opacity-60" style={{ color: 'var(--text-muted)' }}>
+              من {attempts.filter(a => a.completed).length} محاولة
+            </div>
           </div>
         </div>
-        <div className="stat-card text-center">
-          <div className="text-4xl font-cairo font-black" style={{ color: stats.passRate >= 50 ? 'var(--green)' : 'var(--red)' }}>
-            {stats.passRate}%
-          </div>
-          <div className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>معدل النجاح</div>
-          <div className="text-xs mt-2 opacity-60" style={{ color: 'var(--text-muted)' }}>
-            من {attempts.filter(a => a.completed).length} محاولة
-          </div>
-        </div>
-      </div>
+      )}
 
       {/* Recent Exams */}
-      <div className="card-base p-5">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-cairo font-bold text-base" style={{ color: 'var(--gold)' }}>📋 آخر الاختبارات</h3>
-          <Link href="/teacher/exams" className="text-xs flex items-center gap-1" style={{ color: 'var(--text-muted)' }}>
-            عرض الكل <ChevronLeft size={13} />
-          </Link>
-        </div>
-        {recentExams.length === 0 ? (
-          <div className="text-center py-8" style={{ color: 'var(--text-muted)' }}>
-            <div className="text-4xl mb-2">📝</div>
-            <p className="text-sm">لا توجد اختبارات بعد</p>
-            <Link href="/teacher/exams/create" className="btn-gold text-sm mt-3 inline-flex py-2 px-4">
-              <PlusCircle size={14} /> أنشئ أول اختبار
+      {hasPermission('exams') && (
+        <div className="card-base p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-cairo font-bold text-base" style={{ color: 'var(--gold)' }}>📋 آخر الاختبارات</h3>
+            <Link href="/teacher/exams" className="text-xs flex items-center gap-1" style={{ color: 'var(--text-muted)' }}>
+              عرض الكل <ChevronLeft size={13} />
             </Link>
           </div>
-        ) : (
-          <div className="space-y-2">
-            {recentExams.map(exam => {
-              const examAttempts = attempts.filter(a => a.examId === exam.id);
-              return (
-                <div key={exam.id} className="flex items-center gap-3 p-3 rounded-xl transition-all"
-                  style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                  <div className="flex-1 min-w-0">
-                    <div className="font-semibold text-sm truncate">{exam.title}</div>
-                    <div className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                      {(exam.questions || []).length} سؤال • {exam.duration}د • {examAttempts.length} محاولة
+          {recentExams.length === 0 ? (
+            <div className="text-center py-8" style={{ color: 'var(--text-muted)' }}>
+              <div className="text-4xl mb-2">📝</div>
+              <p className="text-sm">لا توجد اختبارات بعد</p>
+              <Link href="/teacher/exams/create" className="btn-gold text-sm mt-3 inline-flex py-2 px-4">
+                <PlusCircle size={14} /> أنشئ أول اختبار
+              </Link>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {recentExams.map(exam => {
+                const examAttempts = attempts.filter(a => a.examId === exam.id);
+                return (
+                  <div key={exam.id} className="flex items-center gap-3 p-3 rounded-xl transition-all"
+                    style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-semibold text-sm truncate">{exam.title}</div>
+                      <div className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                        {(exam.questions || []).length} سؤال • {exam.duration}د • {examAttempts.length} محاولة
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <span className={`badge ${exam.published ? 'badge-green' : 'badge-red'}`}>
+                        {exam.published ? '✅ منشور' : '📝 مسودة'}
+                      </span>
+                      <Link href={`/teacher/exams/${exam.id}`} className="btn-outline text-xs py-1 px-2">
+                        <Eye size={12} />
+                      </Link>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    <span className={`badge ${exam.published ? 'badge-green' : 'badge-red'}`}>
-                      {exam.published ? '✅ منشور' : '📝 مسودة'}
-                    </span>
-                    <Link href={`/teacher/exams/${exam.id}`} className="btn-outline text-xs py-1 px-2">
-                      <Eye size={12} />
-                    </Link>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Recent Attempts */}
-      {recentAttempts.length > 0 && (
+      {hasPermission('students') && recentAttempts.length > 0 && (
         <div className="card-base p-5">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-cairo font-bold text-base" style={{ color: 'var(--gold)' }}>📊 آخر النتائج</h3>

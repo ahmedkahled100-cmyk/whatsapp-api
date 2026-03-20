@@ -137,7 +137,7 @@ export function PDFCompressionModal({ file, showSelection = false, onClose, onCo
         error: error.message || 'حدث خطأ غير متوقع',
       }));
     }
-  }, [file, onComplete]);
+  }, [file, onComplete, status.level]);
 
   useEffect(() => {
     if (status.stage === 'preparing') {

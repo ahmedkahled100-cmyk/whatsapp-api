@@ -2,14 +2,14 @@
 
 import { useState, useEffect } from 'react';
 import { useTeacherStore } from '@/lib/store';
-import { getNotificationLogs, saveNotificationLog, updateNotificationLog, dispatchNotification } from '@/lib/db';
+import { getNotificationLogs, saveNotificationLog, updateNotificationLog, dispatchNotification, subscribeToNotificationLogs } from '@/lib/db';
 import type { NotificationLog } from '@/types';
 import { showToast } from '@/lib/toast';
 import { Send, AlertCircle, CheckCircle2, Search, RefreshCw, MessageSquare, Clock, Filter, Users, ShieldAlert, RotateCcw, Bell } from 'lucide-react';
 import { formatDateAr } from '@/lib/utils';
 
 export default function NotificationsAdmin() {
-  const { students, groups } = useTeacherStore();
+  const { students, groups, user } = useTeacherStore();
   const [logs, setLogs] = useState<NotificationLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'compose' | 'logs'>('compose');
@@ -23,21 +23,19 @@ export default function NotificationsAdmin() {
   const [sending, setSending] = useState(false);
 
   useEffect(() => {
-    loadLogs();
-  }, []);
-
-  const loadLogs = async () => {
-    try {
-      setLoading(true);
-      const data = await getNotificationLogs();
+    if (!user) return;
+    setLoading(true);
+    const unsub = subscribeToNotificationLogs(user.id, (data) => {
       setLogs(data);
-    } catch (e) {
-      console.error(e);
-      showToast('خطأ في تحميل سجل الإشعارات');
-    } finally {
       setLoading(false);
-    }
+    });
+    return () => unsub();
+  }, [user]);
+
+  const loadLogs = () => {
+    // Handled by subscription now
   };
+
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -47,6 +45,7 @@ export default function NotificationsAdmin() {
     if (targetType === 'student' && !selectedStudent) { showToast('الرجاء اختيار الطالب'); return; }
 
     setSending(true);
+    if (!user) return;
     try {
       let targetUsers: string[] = [];
       let whatsappNumbers: string[] = [];
@@ -71,6 +70,7 @@ export default function NotificationsAdmin() {
       }
 
       await dispatchNotification({
+        teacherId: user.id,
         msg,
         targetRoles: targetType === 'all' ? ['student'] : [], // if all, target all students
         targetUsers: targetUsers.length > 0 ? targetUsers : undefined,
@@ -82,7 +82,8 @@ export default function NotificationsAdmin() {
       setMsg('');
       setActiveTab('logs');
       // Adding a small delay to let backend process pending logs
-      setTimeout(() => loadLogs(), 2000);
+      // Handled by subscription
+
     } catch (e: any) {
       console.error(e);
       showToast('حدث خطأ أثناء الإرسال');

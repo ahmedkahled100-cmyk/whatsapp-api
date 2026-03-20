@@ -3,20 +3,22 @@
 // بوابة الطالب - تسجيل الدخول بالكود
 
 import { useState, useEffect, useRef, useMemo } from 'react';
+import Image from 'next/image';
 import { useStudentStore, useFileProcessingStore } from '@/lib/store';
 import { getStudentByCode, getStudentByParentPhone, getPublishedExams, getAttemptsByStudent, getSettings, getMaterials, getAssignments, getStudentSubmissions, uploadFileToStorage, submitAssignment, subscribeToNotifications, dispatchNotification } from '@/lib/db';
 import { FileProcessor } from '@/lib/file-processor';
 import { showToast } from '@/lib/toast';
 import type { Settings } from '@/types';
-import type { Exam, Attempt, CourseMaterial, Assignment, AssignmentSubmission, Notification } from '@/types';
-import { GraduationCap, LogOut, BookOpen, BarChart2, ClipboardList, Download, Award, Video, FileText, Link as LinkIcon, BookMarked, Globe, Lock, Upload, MessageCircle, Loader2, Bell } from 'lucide-react';
+import type { Exam, Attempt, CourseMaterial, Assignment, AssignmentSubmission, Notification, Message, Conversation } from '@/types';
+import { GraduationCap, LogOut, BookOpen, BarChart2, ClipboardList, Download, Award, Video, FileText, Link as LinkIcon, BookMarked, Globe, Lock, Upload, MessageCircle, MessageSquare, Loader2, Bell, Send, Check, CheckCheck, X, Plus, ShieldCheck } from 'lucide-react';
 import { PDFCompressionModal } from '@/components/PDFCompressionModal';
+import { sendMessage, subscribeToMessages, markMessagesAsRead, subscribeToConversations, getTeacherById, getSuperAdmin } from '@/lib/db';
 import Link from 'next/link';
 import { formatDateAr, gradeColor, scoreLabel, getViewerUrl, getDownloadUrl } from '@/lib/utils';
 import { useFilePreview, FilePreviewModal } from '@/components/FilePreviewModal';
 
 export default function StudentPortal() {
-  const { student, setStudent, logout } = useStudentStore();
+  const { student, setStudent, logout, conversations, setConversations } = useStudentStore();
   const { queue } = useFileProcessingStore();
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
@@ -41,7 +43,7 @@ export default function StudentPortal() {
     onComplete?: (blob: Blob, url: string, stats: { originalSize: number; compressedSize: number }) => void;
   }>({ isOpen: false, file: null });
 
-  const [activeTab, setActiveTab] = useState<'exams' | 'courses' | 'assignments' | 'results'>('exams');
+  const [activeTab, setActiveTab] = useState<'exams' | 'courses' | 'assignments' | 'results' | 'messages'>('exams');
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [showNotifs, setShowNotifs] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -51,10 +53,18 @@ export default function StudentPortal() {
   const [parentPhone, setParentPhone] = useState('');
   const [recoveredCode, setRecoveredCode] = useState('');
   const [findingCode, setFindingCode] = useState(false);
+  const [teacherPermissions, setTeacherPermissions] = useState<string[] | null>(null);
   const certRef = useRef<HTMLDivElement>(null);
 
   // File Preview Hook
   const { openPreview, PreviewModal } = useFilePreview();
+
+  // Chat State
+  const [selectedConv, setSelectedConv] = useState<Conversation | null>(null);
+  const [chatMessages, setChatMessages] = useState<Message[]>([]);
+  const [newMsg, setNewMsg] = useState('');
+  const [loadingChat, setLoadingChat] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { setMounted(true); }, []);
 
@@ -62,13 +72,22 @@ export default function StudentPortal() {
     if (student) {
       if (student.teacherId) {
         getSettings(student.teacherId).then(s => setSiteSettings(s));
+        import('@/lib/db').then(({ getTeacherById }) => {
+          getTeacherById(student.teacherId).then(t => setTeacherPermissions(t?.permissions || null));
+        });
       }
       loadStudentData();
-      const unsub = subscribeToNotifications(student.teacherId, (allNotifs) => {
-        const myNotifs = allNotifs.filter(n => !n.targetUsers || n.targetUsers.length === 0 || n.targetUsers.includes(student.id) || (n as any).targetRoles?.includes('student'));
-        setNotifications(myNotifs);
-      });
-      return () => unsub();
+      let unsubNotifs = () => {};
+      let unsubConvs = () => {};
+      
+      if (student.teacherId && student.teacherId !== 'unknown_teacher') {
+        unsubNotifs = subscribeToNotifications(student.teacherId, (allNotifs) => {
+          const myNotifs = allNotifs.filter(n => !n.targetUsers || n.targetUsers.length === 0 || n.targetUsers.includes(student.id) || (n as any).targetRoles?.includes('student'));
+          setNotifications(myNotifs);
+        });
+        unsubConvs = subscribeToConversations(student.id, setConversations);
+      }
+      return () => { unsubNotifs(); unsubConvs(); };
     }
   }, [student]);
 
@@ -119,6 +138,13 @@ export default function StudentPortal() {
       setExams(filteredExams);
       setAttempts(myAtts.filter(a => a.completed));
       
+      // Fetch teacher name if missing
+      if (!student.teacherName && tId !== 'unknown_teacher') {
+        getTeacherById(tId).then((t: any) => {
+          if (t && student) setStudent({ ...student, teacherName: t.name });
+        });
+      }
+      
       const isSubscribed = student.subType !== 'none';
       const isExpired = student.subExpiry ? new Date(student.subExpiry).getTime() < Date.now() : false;
       const hasActiveSub = isSubscribed && !isExpired;
@@ -149,6 +175,16 @@ export default function StudentPortal() {
       setAssignments(filteredAssigns);
       setMySubmissions(mySubs);
 
+      // Effect for chat messages subscription
+      if (selectedConv) {
+        setLoadingChat(true);
+        const unsub = subscribeToMessages(selectedConv.id, (msgs: any[]) => {
+          setChatMessages(msgs);
+          setLoadingChat(false);
+          if (student) markMessagesAsRead(selectedConv.id, student.id);
+        });
+        return unsub;
+      }
     } catch (e) {
       console.error('loadStudentData error:', e);
     }
@@ -161,7 +197,20 @@ export default function StudentPortal() {
     try {
       const s = await getStudentByCode(code.trim());
       if (!s) { setError('❌ الكود غير صحيح'); }
-      else { setStudent(s); }
+      else { 
+        let tName = s.teacherName;
+        if (!tName && s.teacherId) {
+          const teacherData = await getTeacherById(s.teacherId);
+          if (teacherData) {
+            tName = teacherData.name;
+            setStudent({ ...s, teacherName: tName });
+          } else {
+            setStudent(s);
+          }
+        } else {
+          setStudent(s); 
+        }
+      }
     } catch { setError('تعذّر الاتصال'); }
     finally { setLoading(false); }
   };
@@ -357,7 +406,10 @@ export default function StudentPortal() {
         </div>
         <div className="flex-1 min-w-0">
           <div className="font-bold text-sm truncate">{student.name}</div>
-          <div className="text-xs" style={{ color: 'var(--text-muted)' }}>كود: {student.code}</div>
+          <div className="text-[10px] flex gap-2" style={{ color: 'var(--text-muted)' }}>
+            <span>كود الطالب: {student.code}</span>
+            {student.teacherCode && <span>• كود المعلم: {student.teacherCode}</span>}
+          </div>
         </div>
         <div className="flex items-center gap-2">
           {siteSettings?.whatsappNumber && (
@@ -380,6 +432,17 @@ export default function StudentPortal() {
               <Bell size={18} />
               {notifications.filter(n => !n.read).length > 0 && (
                 <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+              )}
+            </button>
+
+            {/* Messaging Icon */}
+            <button 
+              onClick={() => setActiveTab('messages')}
+              className="relative p-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors"
+            >
+              <MessageSquare size={18} />
+              {conversations.some(c => c.lastMessage && !c.lastMessage.isRead && c.lastMessage.receiverId === student.id) && (
+                <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-gold shadow-[0_0_8px_var(--gold)]" />
               )}
             </button>
             
@@ -415,11 +478,13 @@ export default function StudentPortal() {
         {/* Stats */}
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 sm:gap-4">
           {[
-            { label: 'اختبار متاح', value: exams.length, icon: '📋' },
-            { label: 'محاولة مكتملة', value: completedAttempts.length, icon: '✅' },
-            { label: 'متوسط الدرجات', value: avgScore ? `${avgScore}%` : '—', icon: '📊', className: 'col-span-2 sm:col-span-1' },
-          ].map((s, i) => (
-            <div key={i} className={`stat-card text-center py-4 flex flex-col items-center justify-center ${s.className || ''}`}>
+            { id: 'exams', label: 'اختبار متاح', value: exams.length, icon: '📋' },
+            { id: 'courses', label: 'كورس / منهج', value: materials.length, icon: '📚' },
+            { id: 'assignments', label: 'واجب مطلوب', value: assignments.length, icon: '📝' },
+            { id: 'results', label: 'محاولة مكتملة', value: completedAttempts.length, icon: '✅' },
+            { id: 'messages', label: 'رسالة خاصة', value: conversations.reduce((acc, c) => acc + (c.lastMessage && !c.lastMessage.isRead && c.lastMessage.receiverId === student.id ? 1 : 0), 0), icon: '💬' },
+          ].filter(s => !teacherPermissions || teacherPermissions.includes(s.id)).map((s, i) => (
+            <div key={i} className={`stat-card text-center py-4 flex flex-col items-center justify-center`}>
               <div className="text-2xl mb-1.5">{s.icon}</div>
               <div className="font-cairo font-black leading-none" style={{ color: 'var(--gold)', fontSize: '22px' }}>{s.value}</div>
               <div className="text-[11px] mt-1.5 font-bold opacity-70 uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>{s.label}</div>
@@ -434,8 +499,9 @@ export default function StudentPortal() {
             { id: 'exams', label: 'اختباراتي', icon: BookOpen },
             { id: 'courses', label: 'المناهج', icon: BookMarked },
             { id: 'assignments', label: 'الواجبات', icon: ClipboardList },
+            { id: 'messages', label: 'الرسائل', icon: MessageSquare },
             { id: 'results', label: 'نتائجي', icon: BarChart2 },
-          ].map(tab => (
+          ].filter(tab => !teacherPermissions || teacherPermissions.includes(tab.id)).map(tab => (
             <button key={tab.id} onClick={() => setActiveTab(tab.id as any)}
               className={`flex-1 py-2.5 rounded-xl text-[12px] sm:text-sm font-bold transition-all whitespace-nowrap px-4 flex items-center justify-center gap-2 ${activeTab === tab.id ? 'btn-gold shadow-lg shadow-gold/20' : 'text-text-muted hover:bg-white/5'}`}>
               <tab.icon size={14} className={activeTab === tab.id ? 'text-dark' : 'text-text-muted'} />
@@ -845,6 +911,159 @@ export default function StudentPortal() {
           </div>
         )}
 
+        {/* Messages Tab */}
+        {activeTab === 'messages' && (
+          <div className="flex flex-col h-[500px] card-base overflow-hidden animate-slide-up bg-[#0d121f]">
+            {!selectedConv ? (
+              <div className="flex-1 flex flex-col items-center justify-center p-6 text-center space-y-4">
+                <div className="w-16 h-16 bg-gold/5 rounded-full flex items-center justify-center border border-gold/10">
+                  <MessageSquare size={32} className="text-gold/20" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-gray-300">محادثاتي</h3>
+                  <p className="text-xs text-gray-500 mb-6">تبادل الرسائل مع المعلم أو الإدارة</p>
+                </div>
+                
+                <div className="w-full space-y-2 overflow-y-auto max-h-[300px] px-2 custom-scrollbar">
+                  {/* Option to chat with Teacher */}
+                  <button 
+                    onClick={() => {
+                      const convId = [student.id, student.teacherId].sort().join('_');
+                      const existing = conversations.find(c => c.id === convId);
+                      setSelectedConv(existing || {
+                        id: convId,
+                        participants: [student.id, student.teacherId],
+                        participantNames: [student.name, student.teacherName || 'المعلم'],
+                        updatedAt: Date.now()
+                      } as Conversation);
+                    }}
+                    className="w-full p-4 rounded-2xl bg-gold/5 border border-gold/10 flex items-center gap-3 hover:bg-gold/10 transition-all text-right group"
+                  >
+                    <div className="w-10 h-10 rounded-xl bg-gold flex items-center justify-center text-black font-black group-hover:scale-110 transition-transform">
+                       {(student.teacherName || 'م')[0]}
+                    </div>
+                    <div className="flex-1">
+                       <p className="font-bold text-sm text-gold">المعلم: {student.teacherName || 'غير معروف'}</p>
+                       <p className="text-[10px] text-gray-500">تواصل مباشر مع معلمك</p>
+                    </div>
+                    {conversations.find(c => c.participants.includes(student.teacherId))?.lastMessage && !conversations.find(c => c.participants.includes(student.teacherId))?.lastMessage?.isRead && conversations.find(c => c.participants.includes(student.teacherId))?.lastMessage?.receiverId === student.id && (
+                      <span className="w-2 h-2 rounded-full bg-gold shadow-[0_0_8px_var(--gold)]" />
+                    )}
+                  </button>
+
+                  {/* Option to chat with Admin */}
+                  <button 
+                    onClick={async () => {
+                      const admin = await getSuperAdmin();
+                      if (!admin) { showToast('الأدمن غير متاح حالياً'); return; }
+                      const convId = [student.id, admin.id].sort().join('_');
+                      const existing = conversations.find(c => c.id === convId);
+                      setSelectedConv(existing || {
+                        id: convId,
+                        participants: [student.id, admin.id],
+                        participantNames: [student.name, admin.name],
+                        updatedAt: Date.now()
+                      } as Conversation);
+                    }}
+                    className="w-full p-4 rounded-2xl bg-purple-500/5 border border-purple-500/10 flex items-center gap-3 hover:bg-purple-500/10 transition-all text-right group"
+                  >
+                    <div className="w-10 h-10 rounded-xl bg-purple-500 flex items-center justify-center text-white font-black group-hover:scale-110 transition-transform">
+                       <ShieldCheck size={20} />
+                    </div>
+                    <div className="flex-1">
+                       <p className="font-bold text-sm text-purple-400">الدعم الفني (الأدمن)</p>
+                       <p className="text-[10px] text-gray-500">للمشاكل التقنية والاشتراكات</p>
+                    </div>
+                    {conversations.find(c => c.participants.some(p => p !== student.id && p !== student.teacherId))?.lastMessage && !conversations.find(c => c.participants.some(p => p !== student.id && p !== student.teacherId))?.lastMessage?.isRead && conversations.find(c => c.participants.some(p => p !== student.id && p !== student.teacherId))?.lastMessage?.receiverId === student.id && (
+                      <span className="w-2 h-2 rounded-full bg-purple-500 shadow-[0_0_8px_var(--purple-500)]" />
+                    )}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                {/* Chat Header */}
+                <div className="p-3 border-b border-white/5 bg-white/5 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <button onClick={() => setSelectedConv(null)} className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-white transition-colors"><X size={20}/></button>
+                    <div className="w-9 h-9 rounded-xl bg-gold flex items-center justify-center text-black font-bold">
+                       {selectedConv.participantNames[selectedConv.participants.findIndex(p => p !== student.id)][0]}
+                    </div>
+                    <div className="min-w-0">
+                       <h3 className="font-bold text-xs text-white truncate">{selectedConv.participantNames[selectedConv.participants.findIndex(p => p !== student.id)]}</h3>
+                       <p className="text-[9px] text-green-500">متصل الآن</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Messages Area */}
+                <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')]">
+                   {loadingChat ? (
+                     <div className="flex items-center justify-center h-full"><Loader2 className="animate-spin text-gold" size={24} /></div>
+                   ) : chatMessages.length === 0 ? (
+                     <div className="flex flex-col items-center justify-center h-full text-center space-y-2 opacity-30">
+                        <MessageSquare size={32}/>
+                        <p className="text-[10px]">ابدأ المراسلة الآن!</p>
+                     </div>
+                   ) : (
+                     chatMessages.map((msg, i) => {
+                       const isMine = msg.senderId === student.id;
+                       return (
+                         <div key={msg.id} className={`flex flex-col ${isMine ? 'items-end' : 'items-start'}`}>
+                           <div className={`max-w-[85%] p-2.5 rounded-2xl shadow-lg ${
+                             isMine ? 'bg-gold text-black rounded-tr-none' : 'bg-white/10 text-white rounded-tl-none border border-white/5'
+                           }`}>
+                              <p className="text-xs leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                              <div className="flex items-center gap-1 mt-1 justify-end opacity-60">
+                                 <span className="text-[8px]">{new Date(msg.timestamp).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}</span>
+                                 {isMine && (msg.isRead ? <CheckCheck size={10} className="text-blue-600" /> : <Check size={10} />)}
+                              </div>
+                           </div>
+                         </div>
+                       );
+                     })
+                   )}
+                   <div ref={chatEndRef} />
+                </div>
+
+                {/* Input Area */}
+                <div className="p-3 border-t border-white/5 bg-white/5">
+                   <form onSubmit={async (e) => {
+                     e.preventDefault();
+                     if (!newMsg.trim() || !selectedConv) return;
+                     const recId = selectedConv.participants.find(p => p !== student.id)!;
+                     const recName = selectedConv.participantNames[selectedConv.participants.indexOf(recId)];
+                     await sendMessage({
+                       senderId: student.id,
+                       senderName: student.name,
+                       receiverId: recId,
+                       receiverName: recName,
+                       content: newMsg.trim(),
+                       teacherId: student.teacherId
+                     });
+                     setNewMsg('');
+                   }} className="flex items-center gap-2">
+                      <input 
+                        type="text" 
+                        placeholder="اكتب هنا..." 
+                        className="input-base flex-1 py-2 px-4 text-xs h-10"
+                        value={newMsg}
+                        onChange={e => setNewMsg(e.target.value)}
+                      />
+                      <button 
+                        type="submit" 
+                        disabled={!newMsg.trim()}
+                        className="w-10 h-10 rounded-xl bg-gold text-black flex items-center justify-center shadow-lg shadow-gold/20 disabled:opacity-50"
+                      >
+                         <Send size={18} />
+                      </button>
+                   </form>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
         {/* Results Tab */}
         {activeTab === 'results' && (
           <div className="space-y-3 animate-slide-up">
@@ -942,7 +1161,7 @@ export default function StudentPortal() {
                 
                 {siteSettings?.logoUrl && (
                   <div className="absolute inset-0 flex items-center justify-center opacity-[0.04] pointer-events-none z-0">
-                     <img src={siteSettings.logoUrl} alt="Watermark" className="w-[60%] object-contain" />
+                     <Image src={siteSettings.logoUrl} alt="Watermark" width={300} height={300} className="w-[60%] object-contain opacity-20" />
                   </div>
                 )}
 
@@ -964,7 +1183,7 @@ export default function StudentPortal() {
 
                   <p className="text-lg md:text-xl text-gray-700 mb-10 max-w-2xl mx-auto leading-relaxed font-medium">
                     نظراً لاجتيازه(ا) بتفوق ونجاح دراسة واختبار <br/>
-                    <b className="text-[#1A1A25] text-xl md:text-2xl inline-block mt-2 border-b-2 border-dashed border-[#F5C518] pb-1">"{certData.exam.title}"</b>
+                    <b className="text-[#1A1A25] text-xl md:text-2xl inline-block mt-2 border-b-2 border-dashed border-[#F5C518] pb-1">&quot;{certData.exam.title}&quot;</b>
                   </p>
 
                   {/* Score & Footer */}
@@ -987,7 +1206,13 @@ export default function StudentPortal() {
                     <div className="order-3 sm:order-3 sm:text-left flex flex-col items-center">
                       <p className="text-xs md:text-sm text-gray-500 mb-2 font-bold text-center">التوقيع والختم</p>
                       {siteSettings?.certSignatureUrl ? (
-                        <img src={siteSettings.certSignatureUrl} alt="التوقيع" className="h-12 md:h-16 max-w-[120px] md:max-w-[150px] object-contain" />
+                        <Image 
+                          src={siteSettings.certSignatureUrl} 
+                          alt="التوقيع" 
+                          width={150} 
+                          height={100} 
+                          className="h-12 md:h-16 max-w-[120px] md:max-w-[150px] object-contain" 
+                        />
                       ) : (
                         <div className="font-cairo font-black text-lg md:text-2xl text-[#1A1A25] opacity-80 shrink-0 text-center whitespace-nowrap mt-2">
                            {siteSettings?.teacherName || siteSettings?.acadName || 'A-N Academy'}
