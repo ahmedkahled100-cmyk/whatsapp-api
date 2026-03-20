@@ -11,6 +11,7 @@ export interface TeacherUser {
   phone?: string;
   isActive: boolean;
   permissions?: string[]; // Granular features
+  imageUrl?: string;
   subType?: 'free' | 'monthly' | 'yearly';
   subExpiry?: number | null;
   subLink?: string;
@@ -191,6 +192,8 @@ export interface RegistrationRequest {
   status: 'pending' | 'approved' | 'rejected';
   createdAt: number;
   subject?: string; // For teacher registration
+  subPrice?: number; // Subscription price matched during registration
+  imageUrl?: string; // Student profile image if uploaded during registration
 }
 
 export interface CourseMaterial {

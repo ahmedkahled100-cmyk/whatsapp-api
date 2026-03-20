@@ -5,7 +5,7 @@ import { useMemo } from 'react';
 import Link from 'next/link';
 import { useTeacherStore } from '@/lib/store';
 import { formatDateAr, scoreLabel, gradeColor } from '@/lib/utils';
-import { Users, FileText, TrendingUp, Clock, PlusCircle, Eye, Share2, ChevronLeft } from 'lucide-react';
+import { Users, FileText, TrendingUp, Clock, PlusCircle, Eye, Share2, ChevronLeft, AlertCircle } from 'lucide-react';
 
 export default function DashboardPage() {
   const { user, exams, students, attempts, groups, notifications } = useTeacherStore();
@@ -49,11 +49,18 @@ export default function DashboardPage() {
     <div className="space-y-6">
       {/* Welcome */}
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-cairo font-black gold-text">🏠 لوحة التحكم</h1>
-          <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>
-            مرحباً بك {user?.name} — {new Date().toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-          </p>
+        <div className="flex items-center gap-4">
+          {user?.imageUrl ? (
+            <img src={user.imageUrl} alt={user.name} className="w-12 h-12 rounded-2xl object-cover border-2 border-gold/30 shadow-lg shadow-gold/20" />
+          ) : (
+            <div className="text-3xl">🏠</div>
+          )}
+          <div>
+            <h1 className="text-2xl font-cairo font-black gold-text">لوحة التحكم</h1>
+            <p className="text-sm mt-1 font-bold" style={{ color: 'var(--text-muted)' }}>
+              مرحباً بك {user?.name} — {new Date().toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+            </p>
+          </div>
         </div>
         <div className="flex gap-2">
           {hasPermission('students') && (
@@ -68,6 +75,51 @@ export default function DashboardPage() {
           )}
         </div>
       </div>
+
+      {/* Expiry Warning */}
+      {user?.role === 'teacher' && user?.subExpiry && user.subType !== 'free' && new Date(user.subExpiry).getTime() > Date.now() && new Date(user.subExpiry).getTime() - Date.now() <= 7 * 24 * 60 * 60 * 1000 && (
+        <div className="card-base p-4 sm:p-5 bg-red-500/10 border-red-500/30 flex justify-between items-center flex-wrap gap-4 animate-pulse-slow">
+           <div className="flex gap-3 items-start sm:items-center">
+             <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center text-red-500 shrink-0 mt-0.5 sm:mt-0">
+               <AlertCircle size={20} />
+             </div>
+             <div>
+               <div className="font-bold text-red-400">تنبيه اقتراب انتهاء اشتراك المنصة</div>
+               <div className="text-sm text-red-300 mt-1 leading-relaxed">
+                 عزيزي المعلم، اشتراكك الحالي سينتهي يوم <strong>{formatDateAr(new Date(user.subExpiry).toISOString())}</strong>. يرجى التجديد لضمان استمرار وصولك للوحة التحكم وبوابة طلابك.
+               </div>
+             </div>
+           </div>
+           {user.subLink && (
+             <a href={user.subLink.startsWith('http') ? user.subLink : `https://${user.subLink}`} target="_blank" className="btn-gold bg-red-600 shadow-lg shadow-red-900/40 text-sm whitespace-nowrap self-stretch sm:self-auto flex items-center justify-center">
+               تجديد الاشتراك
+             </a>
+           )}
+        </div>
+      )}
+      
+      {/* Expired Warning */}
+      {user?.role === 'teacher' && user?.subExpiry && user.subType !== 'free' && new Date(user.subExpiry).getTime() < Date.now() && (
+        <div className="card-base p-4 sm:p-5 bg-red-900/40 border-red-500/50 flex justify-between items-center flex-wrap gap-4 relative overflow-hidden">
+           <div className="absolute inset-0 bg-[url('/noise.png')] opacity-20 mix-blend-overlay pointer-events-none"></div>
+           <div className="flex gap-3 items-start sm:items-center relative z-10">
+             <div className="w-10 h-10 rounded-full bg-red-500/30 flex items-center justify-center text-red-400 shrink-0 mt-0.5 sm:mt-0">
+               <AlertCircle size={20} />
+             </div>
+             <div>
+               <div className="font-black text-red-400 text-lg">⚠️ انتهى اشتراك المنصة الخاصة بك</div>
+               <div className="text-sm text-red-300 mt-1 leading-relaxed">
+                 انتهى اشتراكك يوم <strong>{formatDateAr(new Date(user.subExpiry).toISOString())}</strong>. يرجى تجديد الاشتراك فوراً لاستعادة كامل الصلاحيات والوصول لمنصتك التعليمية مجدداً.
+               </div>
+             </div>
+           </div>
+           {user.subLink && (
+             <a href={user.subLink.startsWith('http') ? user.subLink : `https://${user.subLink}`} target="_blank" className="btn-gold bg-red-600 shadow-xl shadow-red-900/40 text-sm whitespace-nowrap self-stretch sm:self-auto flex items-center justify-center hover:bg-red-500 relative z-10">
+               تجديد الاشتراك الآن
+             </a>
+           )}
+        </div>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">

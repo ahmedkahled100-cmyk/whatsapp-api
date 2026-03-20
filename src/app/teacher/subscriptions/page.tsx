@@ -3,7 +3,7 @@
 
 import { useState, useMemo } from 'react';
 import { useTeacherStore } from '@/lib/store';
-import { saveStudent, deleteRegistrationRequest } from '@/lib/db';
+import { saveStudent, deleteRegistrationRequest, getSettings } from '@/lib/db';
 import { CreditCard, Search, Calendar, ShieldCheck, Clock, UserX, CheckCircle, XCircle, Copy, AlertCircle, FileText, Image as ImageIcon, X, Download } from 'lucide-react';
 import { showToast } from '@/lib/toast';
 import { formatDateAr, generateCode } from '@/lib/utils';
@@ -16,6 +16,7 @@ export default function SubscriptionsPage() {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<'all' | 'monthly' | 'yearly' | 'halfYearly' | 'course' | 'session' | 'none'>('all');
   const [copiedLink, setCopiedLink] = useState(false);
+  const [receiptStudent, setReceiptStudent] = useState<Student | null>(null);
   
   // File Viewer
   const { openPreview, PreviewModal } = useFilePreview();
@@ -47,10 +48,25 @@ export default function SubscriptionsPage() {
     if (!student) return;
 
     let subExpiry = null;
-    if (subType !== 'none' && daysToAdd) {
-      const now = new Date();
-      now.setDate(now.getDate() + daysToAdd);
-      subExpiry = now.getTime();
+    let subPrice = student.subPrice || 0;
+
+    if (subType !== 'none') {
+      const s = await getSettings(student.teacherId);
+      if (s) {
+        if (subType === 'monthly') subPrice = s.monthlyPrice || 0;
+        else if (subType === 'yearly') subPrice = s.yearlyPrice || 0;
+        else if (subType === 'halfYearly') subPrice = s.halfYearlyPrice || 0;
+        else if (subType === 'course') subPrice = s.coursePrice || 0;
+        else if (subType === 'session') subPrice = s.sessionPrice || 0;
+      }
+      
+      if (daysToAdd) {
+        const now = new Date();
+        now.setDate(now.getDate() + daysToAdd);
+        subExpiry = now.getTime();
+      }
+    } else {
+      subPrice = 0;
     }
 
     try {
@@ -58,6 +74,7 @@ export default function SubscriptionsPage() {
         ...student,
         subType,
         subExpiry,
+        subPrice
       });
       showToast(`تم تحديث اشتراك الطالب ${student.name} بنجاح`);
     } catch (error) {
@@ -120,6 +137,10 @@ export default function SubscriptionsPage() {
         code,
         subType: req.subType,
         subExpiry,
+        subPrice: req.subPrice || 0,
+        imageUrl: req.imageUrl || '',
+        teacherId: req.teacherId,
+        teacherCode: req.teacherCode || '',
         email: '',
         groupIds: [],
         notes: `تم طلب التسجيل إلكترونياً. رقم الإيصال / ملاحظة: ${req.paymentRef || 'لا يوجد'}`,
@@ -264,15 +285,28 @@ export default function SubscriptionsPage() {
                           {student.subExpiry ? formatDateAr(new Date(student.subExpiry).toISOString()) : '—'}
                         </td>
                         <td className="px-6 py-4">
-                          <div className="flex gap-2">
-                            <button onClick={() => handleUpdateSubscription(student.id, 'monthly', 30)} className="btn-outline text-xs py-1.5 px-3 border-blue-500/30 text-blue-400 hover:bg-blue-500/10">
+                          <div className="flex gap-2 flex-wrap min-w-[200px]">
+                            <button onClick={() => handleUpdateSubscription(student.id, 'monthly', 30)} className="btn-outline text-xs py-1.5 px-3 border-blue-500/30 text-blue-400 hover:bg-blue-500/10 mb-1">
                               تجديد شهر
                             </button>
-                            <button onClick={() => handleUpdateSubscription(student.id, 'session', 1)} className="btn-outline text-xs py-1.5 px-3 border-purple-500/30 text-purple-400 hover:bg-purple-500/10">
+                            <button onClick={() => handleUpdateSubscription(student.id, 'session', 1)} className="btn-outline text-xs py-1.5 px-3 border-purple-500/30 text-purple-400 hover:bg-purple-500/10 mb-1">
                               جلسة واحدة
                             </button>
+                            {student.subExpiry && new Date(student.subExpiry).getTime() - Date.now() <= 7 * 24 * 60 * 60 * 1000 && student.subExpiry > Date.now() && (
+                              <button onClick={() => {
+                                const msg = `عزيزي ولي أمر الطالب ${student.name}،\nنود تذكيركم باقتراب موعد انتهاء اشتراك الطالب بنظام المنصة (${translateSubType(student.subType)}) يوم ${formatDateAr(new Date(student.subExpiry!).toISOString())}.\nيرجى تجديد الاشتراك لضمان استمرار وصول الطالب للمنصة.\nشكراً لكم.`;
+                                window.open(`https://wa.me/${student.parentPhone}?text=${encodeURIComponent(msg)}`, '_blank');
+                              }} className="btn-outline text-xs py-1.5 px-3 border-green-500/30 text-green-400 hover:bg-green-500/10 mb-1">
+                                تذكير عبر واتساب
+                              </button>
+                            )}
                             {student.subType !== 'none' && (
-                              <button onClick={() => handleUpdateSubscription(student.id, 'none')} className="btn-outline text-xs py-1.5 px-3 border-red-500/30 text-red-400 hover:bg-red-500/10">
+                              <button onClick={() => setReceiptStudent(student)} className="btn-outline text-xs py-1.5 px-3 border-gold/30 text-gold hover:bg-gold/10 mb-1">
+                                🧾 عرض الإيصال
+                              </button>
+                            )}
+                            {student.subType !== 'none' && (
+                              <button onClick={() => handleUpdateSubscription(student.id, 'none')} className="btn-outline text-xs py-1.5 px-3 border-red-500/30 text-red-400 hover:bg-red-500/10 mb-1">
                                 إلغاء الاشتراك
                               </button>
                             )}
@@ -313,9 +347,12 @@ export default function SubscriptionsPage() {
               registrationRequests.map(req => (
                 <div key={req.id} className="card-base p-5 border border-white/10 hover:border-gold/30 transition-colors">
                   <div className="flex justify-between items-start mb-4 border-b border-white/5 pb-4">
-                    <div>
-                      <h3 className="text-lg font-bold text-white mb-1">{req.name}</h3>
-                      <p className="text-xs text-gray-400">{formatDateAr(new Date(req.createdAt).toISOString())}</p>
+                    <div className="flex gap-3 items-center">
+                      {req.imageUrl && <img src={req.imageUrl} alt="صورة الطالب" className="w-12 h-12 rounded-full object-cover border border-gold/30" />}
+                      <div>
+                        <h3 className="text-lg font-bold text-white mb-1">{req.name}</h3>
+                        <p className="text-xs text-gray-400">{formatDateAr(new Date(req.createdAt).toISOString())}</p>
+                      </div>
                     </div>
                     <span className={`badge ${getSubBadgeColor(req.subType)} text-xs`}>
                       {translateSubType(req.subType)}
@@ -323,6 +360,10 @@ export default function SubscriptionsPage() {
                   </div>
                   
                   <div className="space-y-3 mb-6">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">ميزة الاشتراك المتوقعة:</span>
+                      <span className="text-gold font-bold">{req.subPrice || 0} ج.م</span>
+                    </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-500">الصف الدراسي:</span>
                       <span className="text-gray-200">{req.grade}</span>
@@ -373,6 +414,66 @@ export default function SubscriptionsPage() {
               ))
             )}
           </div>
+        </div>
+      )}
+
+      {receiptStudent && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="card-base p-6 w-full max-w-sm animate-scale-in bg-white text-black print:absolute print:inset-0 print:m-0 print:border-none print:shadow-none print:rounded-none" id="receipt-container">
+            <div className="text-center mb-6">
+              <h2 className="text-2xl font-black text-black mb-1">إيصال اشتراك منصة</h2>
+              <div className="text-xs text-gray-500">{new Date().toLocaleDateString('ar-EG')}</div>
+            </div>
+            
+            <div className="space-y-4 mb-8 text-sm font-bold">
+              <div className="flex justify-between border-b pb-2">
+                <span className="text-gray-600">اسم الطالب:</span>
+                <span>{receiptStudent.name}</span>
+              </div>
+              <div className="flex justify-between border-b pb-2">
+                <span className="text-gray-600">كود الطالب:</span>
+                <span className="font-mono bg-gray-100 px-1 rounded">{receiptStudent.code}</span>
+              </div>
+               <div className="flex justify-between border-b pb-2">
+                <span className="text-gray-600">نوع الاشتراك:</span>
+                <span className="text-blue-600">{translateSubType(receiptStudent.subType)}</span>
+              </div>
+              <div className="flex justify-between border-b pb-2">
+                <span className="text-gray-600">القيمة المسددة:</span>
+                <span className="text-green-600">{receiptStudent.subPrice || 0} ج.م</span>
+              </div>
+              <div className="flex justify-between border-b pb-2">
+                <span className="text-gray-600">تاريخ الانتهاء:</span>
+                <span className="text-red-600">{receiptStudent.subExpiry ? new Date(receiptStudent.subExpiry).toLocaleDateString('ar-EG') : '—'}</span>
+              </div>
+            </div>
+
+            <div className="text-center text-xs text-gray-400 mb-6">
+              تم إنشاء هذا الإيصال إلكترونياً
+            </div>
+
+            <div className="flex gap-2 justify-center mt-4 no-print flex-col sm:flex-row">
+              <button onClick={() => window.print()} className="bg-gray-800 text-white px-4 py-2.5 rounded-lg text-sm font-bold shadow-lg hover:bg-gray-900 w-full sm:w-auto flex items-center justify-center gap-2">
+                🖨️ طباعة
+              </button>
+              <button onClick={() => {
+                const msg = `مرحباً أستاذ/ة،\nمرفق لسيادتكم تفاصيل اشتراك الطالب ${receiptStudent.name}.\n\nنوع الاشتراك: ${translateSubType(receiptStudent.subType)}\nالقيمة: ${receiptStudent.subPrice || 0} جنيه\nينتهي في: ${receiptStudent.subExpiry ? new Date(receiptStudent.subExpiry).toLocaleDateString('ar-EG') : '—'}\n\nشكراً لثقتكم بنا.`;
+                window.open(`https://wa.me/${receiptStudent.parentPhone}?text=${encodeURIComponent(msg)}`, '_blank');
+              }} className="bg-green-600 text-white px-4 py-2.5 rounded-lg text-sm font-bold shadow-lg hover:bg-green-700 w-full sm:w-auto flex items-center justify-center gap-2">
+                واتساب
+              </button>
+              <button onClick={() => setReceiptStudent(null)} className="bg-red-100 text-red-600 px-4 py-2.5 rounded-lg text-sm font-bold hover:bg-red-200 w-full sm:w-auto mt-2 sm:mt-0 border border-red-200">
+                إغلاق
+              </button>
+            </div>
+          </div>
+          <style dangerouslySetInnerHTML={{__html: `
+            @media print {
+              body * { visibility: hidden; }
+              #receipt-container, #receipt-container * { visibility: visible; }
+              .no-print { display: none !important; }
+            }
+          `}} />
         </div>
       )}
 

@@ -40,7 +40,8 @@ export default function ManageTeachersPage() {
     subType: 'free' as 'free' | 'monthly' | 'yearly',
     subExpiry: null as number | null,
     subLink: '',
-    subPrice: 0
+    subPrice: 0,
+    imageUrl: ''
   });
 
   const [adminForm, setAdminForm] = useState({
@@ -97,7 +98,7 @@ export default function ManageTeachersPage() {
       setForm({ 
         name: '', username: '', password: '', code: '', role: 'teacher', 
         permissions: AVAILABLE_PERMISSIONS.map(p => p.id),
-        subType: 'free', subExpiry: null, subLink: '', subPrice: 0
+        subType: 'free', subExpiry: null, subLink: '', subPrice: 0, imageUrl: ''
       });
       loadData();
     } catch(err) {
@@ -150,9 +151,18 @@ export default function ManageTeachersPage() {
           </h1>
           <p className="text-sm text-gray-400 mt-1">تخصيص كامل للمعلمين، الفصول، والميزات المتاحة لكل حساب.</p>
         </div>
-        <button onClick={() => { setShowAddForm(!showAddForm); setEditingTeacher(null); }} className="btn-gold bg-purple-500 hover:bg-purple-600 shadow-purple-500/20">
-          <UserPlus size={16} /> إضافة حساب جديد
-        </button>
+        <div className="flex gap-2">
+          <button onClick={() => {
+            const url = `${window.location.origin}/teacher-register`;
+            navigator.clipboard.writeText(url);
+            showToast('✅ تم نسخ رابط تسجيل المعلمين بنجاح');
+          }} className="btn-outline border-purple-500/30 text-purple-400 hover:bg-purple-500/10">
+            <ExternalLink size={16} /> رابط التسجيل للمنصة
+          </button>
+          <button onClick={() => { setShowAddForm(!showAddForm); setEditingTeacher(null); }} className="btn-gold bg-purple-500 hover:bg-purple-600 shadow-purple-500/20">
+            <UserPlus size={16} /> إضافة حساب جديد
+          </button>
+        </div>
       </div>
 
       {(showAddForm || editingTeacher) && (
@@ -278,7 +288,8 @@ export default function ManageTeachersPage() {
                   subType: t.subType || 'free',
                   subExpiry: t.subExpiry || null,
                   subLink: t.subLink || '',
-                  subPrice: t.subPrice || 0
+                  subPrice: t.subPrice || 0,
+                  imageUrl: t.imageUrl || ''
                 });
                 setShowAddForm(false);
                 window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -287,9 +298,13 @@ export default function ManageTeachersPage() {
             >
               <div className="absolute top-0 right-0 w-20 h-20 bg-purple-500/5 rounded-full blur-3xl -mr-10 -mt-10" />
               <div className="flex justify-between items-start mb-4 relative z-10">
-                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-xl font-bold font-cairo text-white shadow-lg shadow-purple-500/20">
-                  {t.name[0]}
-                </div>
+                {t.imageUrl ? (
+                  <img src={t.imageUrl} alt={t.name} className="w-12 h-12 rounded-2xl object-cover shadow-lg shadow-purple-500/20 border border-purple-500/30" />
+                ) : (
+                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-xl font-bold font-cairo text-white shadow-lg shadow-purple-500/20">
+                    {t.name[0]}
+                  </div>
+                )}
                 <div className="flex flex-col items-end gap-2">
                     <span className={`px-2 py-1 text-[10px] rounded-lg font-black tracking-wider uppercase ${t.role === 'super_admin' ? 'bg-purple-500/20 text-purple-400 border border-purple-500/20' : 'bg-green-500/20 text-green-400 border border-green-500/20'}`}>
                       {t.role === 'super_admin' ? <span className="flex items-center gap-1"><Shield size={10}/> Admin</span> : <span className="flex items-center gap-1"><User size={10}/> Teacher</span>}

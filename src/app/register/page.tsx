@@ -19,6 +19,8 @@ export default function RegisterPage() {
   const [success, setSuccess] = useState(false);
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [studentImageFile, setStudentImageFile] = useState<File | null>(null);
+  const [imageUploadProgress, setImageUploadProgress] = useState(0);
 
   const [form, setForm] = useState({
     name: '',
@@ -26,8 +28,10 @@ export default function RegisterPage() {
     parentPhone: '',
     grade: '',
     subType: 'monthly' as 'monthly' | 'yearly' | 'halfYearly' | 'course' | 'session',
+    subPrice: 0,
     paymentRef: '',
-    receiptUrl: ''
+    receiptUrl: '',
+    imageUrl: ''
   });
 
   // PDF Compression state
@@ -55,6 +59,7 @@ export default function RegisterPage() {
       setLoading(true);
       getSettings(selectedTeacherId).then(s => {
         setSettings(s);
+        setForm(f => ({ ...f, subPrice: s?.monthlyPrice || 0 }));
         setLoading(false);
       });
     }
@@ -74,6 +79,10 @@ export default function RegisterPage() {
         } else {
           showToast('تم اكتمال رفع إيصال الدفع');
         }
+      } else if (path.startsWith('students/')) {
+        setForm(f => ({ ...f, imageUrl: url }));
+        setImageUploadProgress(0);
+        showToast('تم اكتمال رفع صورة الطالب');
       }
     };
     window.addEventListener('fileUploaded', handleUploaded);
@@ -263,27 +272,27 @@ export default function RegisterPage() {
                 <label className="block text-sm mb-2 text-gray-300 font-bold px-1">نوع الاشتراك المطلوب</label>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 sm:gap-3">
                   <label className={`cursor-pointer p-3 rounded-xl border border-white/10 text-center transition-all flex flex-col justify-center ${form.subType === 'monthly' ? 'bg-blue-500/20 border-blue-500/50 text-blue-400' : 'bg-white/5 hover:bg-white/10'}`}>
-                    <input type="radio" className="hidden" name="type" checked={form.subType === 'monthly'} onChange={() => setForm({...form, subType: 'monthly'})} />
+                    <input type="radio" className="hidden" name="type" checked={form.subType === 'monthly'} onChange={() => setForm({...form, subType: 'monthly', subPrice: settings?.monthlyPrice || 0})} />
                     <div className="font-bold text-sm sm:text-base">شهري</div>
                     {settings?.monthlyPrice && <div className="text-[10px] sm:text-xs mt-1 opacity-80">{settings.monthlyPrice} ج.م</div>}
                   </label>
                   <label className={`cursor-pointer p-3 rounded-xl border border-white/10 text-center transition-all flex flex-col justify-center ${form.subType === 'halfYearly' ? 'bg-gold/20 border-gold/50 gold-text' : 'bg-white/5 hover:bg-white/10'}`}>
-                    <input type="radio" className="hidden" name="type" checked={form.subType === 'halfYearly'} onChange={() => setForm({...form, subType: 'halfYearly'})} />
+                    <input type="radio" className="hidden" name="type" checked={form.subType === 'halfYearly'} onChange={() => setForm({...form, subType: 'halfYearly', subPrice: settings?.halfYearlyPrice || 0})} />
                     <div className="font-bold text-sm sm:text-base">نصف سنوي</div>
                     {settings?.halfYearlyPrice && <div className="text-[10px] sm:text-xs mt-1 opacity-80">{settings.halfYearlyPrice} ج.م</div>}
                   </label>
                   <label className={`cursor-pointer p-3 rounded-xl border border-white/10 text-center transition-all flex flex-col justify-center ${form.subType === 'yearly' ? 'bg-gold/20 border-gold/50 gold-text' : 'bg-white/5 hover:bg-white/10'}`}>
-                    <input type="radio" className="hidden" name="type" checked={form.subType === 'yearly'} onChange={() => setForm({...form, subType: 'yearly'})} />
+                    <input type="radio" className="hidden" name="type" checked={form.subType === 'yearly'} onChange={() => setForm({...form, subType: 'yearly', subPrice: settings?.yearlyPrice || 0})} />
                     <div className="font-bold text-sm sm:text-base">سنوي</div>
                     {settings?.yearlyPrice && <div className="text-[10px] sm:text-xs mt-1 opacity-80">{settings.yearlyPrice} ج.م</div>}
                   </label>
                   <label className={`cursor-pointer p-3 rounded-xl border border-white/10 text-center transition-all flex flex-col justify-center ${form.subType === 'course' ? 'bg-purple-500/20 border-purple-500/50 text-purple-400' : 'bg-white/5 hover:bg-white/10'}`}>
-                    <input type="radio" className="hidden" name="type" checked={form.subType === 'course'} onChange={() => setForm({...form, subType: 'course'})} />
+                    <input type="radio" className="hidden" name="type" checked={form.subType === 'course'} onChange={() => setForm({...form, subType: 'course', subPrice: settings?.coursePrice || 0})} />
                     <div className="font-bold text-sm sm:text-base">كورس كامل</div>
                     {settings?.coursePrice && <div className="text-[10px] sm:text-xs mt-1 opacity-80">{settings.coursePrice} ج.م</div>}
                   </label>
                   <label className={`cursor-pointer p-3 rounded-xl border border-white/10 text-center transition-all flex flex-col justify-center ${form.subType === 'session' ? 'bg-purple-500/20 border-purple-500/50 text-purple-400' : 'bg-white/5 hover:bg-white/10'}`}>
-                    <input type="radio" className="hidden" name="type" checked={form.subType === 'session'} onChange={() => setForm({...form, subType: 'session'})} />
+                    <input type="radio" className="hidden" name="type" checked={form.subType === 'session'} onChange={() => setForm({...form, subType: 'session', subPrice: settings?.sessionPrice || 0})} />
                     <div className="font-bold text-sm sm:text-base">بالحصة</div>
                     {settings?.sessionPrice && <div className="text-[10px] sm:text-xs mt-1 opacity-80">{settings.sessionPrice} ج.م</div>}
                   </label>
@@ -298,6 +307,57 @@ export default function RegisterPage() {
                   value={form.paymentRef}
                   onChange={e => setForm({...form, paymentRef: e.target.value})}
                 />
+              </div>
+
+              {/* Student Image / Photo Upload */}
+              <div className="relative">
+                <label className="block text-sm mb-2 text-gray-300 font-bold px-1">صورة الطالب الشخصية (اختياري)</label>
+                <label className="btn-outline w-full border-white/10 text-gray-400 hover:text-white cursor-pointer group flex items-center justify-center gap-2 py-4 rounded-xl border-dashed">
+                  {imageUploadProgress > 0 && imageUploadProgress < 100 ? (
+                    <Loader2 size={18} className="animate-spin group-hover:text-gold transition-colors" />
+                  ) : (
+                    <ImageIcon size={18} className="group-hover:text-gold transition-colors" />
+                  )}
+                  <span className="text-xs sm:text-sm truncate px-2">
+                    {imageUploadProgress > 0 && imageUploadProgress < 100 ? `جاري الرفع... ${imageUploadProgress}%` : (studentImageFile ? studentImageFile.name : 'اختر صورة شخصية للطالب')}
+                  </span>
+                  <input 
+                      type="file" 
+                      accept="image/*"
+                      className="hidden" 
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          if (file.size > 20 * 1024 * 1024) {
+                            showToast('حجم الصورة كبير جداً (أقصى حجم 20 ميجابايت)');
+                            return;
+                          }
+                          setStudentImageFile(file);
+                          setImageUploadProgress(10);
+                          try {
+                            const fileName = `${Date.now()}_${form.phone || 'no_phone'}_profile_${file.name}`;
+                            const path = `students/${fileName}`;
+                            await FileProcessor.queueFile(file, path);
+                            showToast('جاري رفع صورة الطالب...');
+                          } catch (err: any) {
+                            showToast(err.message || 'فشل رفع الصورة');
+                            setImageUploadProgress(0);
+                          }
+                        }
+                      }}
+                      disabled={submitting || (queue.some(f => f.status !== 'completed' && f.status !== 'failed' && f.path.startsWith('students/')))}
+                    />
+                </label>
+                {queue.some(f => f.status !== 'completed' && f.status !== 'failed' && f.path.startsWith('students/')) && (
+                  <div className="w-full bg-white/10 rounded-full h-1.5 overflow-hidden mt-3">
+                    <div className="bg-gold h-full transition-all duration-300 animate-pulse w-full" />
+                  </div>
+                )}
+                {form.imageUrl && (
+                  <div className="text-[10px] sm:text-xs text-green-400 mt-2 flex items-center gap-1">
+                    <CheckCircle2 size={14} /> تم إرفاق الصورة الشخصية بنجاح
+                  </div>
+                )}
               </div>
 
               {/* Receipt File Upload */}
@@ -391,13 +451,13 @@ export default function RegisterPage() {
               </div>
 
               <button 
-                disabled={submitting || queue.some(f => f.status !== 'completed' && f.status !== 'failed' && f.path.startsWith('receipts/'))} 
+                disabled={submitting || queue.some(f => f.status !== 'completed' && f.status !== 'failed' && (f.path.startsWith('receipts/') || f.path.startsWith('students/')))} 
                 type="submit" 
                 className="btn-gold w-full mt-4 h-12 text-base sm:text-lg font-bold shadow-lg shadow-gold/20 disabled:opacity-50"
               >
                 {submitting ? 'جاري إرسال الطلب...' : 
-                 queue.some(f => f.status !== 'completed' && f.status !== 'failed' && f.path.startsWith('receipts/')) ? 
-                 '⏳ جاري معالجة الإيصال...' : 'إرسال طلب الاشتراك'}
+                 queue.some(f => f.status !== 'completed' && f.status !== 'failed' && (f.path.startsWith('receipts/') || f.path.startsWith('students/'))) ? 
+                 '⏳ جاري الرفع...' : 'إرسال طلب الاشتراك'}
               </button>
           </form>
         </div>

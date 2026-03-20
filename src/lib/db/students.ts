@@ -1,7 +1,7 @@
 // src/lib/db/students.ts
 import { 
   collection, doc, getDocs, setDoc, deleteDoc, onSnapshot, 
-  query, where, limit, writeBatch, addDoc 
+  query, where, limit, writeBatch, addDoc, orderBy 
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { STUDENTS, ATTEMPTS, GROUPS, REG_REQUESTS } from './constants';
@@ -94,10 +94,13 @@ export const subscribeToGroups = (teacherId: string, callback: (groups: Group[])
 
 // Registration Requests
 export const getRegistrationRequests = async (teacherId: string): Promise<RegistrationRequest[]> => {
-  const q = query(collection(db, REG_REQUESTS), where('teacherId', '==', teacherId));
+  const q = query(
+    collection(db, REG_REQUESTS), 
+    where('teacherId', '==', teacherId),
+    orderBy('createdAt', 'desc')
+  );
   const snap = await getDocs(q);
-  const items = snap.docs.map(d => ({ ...d.data(), id: d.id } as RegistrationRequest));
-  return items.sort((a, b) => Number(b.createdAt ?? 0) - Number(a.createdAt ?? 0));
+  return snap.docs.map(d => ({ ...d.data(), id: d.id } as RegistrationRequest));
 };
 
 export const saveRegistrationRequest = async (req: Omit<RegistrationRequest, 'id'> & { id?: string }): Promise<string> => {
@@ -114,9 +117,12 @@ export const deleteRegistrationRequest = async (id: string) => {
 };
 
 export const subscribeToRegistrationRequests = (teacherId: string, callback: (requests: RegistrationRequest[]) => void) => {
-  const q = query(collection(db, REG_REQUESTS), where('teacherId', '==', teacherId));
+  const q = query(
+    collection(db, REG_REQUESTS), 
+    where('teacherId', '==', teacherId),
+    orderBy('createdAt', 'desc')
+  );
   return onSnapshot(q, (snap) => {
-    const items = snap.docs.map(d => ({ ...d.data(), id: d.id } as RegistrationRequest));
-    callback(items.sort((a, b) => Number(b.createdAt ?? 0) - Number(a.createdAt ?? 0)));
+    callback(snap.docs.map(d => ({ ...d.data(), id: d.id } as RegistrationRequest)));
   });
 };

@@ -10,7 +10,7 @@ import { FileProcessor } from '@/lib/file-processor';
 import { showToast } from '@/lib/toast';
 import type { Settings } from '@/types';
 import type { Exam, Attempt, CourseMaterial, Assignment, AssignmentSubmission, Notification, Message, Conversation } from '@/types';
-import { GraduationCap, LogOut, BookOpen, BarChart2, ClipboardList, Download, Award, Video, FileText, Link as LinkIcon, BookMarked, Globe, Lock, Upload, MessageCircle, MessageSquare, Loader2, Bell, Send, Check, CheckCheck, X, Plus, ShieldCheck } from 'lucide-react';
+import { GraduationCap, LogOut, BookOpen, BarChart2, ClipboardList, Download, Award, Video, FileText, Link as LinkIcon, BookMarked, Globe, Lock, Upload, MessageCircle, MessageSquare, Loader2, Bell, Send, Check, CheckCheck, X, Plus, ShieldCheck, AlertCircle } from 'lucide-react';
 import { PDFCompressionModal } from '@/components/PDFCompressionModal';
 import { sendMessage, subscribeToMessages, markMessagesAsRead, subscribeToConversations, getTeacherById, getSuperAdmin } from '@/lib/db';
 import Link from 'next/link';
@@ -400,10 +400,14 @@ export default function StudentPortal() {
       {/* Header */}
       <header className="sticky top-0 z-30 px-4 py-3 flex items-center gap-3"
         style={{ background: 'rgba(17,17,24,0.95)', borderBottom: '1px solid rgba(245,197,24,0.1)', backdropFilter: 'blur(12px)' }}>
-        <div className="w-9 h-9 rounded-xl flex items-center justify-center text-sm font-bold"
-          style={{ background: 'linear-gradient(135deg,var(--gold),var(--accent))', color: '#000' }}>
-          {student.name[0]}
-        </div>
+        {student.imageUrl ? (
+          <img src={student.imageUrl} alt={student.name} className="w-9 h-9 rounded-xl object-cover border border-gold/30 flex-shrink-0" />
+        ) : (
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center text-sm font-bold flex-shrink-0"
+            style={{ background: 'linear-gradient(135deg,var(--gold),var(--accent))', color: '#000' }}>
+            {student.name[0]}
+          </div>
+        )}
         <div className="flex-1 min-w-0">
           <div className="font-bold text-sm truncate">{student.name}</div>
           <div className="text-[10px] flex gap-2" style={{ color: 'var(--text-muted)' }}>
@@ -475,6 +479,21 @@ export default function StudentPortal() {
       </header>
 
       <div className="max-w-2xl mx-auto p-4 space-y-4">
+        {/* Expiry Warning */}
+        {student.subExpiry && new Date(student.subExpiry).getTime() > Date.now() && new Date(student.subExpiry).getTime() - Date.now() <= 7 * 24 * 60 * 60 * 1000 && (
+          <div className="card-base p-4 bg-red-500/10 border-red-500/30 flex items-start gap-3 animate-pulse">
+            <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center text-red-500 shrink-0 mt-0.5">
+              <AlertCircle size={20} />
+            </div>
+            <div>
+              <div className="font-bold text-red-400">تنبيه اقتراب انتهاء الاشتراك</div>
+              <div className="text-sm text-red-300 mt-1 leading-relaxed">
+                عزيزي الطالب، اشتراكك الحالي سينتهي يوم <strong>{formatDateAr(new Date(student.subExpiry).toISOString())}</strong>. يرجى التجديد قريباً لضمان استمرار وصولك للمنصة.
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Stats */}
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 sm:gap-4">
           {[

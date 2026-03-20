@@ -91,7 +91,8 @@ export default function AdminSettingsPage() {
         subType: req.subType as any,
         subExpiry: Date.now() + (req.subType === 'yearly' ? 365 : 30) * 24 * 60 * 60 * 1000,
         createdAt: Date.now(),
-        permissions: ['dashboard', 'exams', 'students']
+        permissions: ['dashboard', 'exams', 'students'],
+        imageUrl: req.imageUrl || '',
       };
       await saveTeacher(newTeacher as any);
       await deleteRegistrationRequest(req.id);
@@ -220,19 +221,25 @@ export default function AdminSettingsPage() {
                <div className="col-span-2 card-base p-10 text-center text-gray-500">لا يوجد طلبات انضمام حالياً.</div>
              ) : requests.map(req => (
                <div key={req.id} className="card-base p-5 border-white/5 hover:border-purple-500/30 transition-all group overflow-hidden">
-                  <div className="flex justify-between items-start mb-4">
-                     <div className="w-12 h-12 rounded-xl bg-purple-500/20 flex items-center justify-center text-purple-400 text-xl font-black">
-                        {req.name[0]}
-                     </div>
-                     <div className="flex flex-col items-end gap-1">
-                        <div className="text-[10px] text-gray-500 flex items-center gap-1"><Clock size={10}/> {new Date(req.createdAt).toLocaleDateString('ar-EG')}</div>
-                        <div className={`px-2 py-0.5 rounded text-[10px] font-bold ${req.subType === 'yearly' ? 'bg-gold/20 text-gold' : 'bg-blue-500/20 text-blue-400'}`}>
-                           {req.subType === 'yearly' ? 'خطة سنوية' : 'خطة شهرية'}
+                  <div className="flex justify-between items-start mb-4 border-b border-white/5 pb-4">
+                     <div className="flex items-center gap-3">
+                        {req.imageUrl ? (
+                           <img src={req.imageUrl} alt={req.name} className="w-12 h-12 rounded-xl object-cover shadow-lg shadow-purple-500/20 border border-purple-500/30" />
+                        ) : (
+                           <div className="w-12 h-12 rounded-xl bg-purple-500/20 flex items-center justify-center text-purple-400 text-xl font-black">
+                              {req.name[0]}
+                           </div>
+                        )}
+                        <div className="flex flex-col gap-1">
+                           <h3 className="font-bold text-lg mb-0 leading-none">{req.name}</h3>
+                           <div className="text-[10px] text-gray-500 flex items-center gap-1"><Clock size={10}/> {new Date(req.createdAt).toLocaleDateString('ar-EG')}</div>
                         </div>
                      </div>
+                     <div className={`px-2 py-0.5 rounded text-[10px] font-bold ${req.subType === 'yearly' ? 'bg-gold/20 text-gold' : 'bg-blue-500/20 text-blue-400'}`}>
+                        {req.subType === 'yearly' ? 'خطة سنوية' : 'خطة شهرية'}
+                     </div>
                   </div>
-                  <h3 className="font-bold text-lg mb-1">{req.name}</h3>
-                  <p className="text-xs text-gray-400 mb-4">{req.subject}</p>
+                  <p className="text-xs text-gray-400 mb-4 px-1 flex items-center gap-1"><User size={14}/> المادة: {req.subject}</p>
                   
                   <div className="space-y-2 mb-6">
                      <div className="flex items-center gap-2 text-xs">

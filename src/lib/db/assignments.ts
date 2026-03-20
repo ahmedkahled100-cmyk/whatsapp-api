@@ -1,7 +1,7 @@
 // src/lib/db/assignments.ts
 import { 
   collection, addDoc, getDocs, setDoc, updateDoc, 
-  deleteDoc, onSnapshot, query, where, writeBatch, doc 
+  deleteDoc, onSnapshot, query, where, writeBatch, doc, orderBy 
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { ASSIGNMENTS, ASSIGN_SUBS } from './constants';
@@ -11,10 +11,13 @@ if (!db) throw new Error('Firebase Firestore not initialized');
 
 export const getAssignments = async (teacherId: string): Promise<Assignment[]> => {
   if (!teacherId || teacherId === 'unknown_teacher') return [];
-  const q = query(collection(db, ASSIGNMENTS), where('teacherId', '==', teacherId));
+  const q = query(
+    collection(db, ASSIGNMENTS), 
+    where('teacherId', '==', teacherId),
+    orderBy('dueDate', 'desc')
+  );
   const snap = await getDocs(q);
-  const items = snap.docs.map(d => ({ ...d.data(), id: d.id } as Assignment));
-  return items.sort((a, b) => new Date(b.dueDate).getTime() - new Date(a.dueDate).getTime());
+  return snap.docs.map(d => ({ ...d.data(), id: d.id } as Assignment));
 };
 
 export const saveAssignment = async (assign: Omit<Assignment, 'id'> & { id?: string }): Promise<string> => {
@@ -35,10 +38,13 @@ export const deleteAssignment = async (id: string) => {
 };
 
 export const subscribeToAssignments = (teacherId: string, callback: (data: Assignment[]) => void) => {
-  const q = query(collection(db, ASSIGNMENTS), where('teacherId', '==', teacherId));
+  const q = query(
+    collection(db, ASSIGNMENTS), 
+    where('teacherId', '==', teacherId),
+    orderBy('createdAt', 'desc')
+  );
   return onSnapshot(q, (snap) => {
-    const items = snap.docs.map(d => ({ ...d.data(), id: d.id } as Assignment));
-    callback(items.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')));
+    callback(snap.docs.map(d => ({ ...d.data(), id: d.id } as Assignment)));
   });
 };
 

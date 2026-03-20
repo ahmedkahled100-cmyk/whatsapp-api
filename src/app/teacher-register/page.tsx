@@ -18,6 +18,8 @@ export default function TeacherRegisterPage() {
   const [success, setSuccess] = useState(false);
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [teacherImageFile, setTeacherImageFile] = useState<File | null>(null);
+  const [imageUploadProgress, setImageUploadProgress] = useState(0);
 
   const [form, setForm] = useState({
     name: '',
@@ -28,7 +30,8 @@ export default function TeacherRegisterPage() {
     subType: 'monthly' as 'monthly' | 'yearly',
     paymentRef: '',
     receiptUrl: '',
-    type: 'teacher' as 'teacher'
+    type: 'teacher' as 'teacher',
+    imageUrl: ''
   });
 
   // PDF Compression state
@@ -59,6 +62,10 @@ export default function TeacherRegisterPage() {
         setForm(f => ({ ...f, receiptUrl: url }));
         setUploadProgress(0);
         showToast('تم اكتمال رفع إيصال الدفع');
+      } else if (path.startsWith('teachers/')) {
+        setForm(f => ({ ...f, imageUrl: url }));
+        setImageUploadProgress(0);
+        showToast('تم اكتمال رفع الصورة الشخصية');
       }
     };
     window.addEventListener('fileUploaded', handleUploaded);
@@ -205,6 +212,43 @@ export default function TeacherRegisterPage() {
             </div>
 
             <div className="space-y-4">
+              {/* Profile Image Upload */}
+              <div className="relative">
+                <label className="text-xs text-gray-400 px-1">صورة شخصية للمعلم (اختياري)</label>
+                <label className="btn-outline w-full border-dashed border-white/20 py-6 flex flex-col items-center gap-2 cursor-pointer hover:border-purple-500 hover:text-purple-400 mb-4">
+                  {imageUploadProgress > 0 && imageUploadProgress < 100 ? (
+                    <Loader2 size={24} className="animate-spin text-purple-500" />
+                  ) : (
+                    <ImageIcon size={24} />
+                  )}
+                  <span className="text-sm">
+                    {imageUploadProgress > 0 && imageUploadProgress < 100 
+                      ? `جاري الرفع... ${imageUploadProgress}%` 
+                      : (teacherImageFile ? teacherImageFile.name : 'ارفع صورة شخصية لعرضها في حسابك')}
+                  </span>
+                  <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      setTeacherImageFile(file);
+                      setImageUploadProgress(10);
+                      const path = `teachers/profile_${Date.now()}_${file.name}`;
+                      try {
+                        await FileProcessor.queueFile(file, path);
+                        showToast('جاري رفع الصورة...');
+                      } catch (err) {
+                        setImageUploadProgress(0);
+                      }
+                    }
+                  }} disabled={submitting || queue.some(f => f.status !== 'completed' && f.status !== 'failed' && f.path.startsWith('teachers/'))} />
+                </label>
+                {queue.some(f => f.status !== 'completed' && f.status !== 'failed' && f.path.startsWith('teachers/')) && (
+                  <div className="w-full bg-white/10 rounded-full h-1.5 overflow-hidden mt-3 mb-2">
+                    <div className="bg-purple-500 h-full transition-all duration-300 animate-pulse w-full" />
+                  </div>
+                )}
+                {form.imageUrl && <div className="text-[10px] text-green-400 text-center mt-2 mb-2">✅ تم رفع الصورة بنجاح</div>}
+              </div>
+
               <div className="relative">
                 <label className="text-xs text-gray-400 px-1">رقم التحويل أو تفاصيل الدفع</label>
                 <textarea placeholder="أدخل كود التحويل أو أي ملاحظات حول الدفع..." className="input-base w-full min-h-[80px]" value={form.paymentRef} onChange={e => setForm({...form, paymentRef: e.target.value})} />
@@ -229,8 +273,8 @@ export default function TeacherRegisterPage() {
               </div>
             </div>
 
-            <button type="submit" disabled={submitting} className="btn-gold w-full py-4 text-lg font-black bg-purple-600 shadow-xl shadow-purple-500/20 active:scale-95 transition-all">
-              {submitting ? 'جاري الإرسال...' : 'إرسال طلب الانضمام الآن'}
+            <button type="submit" disabled={submitting || queue.some(f => f.status !== 'completed' && f.status !== 'failed' && (f.path.startsWith('receipts/') || f.path.startsWith('teachers/')))} className="btn-gold w-full py-4 text-lg font-black bg-purple-600 shadow-xl shadow-purple-500/20 active:scale-95 transition-all">
+              {submitting ? 'جاري الإرسال...' : queue.some(f => f.status !== 'completed' && f.status !== 'failed' && (f.path.startsWith('receipts/') || f.path.startsWith('teachers/'))) ? '⏳ جاري الرفع...' : 'إرسال طلب الانضمام الآن'}
             </button>
           </form>
         </div>

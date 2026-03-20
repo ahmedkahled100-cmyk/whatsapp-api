@@ -49,10 +49,19 @@ export const getPlatformStats = async () => {
     getDocs(collection(db, ATTEMPTS)),
   ]);
 
+  let totalRevenue = 0;
+  students.forEach((doc: any) => {
+    const data = doc.data();
+    if (data.subPrice && typeof data.subPrice === 'number') {
+      totalRevenue += data.subPrice;
+    }
+  });
+
   return {
     totalTeachers: teachers.size,
     totalExams: exams.size,
     totalStudents: students.size,
-    totalAttempts: attempts.size
+    totalAttempts: attempts.size,
+    totalRevenue
   };
 };

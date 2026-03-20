@@ -4,14 +4,14 @@
 import { useState, useMemo } from 'react';
 import { useTeacherStore } from '@/lib/store';
 import { showToast } from '@/lib/toast';
-import { saveStudent, deleteStudent, uploadFileToStorage, deleteRegistrationRequest } from '@/lib/db';
+import { saveStudent, deleteStudent, uploadFileToStorage, deleteRegistrationRequest, getSettings } from '@/lib/db';
 import { generateCode, formatDateAr } from '@/lib/utils';
 import type { Student } from '@/types';
 import { UserPlus, Search, Trash2, Copy, Users, Phone, Upload, Loader2, FileSpreadsheet, Download, Edit } from 'lucide-react';
 
 const EMPTY_STUDENT: Omit<Student, 'id'> = {
   name: '', code: '', email: '', phone: '', parentPhone: '',
-  grade: '', groupIds: [], notes: '', subType: 'none',
+  grade: '', groupIds: [], notes: '', subType: 'none', subPrice: 0,
   subExpiry: null, registeredAt: new Date().toLocaleDateString('ar-EG'), createdAt: Date.now(),
   imageUrl: '', teacherId: ''
 };
@@ -25,6 +25,29 @@ export default function StudentsPage() {
   const [saving, setSaving] = useState(false);
   const [uploadingCSV, setUploadingCSV] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [settings, setSettings] = useState<any>(null);
+
+  import('react').then(R => {
+    R.useEffect(() => {
+      if (user?.id) {
+        getSettings(user.id).then(s => setSettings(s));
+      }
+    }, [user?.id]);
+  });
+
+  const handleSubTypeChange = (newType: string) => {
+    let newPrice = form.subPrice || 0;
+    if (settings && newType !== 'none') {
+      if (newType === 'monthly') newPrice = settings.monthlyPrice || 0;
+      else if (newType === 'yearly') newPrice = settings.yearlyPrice || 0;
+      else if (newType === 'halfYearly') newPrice = settings.halfYearlyPrice || 0;
+      else if (newType === 'course') newPrice = settings.coursePrice || 0;
+      else if (newType === 'session') newPrice = settings.sessionPrice || 0;
+    } else if (newType === 'none') {
+      newPrice = 0;
+    }
+    setForm(f => ({ ...f, subType: newType as any, subPrice: newPrice }));
+  };
 
   const filtered = useMemo(() =>
     students.filter(s =>
@@ -76,7 +99,8 @@ export default function StudentsPage() {
         parentPhone: req.parentPhone,
         grade: req.grade,
         subType: req.subType,
-        imageUrl: '',
+        subPrice: req.subPrice || 0,
+        imageUrl: req.imageUrl || '',
         teacherId: user.id,
         teacherCode: user.code || '',
         code: generateCode(),
@@ -316,7 +340,7 @@ export default function StudentsPage() {
               </div>
               <div>
                 <label className="block text-[11px] mb-1 text-text-muted">نوع الاشتراك</label>
-                <select value={form.subType} onChange={e => setForm(f => ({ ...f, subType: e.target.value as any }))} className="input-base text-sm w-full h-[42px]">
+                <select value={form.subType} onChange={e => handleSubTypeChange(e.target.value)} className="input-base text-sm w-full h-[42px]">
                   <option value="none">مجاني</option>
                   <option value="monthly">شهري</option>
                   <option value="halfYearly">نصف سنوي</option>
@@ -324,6 +348,10 @@ export default function StudentsPage() {
                   <option value="course">كورس</option>
                   <option value="session">بالحصة</option>
                 </select>
+              </div>
+              <div>
+                <label className="block text-[11px] mb-1 text-text-muted">مبلغ الاشتراك (ج.م)</label>
+                <input type="number" value={form.subPrice || 0} onChange={e => setForm(f => ({ ...f, subPrice: Number(e.target.value) }))} className="input-base text-sm w-full py-2" />
               </div>
               <div>
                 <label className="block text-[11px] mb-1 text-text-muted">تاريخ الانتهاء</label>
