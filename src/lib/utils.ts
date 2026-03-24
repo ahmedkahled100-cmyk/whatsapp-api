@@ -105,6 +105,10 @@ export function getDownloadUrl(url: string | undefined, fileName?: string): stri
   return cleanUrl;
 }
 
-
-
-
+// Get Dynamic API Base URL (Fixes Vercel 404s on Static APKs)
+export function getApiBase() {
+  if (typeof window === 'undefined') return '';
+  if (window.location.hostname.includes('vercel.app')) return '';
+  // Default to Vercel production
+  return 'https://an-academy.vercel.app';
+}

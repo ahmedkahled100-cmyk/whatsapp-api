@@ -3,7 +3,7 @@
 
 import { useState, useMemo } from 'react';
 import { useTeacherStore } from '@/lib/store';
-import { formatDateAr, gradeColor, scoreLabel } from '@/lib/utils';
+import { formatDateAr, gradeColor, scoreLabel, getApiBase } from '@/lib/utils';
 import { Search, Download, Trash2, Filter, MessageCircle, Loader2, Share2, X } from 'lucide-react';
 import { deleteAttempt } from '@/lib/db';
 import { showToast } from '@/lib/toast';
@@ -246,7 +246,7 @@ export default function ResultsPage() {
     const maxScore = attempt.mcqTotal + (attempt.essayAnswers?.reduce((sum: number, ea: any) => sum + (ea.maxScore || 0), 0) || 0);
 
     try {
-      const res = await fetch('/api/generate-whatsapp', {
+      const res = await fetch(`${getApiBase()}/api/generate-whatsapp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

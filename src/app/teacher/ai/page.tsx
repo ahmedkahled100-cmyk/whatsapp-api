@@ -11,6 +11,7 @@ import { Bot, Sparkles, Loader2, Save, CheckCircle, Upload, FileText, MessageSqu
 import { useRouter } from 'next/navigation';
 import { PDFCompressionModal, usePDFCompression } from '@/components/PDFCompressionModal';
 import { FileProcessor } from '@/lib/file-processor';
+import { getApiBase } from '@/lib/utils';
 
 type Mode = 'questions' | 'summary' | 'chat' | 'flashcards' | 'explain';
 
@@ -154,7 +155,7 @@ export default function AIPage() {
   const callAI = async (requestMode: Mode, prompt?: string, extraOptions?: any) => {
     setLoading(true);
     try {
-      const res = await fetch('/api/ai', {
+      const res = await fetch(`${getApiBase()}/api/ai`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ mode: requestMode, prompt, fileData, options: extraOptions }),

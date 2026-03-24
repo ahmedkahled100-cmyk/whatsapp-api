@@ -9,7 +9,16 @@ export async function compressWithILovePDF(
     // Stage 1: Init Task
     onProgress(5, 'جاري بدء جلسة الضغط...');
     
-    const initRes = await fetch('/api/ilovepdf/start');
+    const getApiBase = () => {
+      if (typeof window === 'undefined') return '';
+      if (window.location.hostname.includes('vercel.app')) return '';
+      // Default to production Vercel app when running in Android APK/localhost static export
+      return 'https://an-academy.vercel.app';
+    };
+    
+    const API_BASE = getApiBase();
+
+    const initRes = await fetch(`${API_BASE}/api/ilovepdf/start`);
     const data = await initRes.json();
     
     if (!initRes.ok || data.success === false) {
@@ -52,7 +61,7 @@ export async function compressWithILovePDF(
     // Stage 3: Server-side processing
     onProgress(80, 'جاري الضغط والمعالجة...');
     
-    const processRes = await fetch('/api/ilovepdf/process', {
+    const processRes = await fetch(`${API_BASE}/api/ilovepdf/process`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 

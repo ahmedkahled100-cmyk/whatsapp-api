@@ -4,6 +4,7 @@ import {
   query, where, orderBy, limit, writeBatch, doc
 } from 'firebase/firestore';
 import { db } from '../firebase';
+import { getApiBase } from '@/lib/utils';
 import { NOTIFICATIONS, NOTIFICATION_LOGS } from './constants';
 import { clean } from './utils';
 import type { Notification, NotificationLog } from '@/types';
@@ -131,7 +132,7 @@ export const dispatchNotification = async (options: DispatchOptions) => {
           createdAt: Date.now()
         } as any);
 
-        const res = await fetch('/api/whatsapp/send', {
+        const res = await fetch(`${getApiBase()}/api/whatsapp/send`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ phone, message: msg })

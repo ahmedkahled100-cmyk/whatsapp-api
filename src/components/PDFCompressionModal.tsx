@@ -44,7 +44,14 @@ export function PDFCompressionModal({ file, showSelection = false, onClose, onCo
       // Stage 1: Init Task
       setStatus(prev => ({ ...prev, stage: 'preparing', progress: 5, message: 'جاري بدء جلسة الضغط...' }));
       
-      const initRes = await fetch('/api/ilovepdf/start');
+      const getApiBase = () => {
+        if (typeof window === 'undefined') return '';
+        if (window.location.hostname.includes('vercel.app')) return '';
+        return 'https://an-academy.vercel.app';
+      };
+      const API_BASE = getApiBase();
+
+      const initRes = await fetch(`${API_BASE}/api/ilovepdf/start`);
       const data = await initRes.json();
       
       if (!initRes.ok || data.success === false) {
@@ -88,7 +95,7 @@ export function PDFCompressionModal({ file, showSelection = false, onClose, onCo
       // Stage 3: Server-side processing
       setStatus(prev => ({ ...prev, stage: 'compressing', progress: 80, message: 'جاري الضغط والمعالجة...' }));
       
-      const processRes = await fetch('/api/ilovepdf/process', {
+      const processRes = await fetch(`${API_BASE}/api/ilovepdf/process`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 

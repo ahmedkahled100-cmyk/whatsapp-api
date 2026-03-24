@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { getApiBase } from '@/lib/utils';
 
 interface CompressionStatus {
   stage: 'idle' | 'preparing' | 'uploading' | 'compressing' | 'completed' | 'error';
@@ -104,7 +105,7 @@ export const useILovePDFStore = create<ILovePDFStore>()(
           });
 
           // 1. Init
-          const initRes = await fetch(`/api/ilovepdf/start?tool=${tool}`);
+          const initRes = await fetch(`${getApiBase()}/api/ilovepdf/start?tool=${tool}`);
           const initData = await initRes.json();
           if (!initRes.ok || !initData.success) {
             throw new Error(initData.error || 'فشل بدء الجلسة');
@@ -158,7 +159,7 @@ export const useILovePDFStore = create<ILovePDFStore>()(
             message: 'جاري المعالجة والانتهاء من المهمة...',
           });
 
-          const processRes = await fetch('/api/ilovepdf/process', {
+          const processRes = await fetch(`${getApiBase()}/api/ilovepdf/process`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({

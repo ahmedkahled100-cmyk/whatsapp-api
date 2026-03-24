@@ -1,6 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: 'export',
+  output: process.env.BUILD_APK === 'true' ? 'export' : undefined,
   images: {
     unoptimized: true,
     remotePatterns: [

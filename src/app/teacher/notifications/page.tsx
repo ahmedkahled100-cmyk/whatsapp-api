@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -6,7 +7,7 @@ import { getNotificationLogs, saveNotificationLog, updateNotificationLog, dispat
 import type { NotificationLog } from '@/types';
 import { showToast } from '@/lib/toast';
 import { Send, AlertCircle, CheckCircle2, Search, RefreshCw, MessageSquare, Clock, Filter, Users, ShieldAlert, RotateCcw, Bell } from 'lucide-react';
-import { formatDateAr } from '@/lib/utils';
+import { formatDateAr, getApiBase } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 
 export default function NotificationsAdmin() {
@@ -102,7 +103,7 @@ export default function NotificationsAdmin() {
     setLogs(logs.map(l => l.id === log.id ? { ...l, status: 'pending' } : l));
     
     try {
-      const res = await fetch('/api/whatsapp/send', {
+      const res = await fetch(`${getApiBase()}/api/whatsapp/send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phone: log.target, message: log.message })
