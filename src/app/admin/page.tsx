@@ -59,13 +59,13 @@ export default function AdminDashboardPage() {
             <div className="text-3xl font-black">{stats.totalAttempts}</div>
             <div className="text-sm text-gray-400 mt-1 font-bold tracking-wider">ردود الطلاب الإجمالية</div>
         </div>
-        <div className="card-base p-6 border border-white/5 hover:-translate-y-1 transition text-center cursor-default hover:border-gold/30">
-            <div className="w-12 h-12 rounded-full bg-gold/20 text-gold flex items-center justify-center mx-auto mb-3">
+        <Link href="/admin/subscriptions" className="card-base p-6 border border-white/5 hover:-translate-y-1 transition text-center cursor-pointer group hover:border-gold/30">
+            <div className="w-12 h-12 rounded-full bg-gold/20 text-gold flex items-center justify-center mx-auto mb-3 group-hover:bg-gold/30">
                 <BarChart2 size={24} />
             </div>
             <div className="text-3xl font-black text-gold">{stats.totalRevenue ? stats.totalRevenue.toLocaleString() : 0} <span className="text-sm font-normal text-gray-400">ج.م</span></div>
             <div className="text-sm text-gray-400 mt-1 font-bold tracking-wider">مجموع مبالغ الاشتراكات</div>
-        </div>
+        </Link>
       </div>
     </div>
   );

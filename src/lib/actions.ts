@@ -88,6 +88,66 @@ export async function compressAndUploadPDFAction(formData: FormData) {
   }
 }
 
+export async function compressAndUploadImageAction(formData: FormData) {
+  try {
+    const file = formData.get('file') as File;
+    const folder = formData.get('folder') as string || 'an-academy';
+    const originalFileName = formData.get('fileName') as string || file.name || 'image.jpg';
+    
+    if (!file) throw new Error('Missing file');
+
+    console.log('[compressAndUploadImageAction] Starting image compression:', originalFileName, 'size:', file.size);
+
+    const arrayBuffer = await file.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+
+    console.log('[compressAndUploadImageAction] Compressing with iLovePDF...');
+    const compressedBuffer = await ILovePDFClient.compressImage(buffer);
+    console.log('[compressAndUploadImageAction] Compression complete, new size:', compressedBuffer.length);
+    
+    console.log('[compressAndUploadImageAction] Uploading to Cloudinary...');
+    
+    const nameWithoutExt = originalFileName.replace(/\.[^/.]+$/, "").replace(/[^a-z0-9]/gi, '_').toLowerCase();
+    const publicId = `${nameWithoutExt}_${Math.random().toString(36).substring(2, 8)}`;
+
+    const result: any = await new Promise((resolve, reject) => {
+      const uploadStream = cloudinary.uploader.upload_stream(
+        { 
+          folder, 
+          resource_type: 'auto',
+          public_id: publicId,
+          use_filename: true,
+          unique_filename: true,
+          display_name: originalFileName
+        },
+        (error, result) => {
+          if (error) {
+            console.error('[compressAndUploadImageAction] Cloudinary upload error:', error);
+            reject(error);
+          } else {
+            console.log('[compressAndUploadImageAction] Upload successful:', result?.secure_url);
+            resolve(result);
+          }
+        }
+      );
+      uploadStream.end(compressedBuffer);
+    });
+
+    return {
+      success: true,
+      url: result.secure_url,
+      size: compressedBuffer.length,
+      originalSize: file.size
+    };
+  } catch (error: any) {
+    console.error('[compressAndUploadImageAction] Error:', error);
+    return {
+      success: false,
+      error: error.message || 'فشل ضغط ورفع الصورة.',
+    };
+  }
+}
+
 export async function uploadFileAction(formData: FormData) {
   try {
     const file = formData.get('file') as File;

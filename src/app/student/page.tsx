@@ -10,12 +10,13 @@ import { FileProcessor } from '@/lib/file-processor';
 import { showToast } from '@/lib/toast';
 import type { Settings } from '@/types';
 import type { Exam, Attempt, CourseMaterial, Assignment, AssignmentSubmission, Notification, Message, Conversation } from '@/types';
-import { GraduationCap, LogOut, BookOpen, BarChart2, ClipboardList, Download, Award, Video, FileText, Link as LinkIcon, BookMarked, Globe, Lock, Upload, MessageCircle, MessageSquare, Loader2, Bell, Send, Check, CheckCheck, X, Plus, ShieldCheck, AlertCircle } from 'lucide-react';
+import { GraduationCap, LogOut, BookOpen, BarChart2, ClipboardList, Download, Award, Video, FileText, Link as LinkIcon, BookMarked, Globe, Lock, Upload, MessageCircle, MessageSquare, Loader2, Bell, Send, Check, CheckCheck, X, Plus, ShieldCheck, AlertCircle, Paperclip, Image as ImageIcon, Trash2 } from 'lucide-react';
 import { PDFCompressionModal } from '@/components/PDFCompressionModal';
-import { sendMessage, subscribeToMessages, markMessagesAsRead, subscribeToConversations, getTeacherById, getSuperAdmin } from '@/lib/db';
+import { sendMessage, subscribeToMessages, markMessagesAsRead, subscribeToConversations, getTeacherById, getSuperAdmin, setUserOnlineStatus, subscribeToUserOnlineStatus } from '@/lib/db';
 import Link from 'next/link';
 import { formatDateAr, gradeColor, scoreLabel, getViewerUrl, getDownloadUrl } from '@/lib/utils';
 import { useFilePreview, FilePreviewModal } from '@/components/FilePreviewModal';
+import { GlobalFileUpload } from '@/components/GlobalFileUpload';
 
 export default function StudentPortal() {
   const { student, setStudent, logout, conversations, setConversations } = useStudentStore();
@@ -64,7 +65,37 @@ export default function StudentPortal() {
   const [chatMessages, setChatMessages] = useState<Message[]>([]);
   const [newMsg, setNewMsg] = useState('');
   const [loadingChat, setLoadingChat] = useState(false);
+  const [otherUserOnline, setOtherUserOnline] = useState(false);
+  const [otherUserLastActive, setOtherUserLastActive] = useState<number | undefined>();
+  const [chatUploadingFile, setChatUploadingFile] = useState(false);
+  const [chatAttachmentUrl, setChatAttachmentUrl] = useState('');
+  const [chatAttachmentType, setChatAttachmentType] = useState<'text' | 'image' | 'file'>('text');
   const chatEndRef = useRef<HTMLDivElement>(null);
+
+  const handleChatAttachment = async (e: React.ChangeEvent<HTMLInputElement>, type: 'image' | 'file') => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 25 * 1024 * 1024) {
+      showToast('حجم الملف كبير جداً (الأقصى 25 ميجابايت)');
+      e.target.value = '';
+      return;
+    }
+
+    setChatUploadingFile(true);
+    try {
+      const path = `chat-attachments/${Date.now()}_${file.name}`;
+      const url = await uploadFileToStorage(file, path);
+      setChatAttachmentUrl(url);
+      setChatAttachmentType(type);
+      showToast('تم إرفاق الملف بنجاح');
+    } catch (err) {
+      showToast('فشل رفع الملف');
+    } finally {
+      setChatUploadingFile(false);
+      e.target.value = '';
+    }
+  };
 
   useEffect(() => { setMounted(true); }, []);
 
@@ -82,7 +113,12 @@ export default function StudentPortal() {
       
       if (student.teacherId && student.teacherId !== 'unknown_teacher') {
         unsubNotifs = subscribeToNotifications(student.teacherId, (allNotifs) => {
-          const myNotifs = allNotifs.filter(n => !n.targetUsers || n.targetUsers.length === 0 || n.targetUsers.includes(student.id) || (n as any).targetRoles?.includes('student'));
+          const myNotifs = allNotifs.filter(n => {
+            const isForMe = !n.targetUsers || n.targetUsers.length === 0 || n.targetUsers.includes(student.id) || (n as any).targetRoles?.includes('student');
+            const isForAdmin = (n as any).targetRoles?.includes('admin');
+            const isJoinMsg = n.msg.includes('طلب انضمام') || n.msg.includes('تسجيل معلم');
+            return isForMe && !isForAdmin && !isJoinMsg;
+          });
           setNotifications(myNotifs);
         });
         unsubConvs = subscribeToConversations(student.id, setConversations);
@@ -90,6 +126,50 @@ export default function StudentPortal() {
       return () => { unsubNotifs(); unsubConvs(); };
     }
   }, [student]);
+
+  // Handle our own presence
+  useEffect(() => {
+    if (student && student.id !== 'unknown_student') {
+      setUserOnlineStatus(student.id, 'student', true);
+      
+      const handleUnload = () => {
+        setUserOnlineStatus(student.id, 'student', false);
+      };
+      window.addEventListener('beforeunload', handleUnload);
+      
+      return () => {
+        window.removeEventListener('beforeunload', handleUnload);
+        setUserOnlineStatus(student.id, 'student', false);
+      };
+    }
+  }, [student]);
+
+  // Handle Chat and Other User Presence
+  useEffect(() => {
+    if (!selectedConv || !student) return;
+    
+    setLoadingChat(true);
+    const unsubMsgs = subscribeToMessages(selectedConv.id, (msgs: any[]) => {
+      setChatMessages(msgs);
+      setLoadingChat(false);
+      markMessagesAsRead(selectedConv.id, student.id);
+    });
+
+    const otherParticipantId = selectedConv.participants.find(p => p !== student.id);
+    let unsubPresence = () => {};
+    if (otherParticipantId) {
+      // Assuming the other user is a teacher for students
+      unsubPresence = subscribeToUserOnlineStatus(otherParticipantId, 'teachers', (isOnline, lastActive) => {
+        setOtherUserOnline(isOnline);
+        setOtherUserLastActive(lastActive);
+      });
+    }
+
+    return () => {
+      unsubMsgs();
+      unsubPresence();
+    };
+  }, [selectedConv, student]);
 
   // Listen for background upload completion
   useEffect(() => {
@@ -174,17 +254,6 @@ export default function StudentPortal() {
       });
       setAssignments(filteredAssigns);
       setMySubmissions(mySubs);
-
-      // Effect for chat messages subscription
-      if (selectedConv) {
-        setLoadingChat(true);
-        const unsub = subscribeToMessages(selectedConv.id, (msgs: any[]) => {
-          setChatMessages(msgs);
-          setLoadingChat(false);
-          if (student) markMessagesAsRead(selectedConv.id, student.id);
-        });
-        return unsub;
-      }
     } catch (e) {
       console.error('loadStudentData error:', e);
     }
@@ -818,6 +887,35 @@ export default function StudentPortal() {
                           )}
                         </div>
                       )}
+                      {submission.status === 'redo' && (
+                        <div className="mt-4 pt-3 border-t border-orange-500/20 bg-orange-500/5 p-3 rounded-lg">
+                          <div className="flex items-center gap-2 mb-3">
+                            <span className="text-orange-400 text-lg">⚠️</span>
+                            <h5 className="font-bold text-orange-400">طلب المعلم إعادة تسليم الواجب</h5>
+                          </div>
+                          {submission.teacherComment && (
+                            <div className="text-sm text-gray-300 bg-black/40 p-2 rounded border border-orange-500/20 mb-3">
+                              <b>ملاحظة المعلم:</b> {submission.teacherComment}
+                            </div>
+                          )}
+                          <div className="space-y-3">
+                            <textarea 
+                              className="input-base w-full h-24 p-3 text-sm resize-none"
+                              placeholder="اكتب الإجابة المعدلة هنا..."
+                              value={submitText}
+                              onChange={e => setSubmitText(e.target.value)}
+                              disabled={submittingAssignId !== null}
+                            />
+                            <button 
+                              onClick={() => handleAssignmentSubmit(assign.id)}
+                              disabled={submittingAssignId !== null || !submitText.trim()}
+                              className="btn-gold w-full flex justify-center items-center gap-2 py-3 disabled:opacity-50"
+                            >
+                              {submittingAssignId === assign.id ? <>⏳ جاري إعادة التسليم...</> : '📤 إعادة تسليم الواجب'}
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ) : isPastDue ? (
                     <div className="text-red-400 text-sm text-center py-2 bg-red-400/10 rounded-lg">
@@ -834,69 +932,66 @@ export default function StudentPortal() {
                         disabled={submittingAssignId !== null}
                       />
                       
-                      <div className="flex items-center gap-2">
-                        <label className="btn-outline flex-1 border-white/10 text-gray-400 hover:text-white cursor-pointer group flex items-center justify-center gap-2 py-3 rounded-xl border-dashed">
-                          <Upload size={18} className="group-hover:text-gold transition-colors" />
-                          <span className="text-sm">{submitFile ? submitFile.name : 'إرفاق ملف (صور، PDF، Word...)'}</span>
-                          <input 
-                            type="file" 
-                            className="hidden" 
-                            onChange={async (e) => {
-                              const file = e.target.files?.[0];
-                                if (file) {
-                                  if (file.size > 100 * 1024 * 1024) {
-                                    showToast('حجم الملف كبير جداً (أقصى حجم 100 ميجابايت)');
-                                    return;
-                                  }
-
-                                  // Check if PDF > 10MB - Show compression modal
-                                  const TEN_MB = 10 * 1024 * 1024;
-                                  const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
-                                  
-                                  if (isPdf && file.size > TEN_MB) {
-                                    setCompressionModal({
-                                      isOpen: true,
-                                      file: file,
-                                      onComplete: async (compressedBlob, cloudinaryUrl, stats) => {
-                                        try {
-                                          const path = `assignments/${assign.id}/${student!.id}_${file.name}`;
-                                          
-                                          // Dispatch event to update the UI
-                                          window.dispatchEvent(new CustomEvent('fileUploaded', {
-                                            detail: { 
-                                              url: cloudinaryUrl, 
-                                              path, 
-                                              fileName: file.name,
-                                              stats
-                                            }
-                                          }));
-
-                                          setSubmitFile(new File([compressedBlob], file.name, { type: 'application/pdf' }));
-                                          setUploadedFileUrl(cloudinaryUrl);
-                                          setCompressionModal({ isOpen: false, file: null });
-                                        } catch (err: any) {
-                                          console.error('Handoff Error:', err);
-                                          showToast('حدث خطأ أثناء استلام الملف المضغوط');
-                                        }
-                                      }
-                                    });
-                                    e.target.value = '';
-                                    return;
-                                  }
-
-                                  setSubmitFile(file);
-                                  try {
-                                    const path = `assignments/${assign.id}/${student!.id}_${file.name}`;
-                                    await FileProcessor.queueFile(file, path);
-                                    showToast('جاري ضغط ورفع الملف في الخلفية...');
-                                  } catch (err: any) {
-                                    showToast(err.message || 'فشل معالجة الملف');
-                                  }
+                      <div className="flex items-center gap-2 w-full mt-2">
+                        <GlobalFileUpload 
+                          accept="*"
+                          isUploading={submittingAssignId !== null}
+                          label={submitFile ? submitFile.name : 'إرفاق ملف (صور، PDF، Word...)'}
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                              if (file) {
+                                if (file.size > 100 * 1024 * 1024) {
+                                  showToast('حجم الملف كبير جداً (أقصى حجم 100 ميجابايت)');
+                                  return;
                                 }
-                            }}
-                            disabled={submittingAssignId !== null}
-                          />
-                        </label>
+
+                                // Check if PDF > 10MB - Show compression modal
+                                const TEN_MB = 10 * 1024 * 1024;
+                                const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+                                
+                                if (isPdf && file.size > TEN_MB) {
+                                  setCompressionModal({
+                                    isOpen: true,
+                                    file: file,
+                                    onComplete: async (compressedBlob, cloudinaryUrl, stats) => {
+                                      try {
+                                        const path = `assignments/${assign.id}/${student!.id}_${file.name}`;
+                                        
+                                        // Dispatch event to update the UI
+                                        window.dispatchEvent(new CustomEvent('fileUploaded', {
+                                          detail: { 
+                                            url: cloudinaryUrl, 
+                                            path, 
+                                            fileName: file.name,
+                                            stats
+                                          }
+                                        }));
+
+                                        setSubmitFile(new File([compressedBlob], file.name, { type: 'application/pdf' }));
+                                        setUploadedFileUrl(cloudinaryUrl);
+                                        setCompressionModal({ isOpen: false, file: null });
+                                      } catch (err: any) {
+                                        console.error('Handoff Error:', err);
+                                        showToast('حدث خطأ أثناء استلام الملف المضغوط');
+                                      }
+                                    }
+                                  });
+                                  e.target.value = '';
+                                  return;
+                                }
+
+                                setSubmitFile(file);
+                                try {
+                                  const path = `assignments/${assign.id}/${student!.id}_${file.name}`;
+                                  await FileProcessor.queueFile(file, path);
+                                  showToast('جاري ضغط ورفع الملف في الخلفية...');
+                                } catch (err: any) {
+                                  showToast(err.message || 'فشل معالجة الملف');
+                                }
+                              }
+                          }}
+                          disabled={submittingAssignId !== null}
+                        />
                       </div>
 
                       {submitFile && (
@@ -969,34 +1064,6 @@ export default function StudentPortal() {
                       <span className="w-2 h-2 rounded-full bg-gold shadow-[0_0_8px_var(--gold)]" />
                     )}
                   </button>
-
-                  {/* Option to chat with Admin */}
-                  <button 
-                    onClick={async () => {
-                      const admin = await getSuperAdmin();
-                      if (!admin) { showToast('الأدمن غير متاح حالياً'); return; }
-                      const convId = [student.id, admin.id].sort().join('_');
-                      const existing = conversations.find(c => c.id === convId);
-                      setSelectedConv(existing || {
-                        id: convId,
-                        participants: [student.id, admin.id],
-                        participantNames: [student.name, admin.name],
-                        updatedAt: Date.now()
-                      } as Conversation);
-                    }}
-                    className="w-full p-4 rounded-2xl bg-purple-500/5 border border-purple-500/10 flex items-center gap-3 hover:bg-purple-500/10 transition-all text-right group"
-                  >
-                    <div className="w-10 h-10 rounded-xl bg-purple-500 flex items-center justify-center text-white font-black group-hover:scale-110 transition-transform">
-                       <ShieldCheck size={20} />
-                    </div>
-                    <div className="flex-1">
-                       <p className="font-bold text-sm text-purple-400">الدعم الفني (الأدمن)</p>
-                       <p className="text-[10px] text-gray-500">للمشاكل التقنية والاشتراكات</p>
-                    </div>
-                    {conversations.find(c => c.participants.some(p => p !== student.id && p !== student.teacherId))?.lastMessage && !conversations.find(c => c.participants.some(p => p !== student.id && p !== student.teacherId))?.lastMessage?.isRead && conversations.find(c => c.participants.some(p => p !== student.id && p !== student.teacherId))?.lastMessage?.receiverId === student.id && (
-                      <span className="w-2 h-2 rounded-full bg-purple-500 shadow-[0_0_8px_var(--purple-500)]" />
-                    )}
-                  </button>
                 </div>
               </div>
             ) : (
@@ -1010,7 +1077,9 @@ export default function StudentPortal() {
                     </div>
                     <div className="min-w-0">
                        <h3 className="font-bold text-xs text-white truncate">{selectedConv.participantNames[selectedConv.participants.findIndex(p => p !== student.id)]}</h3>
-                       <p className="text-[9px] text-green-500">متصل الآن</p>
+                       <p className={`text-[9px] ${otherUserOnline ? 'text-green-500' : 'text-gray-500'}`}>
+                         {otherUserOnline ? 'نشط الآن' : (otherUserLastActive ? `آخر ظهور: ${new Date(otherUserLastActive).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}` : 'غير متصل')}
+                       </p>
                     </div>
                   </div>
                 </div>
@@ -1032,7 +1101,23 @@ export default function StudentPortal() {
                            <div className={`max-w-[85%] p-2.5 rounded-2xl shadow-lg ${
                              isMine ? 'bg-gold text-black rounded-tr-none' : 'bg-white/10 text-white rounded-tl-none border border-white/5'
                            }`}>
-                              <p className="text-xs leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                              {msg.type === 'image' && msg.fileUrl && (
+                                <div className="mb-2 rounded-xl overflow-hidden cursor-pointer bg-black/10" onClick={() => openPreview(msg.fileUrl!, 'مرفق صورة')}>
+                                  <img src={msg.fileUrl} alt="Attachment" className="max-w-full h-auto max-h-60 object-contain hover:opacity-90 transition-opacity" />
+                                </div>
+                              )}
+                              {msg.type === 'file' && msg.fileUrl && (
+                                <div className="mb-2 p-3 rounded-xl bg-black/20 flex items-center gap-3 cursor-pointer hover:bg-black/30 transition-colors" onClick={() => openPreview(msg.fileUrl!, 'مرفق ملف')}>
+                                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${isMine ? 'bg-black/10 text-black' : 'bg-white/10 text-white'}`}>
+                                    <FileText size={20} />
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="font-bold text-sm truncate">ملف مرفق</p>
+                                    <span className="text-[10px] opacity-70">اضغط للفتح</span>
+                                  </div>
+                                </div>
+                              )}
+                              {msg.content && <p className="text-xs leading-relaxed whitespace-pre-wrap">{msg.content}</p>}
                               <div className="flex items-center gap-1 mt-1 justify-end opacity-60">
                                  <span className="text-[8px]">{new Date(msg.timestamp).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}</span>
                                  {isMine && (msg.isRead ? <CheckCheck size={10} className="text-blue-600" /> : <Check size={10} />)}
@@ -1046,10 +1131,21 @@ export default function StudentPortal() {
                 </div>
 
                 {/* Input Area */}
-                <div className="p-3 border-t border-white/5 bg-white/5">
+                <div className="p-3 border-t border-white/5 bg-white/5 flex flex-col gap-2">
+                   {chatAttachmentUrl && (
+                     <div className="flex items-center gap-2 p-2 bg-black/20 rounded-xl w-max relative">
+                       <div className="w-8 h-8 rounded-lg bg-gold/20 flex items-center justify-center text-gold">
+                         {chatAttachmentType === 'image' ? <ImageIcon size={16} /> : <FileText size={16} />}
+                       </div>
+                       <div className="text-[10px] text-gold font-bold">ملف مرفق جاهز للإرسال</div>
+                       <button onClick={() => { setChatAttachmentUrl(''); setChatAttachmentType('text'); }} className="text-red-400 hover:text-red-300 bg-red-400/10 p-1.5 rounded-lg mr-2">
+                         <Trash2 size={12} />
+                       </button>
+                     </div>
+                   )}
                    <form onSubmit={async (e) => {
                      e.preventDefault();
-                     if (!newMsg.trim() || !selectedConv) return;
+                     if ((!newMsg.trim() && !chatAttachmentUrl) || !selectedConv) return;
                      const recId = selectedConv.participants.find(p => p !== student.id)!;
                      const recName = selectedConv.participantNames[selectedConv.participants.indexOf(recId)];
                      await sendMessage({
@@ -1058,21 +1154,35 @@ export default function StudentPortal() {
                        receiverId: recId,
                        receiverName: recName,
                        content: newMsg.trim(),
-                       teacherId: student.teacherId
+                       teacherId: student.teacherId,
+                       type: chatAttachmentUrl ? chatAttachmentType : 'text',
+                       fileUrl: chatAttachmentUrl || undefined
                      });
                      setNewMsg('');
-                   }} className="flex items-center gap-2">
+                     setChatAttachmentUrl('');
+                     setChatAttachmentType('text');
+                   }} className="flex items-end gap-2">
+                      <div className="flex items-center gap-1">
+                        <label className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-gray-400 hover:text-white transition-colors cursor-pointer relative overflow-hidden">
+                          {chatUploadingFile && chatAttachmentType === 'file' ? <Loader2 size={16} className="animate-spin text-gold" /> : <Paperclip size={18}/>}
+                          <input type="file" className="hidden" accept="application/pdf,.doc,.docx,.txt" onChange={(e) => handleChatAttachment(e, 'file')} disabled={chatUploadingFile || !!chatAttachmentUrl} />
+                        </label>
+                        <label className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-gray-400 hover:text-white transition-colors cursor-pointer relative overflow-hidden">
+                          {chatUploadingFile && chatAttachmentType === 'image' ? <Loader2 size={16} className="animate-spin text-gold" /> : <ImageIcon size={18}/>}
+                          <input type="file" className="hidden" accept="image/*" onChange={(e) => handleChatAttachment(e, 'image')} disabled={chatUploadingFile || !!chatAttachmentUrl} />
+                        </label>
+                      </div>
                       <input 
                         type="text" 
-                        placeholder="اكتب هنا..." 
-                        className="input-base flex-1 py-2 px-4 text-xs h-10"
+                        placeholder="اكتب رسالتك..." 
+                        className="input-base flex-1 h-10 text-xs px-3"
                         value={newMsg}
                         onChange={e => setNewMsg(e.target.value)}
                       />
                       <button 
                         type="submit" 
-                        disabled={!newMsg.trim()}
-                        className="w-10 h-10 rounded-xl bg-gold text-black flex items-center justify-center shadow-lg shadow-gold/20 disabled:opacity-50"
+                        disabled={(!newMsg.trim() && !chatAttachmentUrl) || chatUploadingFile}
+                        className="w-10 h-10 rounded-xl bg-gold text-black flex items-center justify-center shadow-lg shadow-gold/20 disabled:opacity-50 flex-shrink-0 hover:scale-105 active:scale-95 transition-transform"
                       >
                          <Send size={18} />
                       </button>

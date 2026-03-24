@@ -1,13 +1,14 @@
 'use client';
 // src/app/teacher/students/page.tsx
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useTeacherStore } from '@/lib/store';
 import { showToast } from '@/lib/toast';
 import { saveStudent, deleteStudent, uploadFileToStorage, deleteRegistrationRequest, getSettings } from '@/lib/db';
 import { generateCode, formatDateAr } from '@/lib/utils';
 import type { Student } from '@/types';
-import { UserPlus, Search, Trash2, Copy, Users, Phone, Upload, Loader2, FileSpreadsheet, Download, Edit } from 'lucide-react';
+import { UserPlus, Search, Trash2, Copy, Users, Phone, Upload, Loader2, FileSpreadsheet, Download, Edit, Eye, Printer, Calendar, Clock, Award, CheckCircle2, XCircle } from 'lucide-react';
+import { GlobalFileUpload } from '@/components/GlobalFileUpload';
 
 const EMPTY_STUDENT: Omit<Student, 'id'> = {
   name: '', code: '', email: '', phone: '', parentPhone: '',
@@ -17,7 +18,8 @@ const EMPTY_STUDENT: Omit<Student, 'id'> = {
 };
 
 export default function StudentsPage() {
-  const { students, groups, attempts, user, registrationRequests } = useTeacherStore();
+  const { students, groups, attempts, exams, user, registrationRequests } = useTeacherStore();
+  const [viewStudent, setViewStudent] = useState<Student | null>(null);
   const [activeTab, setActiveTab] = useState<'active' | 'requests'>('active');
   const [search, setSearch] = useState('');
   const [showModal, setShowModal] = useState(false);
@@ -27,13 +29,11 @@ export default function StudentsPage() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [settings, setSettings] = useState<any>(null);
 
-  import('react').then(R => {
-    R.useEffect(() => {
-      if (user?.id) {
-        getSettings(user.id).then(s => setSettings(s));
-      }
-    }, [user?.id]);
-  });
+  useEffect(() => {
+    if (user?.id) {
+      getSettings(user.id).then(s => setSettings(s));
+    }
+  }, [user?.id]);
 
   const handleSubTypeChange = (newType: string) => {
     let newPrice = form.subPrice || 0;
@@ -253,9 +253,10 @@ export default function StudentsPage() {
                           <td className="px-4 py-3 text-sm">{student.grade || '—'}</td>
                           <td className="px-4 py-3 text-sm text-text-muted">{studentAttempts.length} محاولة</td>
                           <td className="px-4 py-3">
-                            <div className="flex gap-2">
-                              <button onClick={() => openEdit(student)} className="text-blue-400 hover:text-blue-300 p-1"><Edit size={14} /></button>
-                              <button onClick={() => handleDelete(student.id, student.name)} className="text-red-400 hover:text-red-300 p-1"><Trash2 size={14} /></button>
+                            <div className="flex gap-2 justify-end">
+                              <button onClick={() => setViewStudent(student)} className="text-green-400 hover:text-green-300 p-1 bg-white/5 rounded" title="تفاصيل الطالب"><Eye size={16} /></button>
+                              <button onClick={() => openEdit(student)} className="text-blue-400 hover:text-blue-300 p-1 bg-white/5 rounded"><Edit size={16} /></button>
+                              <button onClick={() => handleDelete(student.id, student.name)} className="text-red-400 hover:text-red-300 p-1 bg-white/5 rounded"><Trash2 size={16} /></button>
                             </div>
                           </td>
                         </tr>
@@ -272,6 +273,7 @@ export default function StudentsPage() {
                       <div className="text-[10px] text-text-muted mt-0.5">{student.grade} | {student.code}</div>
                     </div>
                     <div className="flex gap-2">
+                      <button onClick={() => setViewStudent(student)} className="p-2 bg-white/5 rounded-lg text-green-400"><Eye size={14} /></button>
                       <button onClick={() => openEdit(student)} className="p-2 bg-white/5 rounded-lg text-blue-400"><Edit size={14} /></button>
                       <button onClick={() => handleDelete(student.id, student.name)} className="p-2 bg-white/5 rounded-lg text-red-400"><Trash2 size={14} /></button>
                     </div>
@@ -310,6 +312,127 @@ export default function StudentsPage() {
               </div>
             ))
           )}
+        </div>
+      )}
+
+      {/* Student Profile & Print Modal */}
+      {viewStudent && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 bg-black/90 backdrop-blur-sm print:p-0 print:bg-white print:block overflow-y-auto">
+          <div className="card-base w-full max-w-4xl max-h-[90vh] overflow-y-auto print:max-h-none print:shadow-none print:border-none print:bg-white print:text-black">
+            {/* Header / Actions */}
+            <div className="sticky top-0 z-10 flex items-center justify-between p-4 bg-[#0a0f18]/90 backdrop-blur border-b border-white/5 print:hidden">
+              <h3 className="font-black text-xl gold-text flex items-center gap-2"><Eye size={24} /> ملف الطالب الشامل</h3>
+              <div className="flex gap-2">
+                <button onClick={() => window.print()} className="btn-gold py-2 px-4 flex items-center gap-2"><Printer size={18} /> طباعة التقرير</button>
+                <button onClick={() => setViewStudent(null)} className="btn-outline py-2 px-4">إغلاق</button>
+              </div>
+            </div>
+
+            <div className="p-6 sm:p-8 space-y-8 print:p-0" id="printable-profile">
+              {/* Profile Header */}
+              <div className="flex flex-col sm:flex-row gap-6 items-center sm:items-start text-center sm:text-right border-b border-white/10 print:border-gray-200 pb-6">
+                {viewStudent.imageUrl ? (
+                  <img src={viewStudent.imageUrl} className="w-24 h-24 sm:w-32 sm:h-32 rounded-full border-4 border-gold shadow-lg object-cover" alt={viewStudent.name} />
+                ) : (
+                  <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-full border-4 border-gold bg-gold/10 flex items-center justify-center text-4xl font-black text-gold">
+                    {viewStudent.name[0]}
+                  </div>
+                )}
+                <div className="flex-1 space-y-2">
+                  <h2 className="text-3xl font-black text-white print:text-black">{viewStudent.name}</h2>
+                  <div className="flex flex-wrap items-center justify-center sm:justify-start gap-4 text-sm text-gray-400 print:text-gray-600 font-mono">
+                    <span className="bg-white/5 print:bg-gray-100 px-3 py-1 rounded-lg">الكود: {viewStudent.code}</span>
+                    <span className="bg-white/5 print:bg-gray-100 px-3 py-1 rounded-lg">الصف: {viewStudent.grade || 'غير محدد'}</span>
+                  </div>
+                  <div className="flex flex-wrap gap-4 mt-4 justify-center sm:justify-start print:text-black">
+                    <div className="flex items-center gap-2"><Phone size={16} className="text-gold" /> {viewStudent.phone || '—'} (طالب)</div>
+                    {viewStudent.parentPhone && <div className="flex items-center gap-2"><Users size={16} className="text-gold" /> {viewStudent.parentPhone} (ولي أمر)</div>}
+                  </div>
+                </div>
+              </div>
+
+              {/* Subscriptions Info */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="p-4 rounded-2xl bg-white/5 print:bg-gray-50 border border-white/5 print:border-gray-200 flex flex-col justify-center items-center text-center">
+                  <Award size={24} className="text-gold mb-2" />
+                  <span className="text-xs text-gray-400 print:text-gray-500 mb-1">الاشتراك</span>
+                  <strong className="text-lg print:text-black">{viewStudent.subType === 'monthly' ? 'شهري' : viewStudent.subType === 'yearly' ? 'سنوي' : viewStudent.subType === 'course' ? 'كورس' : viewStudent.subType === 'session' ? 'بالحصة' : viewStudent.subType === 'halfYearly' ? 'نصف سنوي' : 'مجاني'}</strong>
+                </div>
+                <div className="p-4 rounded-2xl bg-white/5 print:bg-gray-50 border border-white/5 print:border-gray-200 flex flex-col justify-center items-center text-center">
+                  <Calendar size={24} className="text-gold mb-2" />
+                  <span className="text-xs text-gray-400 print:text-gray-500 mb-1">تاريخ التسجيل</span>
+                  <strong className="text-lg print:text-black">{viewStudent.registeredAt}</strong>
+                </div>
+                <div className="p-4 rounded-2xl bg-white/5 print:bg-gray-50 border border-white/5 print:border-gray-200 flex flex-col justify-center items-center text-center">
+                  <Clock size={24} className={viewStudent.subExpiry && new Date(viewStudent.subExpiry).getTime() < Date.now() ? "text-red-500 mb-2" : "text-gold mb-2"} />
+                  <span className="text-xs text-gray-400 print:text-gray-500 mb-1">تاريخ الانتهاء</span>
+                  <strong className={`text-lg print:text-black ${viewStudent.subExpiry && new Date(viewStudent.subExpiry).getTime() < Date.now() ? 'text-red-400' : ''}`}>
+                    {viewStudent.subExpiry ? new Date(viewStudent.subExpiry).toLocaleDateString('ar-EG') : 'مفتوح'}
+                  </strong>
+                </div>
+                <div className="p-4 rounded-2xl bg-white/5 print:bg-gray-50 border border-white/5 print:border-gray-200 flex flex-col justify-center items-center text-center">
+                  <FileSpreadsheet size={24} className="text-gold mb-2" />
+                  <span className="text-xs text-gray-400 print:text-gray-500 mb-1">إجمالي الامتحانات</span>
+                  <strong className="text-lg print:text-black">{attempts.filter(a => a.studentId === viewStudent.id && a.completed).length} امتحانات</strong>
+                </div>
+              </div>
+
+              {/* Exams History */}
+              <div className="space-y-4">
+                <h4 className="text-xl font-bold border-b border-white/10 print:border-gray-300 pb-2 print:text-black print:mt-4">سجل الامتحانات والدرجات</h4>
+                {attempts.filter(a => a.studentId === viewStudent.id && a.completed).length === 0 ? (
+                  <div className="p-8 text-center text-gray-500 bg-white/5 print:bg-gray-50 rounded-2xl border border-white/5 print:border-gray-200">
+                    لم يكمل الطالب أي امتحانات حتى الآن.
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto rounded-xl border border-white/10 print:border-gray-300">
+                    <table className="w-full text-right print:text-black text-sm">
+                      <thead className="bg-white/5 print:bg-gray-100 border-b border-white/10 print:border-gray-300">
+                        <tr>
+                          <th className="p-3">اسم الامتحان</th>
+                          <th className="p-3">التاريخ</th>
+                          <th className="p-3">الدرجة</th>
+                          <th className="p-3">النتيجة</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-white/5 print:divide-gray-200 bg-[#0a0f18] print:bg-white">
+                        {attempts
+                          .filter(a => a.studentId === viewStudent.id && a.completed)
+                          .sort((a,b) => (b.submittedAt ? new Date(b.submittedAt).getTime() : 0) - (a.submittedAt ? new Date(a.submittedAt).getTime() : 0))
+                          .map(att => {
+                            const exam = exams?.find((e: any) => e.id === att.examId);
+                            const mcqPoints = att.mcqScore * att.mcqTotal / 100;
+                            const essayPoints = att.essayAnswers?.reduce((sum, ea) => sum + (ea.score || 0), 0) || 0;
+                            const totalPoints = att.mcqTotal + (att.essayAnswers?.reduce((sum, ea) => sum + (ea.maxScore || 0), 0) || 0);
+                            const rawScore = Math.round((mcqPoints + essayPoints) * 10) / 10;
+                            const isPending = att.essayAnswers?.some(ea => ea.pending);
+
+                            return (
+                              <tr key={att.id} className="hover:bg-white/5 print:hover:bg-gray-50 transition-colors">
+                                <td className="p-3 font-bold">{att.examTitle}</td>
+                                <td className="p-3 text-gray-400 print:text-gray-600">{att.submittedAt ? new Date(att.submittedAt).toLocaleDateString('ar-EG') : '—'}</td>
+                                <td className="p-3 font-mono" dir="ltr">
+                                  {isPending ? <span className="text-purple-400">قيد التصحيح</span> : `${rawScore} / ${totalPoints}`}
+                                </td>
+                                <td className="p-3">
+                                  {isPending ? (
+                                    <span className="px-2 py-1 rounded bg-purple-500/20 print:bg-purple-100 text-purple-400 print:text-purple-700 text-xs font-bold inline-block">انتظار</span>
+                                  ) : att.passed ? (
+                                    <span className="flex items-center gap-1 text-green-500 print:text-green-700 font-bold"><CheckCircle2 size={16} /> ناجح</span>
+                                  ) : (
+                                    <span className="flex items-center gap-1 text-red-500 print:text-red-700 font-bold"><XCircle size={16} /> راسب</span>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -360,10 +483,11 @@ export default function StudentsPage() {
               </div>
               <div className="sm:col-span-2">
                 <label className="block text-[11px] mb-1 text-text-muted">صورة الطالب (اختياري)</label>
-                <div className="flex gap-3 items-center">
-                  <label className="btn-outline flex-1 cursor-pointer py-2 text-xs relative">
-                    <Upload size={14} /> {uploadProgress > 0 ? `جاري الرفع ${uploadProgress}%` : 'رفع صورة'}
-                    <input type="file" accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer" 
+                <div className="flex gap-3 items-center h-12">
+                  <div className="flex-1 h-full">
+                    <GlobalFileUpload
+                      accept="image/*"
+                      variant="compact"
                       onChange={async e => {
                         const file = e.target.files?.[0];
                         if (!file) return;
@@ -374,8 +498,10 @@ export default function StudentsPage() {
                         } catch { showToast('فشل رفع الصورة'); }
                         finally { setUploadProgress(0); }
                       }}
+                      isUploading={uploadProgress > 0}
+                      label={<span className="text-xs">رفع صورة</span>}
                     />
-                  </label>
+                  </div>
                   {form.imageUrl && <img src={form.imageUrl} className="w-10 h-10 rounded-full object-cover" alt="" />}
                 </div>
               </div>
@@ -391,6 +517,24 @@ export default function StudentsPage() {
           </div>
         </div>
       )}
+
+      <style jsx global>{`
+        @media print {
+          body * {
+            visibility: hidden;
+          }
+          #printable-profile, #printable-profile * {
+            visibility: visible;
+          }
+          #printable-profile {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            padding: 20px;
+          }
+        }
+      `}</style>
     </div>
   );
 }

@@ -3,7 +3,7 @@ import {
   collection, addDoc 
 } from 'firebase/firestore';
 import { db } from '../firebase';
-import { compressAndUploadPDFAction, getCloudinarySignature } from '../actions';
+import { compressAndUploadPDFAction, compressAndUploadImageAction, getCloudinarySignature } from '../actions';
 
 if (!db) throw new Error('Firebase Firestore not initialized');
 
@@ -18,9 +18,10 @@ export const uploadFileToStorage = async (
   const fileType = (file as File).type || (file as any).fileType || 'application/octet-stream';
 
   const isPDF = fileType === 'application/pdf' || originalName.toLowerCase().endsWith('.pdf');
+  const isImage = fileType.startsWith('image/') || originalName.match(/\.(jpeg|jpg|gif|png|webp|bmp|svg)$/i);
   const isLarge = fileToUpload.size > 10 * 1024 * 1024;
 
-  if (isPDF && isLarge) {
+  if (isLarge && (isPDF || isImage)) {
     onProgress?.(10, 'جاري ضغط الملف عبر iLovePDF...');
     const formData = new FormData();
     const fileForAction = fileToUpload instanceof File ? fileToUpload : new File([fileToUpload], originalName, { type: fileType });
@@ -29,7 +30,10 @@ export const uploadFileToStorage = async (
     formData.append('folder', path.split('/')[0] || 'an-academy');
 
     try {
-      const result = await compressAndUploadPDFAction(formData);
+      const result = isPDF 
+        ? await compressAndUploadPDFAction(formData)
+        : await compressAndUploadImageAction(formData);
+
       if (result.success && result.url) {
         onProgress?.(100, 'اكتمل الضغط والرفع!');
         try {

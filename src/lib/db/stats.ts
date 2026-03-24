@@ -50,7 +50,15 @@ export const getPlatformStats = async () => {
   ]);
 
   let totalRevenue = 0;
+  
   students.forEach((doc: any) => {
+    const data = doc.data();
+    if (data.subPrice && typeof data.subPrice === 'number') {
+      totalRevenue += data.subPrice;
+    }
+  });
+
+  teachers.forEach((doc: any) => {
     const data = doc.data();
     if (data.subPrice && typeof data.subPrice === 'number') {
       totalRevenue += data.subPrice;

@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { AlertCircle, X, Download, ExternalLink, FileText, Image as ImageIcon, File, Eye } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { AlertCircle, X, Download, ExternalLink, FileText, Image as ImageIcon, File, Eye, RefreshCw } from 'lucide-react';
 import { getViewerUrl } from '@/lib/utils';
 
 interface FilePreviewModalProps {
@@ -14,52 +14,58 @@ export function FilePreviewModal({ url, fileName, onClose }: FilePreviewModalPro
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [useGoogleViewer, setUseGoogleViewer] = useState(false);
-  const [key, setKey] = useState(0); // For reloading
+  const [key, setKey] = useState(0);
 
+  // Keyboard & scroll lock
   useEffect(() => {
-    // Prevent body scroll when modal is open
     document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = 'unset';
-    };
-  }, []);
+    const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', handleKey);
+    return () => { document.body.style.overflow = 'unset'; window.removeEventListener('keydown', handleKey); };
+  }, [onClose]);
 
-  // Detect file type - Ensure PDF takes priority even if it's in an image folder
-  const isPdf = url.match(/\.pdf$/i) || url.includes('application%2Fpdf') || url.includes('.pdf') || url.includes('/raw/upload/') || url.includes('/files/upload/');
-  const isImage = (url.match(/\.(jpeg|jpg|gif|png|webp|bmp|svg)$/i) || url.includes('image%2F') || url.includes('/image/upload/')) && !isPdf;
-  const isVideo = url.match(/\.(mp4|webm|ogg|mov)$/i) || url.includes('video%2F') || url.includes('/video/upload/');
-  const isAudio = url.match(/\.(mp3|wav|ogg|m4a)$/i) || url.includes('audio%2F');
+  // Reset on URL change
+  useEffect(() => {
+    setIsLoading(true);
+    setLoadError(false);
+    setUseGoogleViewer(false);
+    setKey(k => k + 1);
+  }, [url]);
 
-  // Clean URL - ensure proper format
-  const cleanUrl = url.replace(/\s+/g, '');
-  
-  // For Cloudinary PDFs, ensure proper access
-  const getDirectUrl = (forDownload = false) => {
-    // If it's a raw resource, don't try to strip transformations
-    const isRaw = cleanUrl.includes('/raw/upload/') || cleanUrl.includes('/files/upload/');
-    
-    let processedUrl = cleanUrl;
-    
-    if (!isRaw) {
-      processedUrl = processedUrl.replace('/upload/fl_attachment:false/', '/upload/').replace('/upload/fl_attachment/', '/upload/');
-      
-      // If downloading, we can try to force attachment with filename if it's Cloudinary
-      if (forDownload && processedUrl.includes('cloudinary.com') && fileName) {
-        // Remove existing flags and add fl_attachment
-        const safeName = fileName.replace(/[/\\?%*:|"<>]/g, '_');
-        processedUrl = processedUrl.replace('/upload/', `/upload/fl_attachment:${encodeURIComponent(safeName)}/`);
+  // File type detection
+  const cleanUrl = url.trim().replace(/\s+/g, '%20');
+  const lower = cleanUrl.toLowerCase().split('?')[0];
+  const isPdf = lower.endsWith('.pdf') || cleanUrl.includes('application%2Fpdf') || cleanUrl.includes('/raw/upload/') || (cleanUrl.includes('cloudinary') && lower.includes('.pdf'));
+  const isImage = !isPdf && (lower.match(/\.(jpeg|jpg|gif|png|webp|bmp|svg)$/) !== null || cleanUrl.includes('image%2F') || (cleanUrl.includes('/image/upload/') && !cleanUrl.includes('/raw/')));
+  const isVideo = lower.match(/\.(mp4|webm|ogg|mov)$/) !== null || cleanUrl.includes('video%2F') || cleanUrl.includes('/video/upload/');
+  const isAudio = lower.match(/\.(mp3|wav|ogg|m4a)$/) !== null || cleanUrl.includes('audio%2F');
+
+  const getDirectUrl = useCallback((forDownload = false) => {
+    let processed = cleanUrl;
+    if (!cleanUrl.includes('/raw/upload/') && !cleanUrl.includes('/files/upload/')) {
+      processed = processed.replace('/upload/fl_attachment:false/', '/upload/').replace('/upload/fl_attachment/', '/upload/');
+      if (forDownload && processed.includes('cloudinary.com') && fileName) {
+        const safe = fileName.replace(/[/\\?%*:"|<>]/g, '_');
+        processed = processed.replace('/upload/', `/upload/fl_attachment:${encodeURIComponent(safe)}/`);
       }
     }
-
-    return processedUrl;
-  };
+    return processed;
+  }, [cleanUrl, fileName]);
 
   const directUrl = getDirectUrl(false);
   const downloadUrl = getDirectUrl(true);
   const googleViewerUrl = getViewerUrl(directUrl);
+  const displayFileName = fileName ? (isPdf && !fileName.toLowerCase().endsWith('.pdf') ? `${fileName}.pdf` : fileName) : 'ملف';
 
-  // Ensure fileName has .pdf extension if it's a PDF
-  const displayFileName = fileName ? (isPdf && !fileName.toLowerCase().endsWith('.pdf') ? `${fileName}.pdf` : fileName) : 'file.pdf';
+  // Auto-fallback for PDF: switch to Google Viewer after 12s if still loading
+  useEffect(() => {
+    if (isPdf && !useGoogleViewer && isLoading && !loadError) {
+      const t = setTimeout(() => { setUseGoogleViewer(true); setKey(k => k + 1); setIsLoading(true); }, 12000);
+      return () => clearTimeout(t);
+    }
+  }, [isPdf, useGoogleViewer, isLoading, loadError, key]);
+
+  const reload = () => { setIsLoading(true); setLoadError(false); setKey(k => k + 1); };
 
   const getFileIcon = () => {
     if (isImage) return <ImageIcon className="text-blue-400" size={24} />;
@@ -67,7 +73,7 @@ export function FilePreviewModal({ url, fileName, onClose }: FilePreviewModalPro
     return <File className="text-gold" size={24} />;
   };
 
-  const getFileTypeLabel = () => {
+  const getTypeLabel = () => {
     if (isImage) return 'صورة';
     if (isPdf) return 'PDF';
     if (isVideo) return 'فيديو';
@@ -75,67 +81,47 @@ export function FilePreviewModal({ url, fileName, onClose }: FilePreviewModalPro
     return 'ملف';
   };
 
-  const reload = () => {
-    setIsLoading(true);
-    setLoadError(false);
-    setKey(prev => prev + 1);
-  };
-
   return (
-    <div 
-      className="fixed inset-0 z-[9999] bg-black/95 flex flex-col animate-fade-in"
-      dir="rtl"
-    >
+    <div className="fixed inset-0 z-[9999] bg-black/95 flex flex-col animate-fade-in" dir="rtl">
       {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-stretch md:items-center px-4 py-3 bg-white/5 border-b border-white/10 gap-3">
+      <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center px-4 py-3 bg-white/5 border-b border-white/10 gap-3 flex-shrink-0">
         <div className="flex items-center gap-3">
           {getFileIcon()}
           <div className="min-w-0">
-            <h3 className="text-white font-bold text-sm md:text-base">
-              معاينة {getFileTypeLabel()}
-            </h3>
-            {fileName && (
-              <p className="text-gray-400 text-xs truncate max-w-[200px] md:max-w-md">
-                {displayFileName}
-              </p>
-            )}
+            <h3 className="text-white font-bold text-sm">معاينة {getTypeLabel()}</h3>
+            {fileName && <p className="text-gray-400 text-xs truncate max-w-[200px] sm:max-w-sm">{displayFileName}</p>}
           </div>
         </div>
-        
+
         <div className="flex flex-wrap items-center gap-2">
-          <button 
-            onClick={reload}
-            className="p-2 bg-white/5 text-white rounded-lg hover:bg-white/10 transition-all border border-white/5"
-            title="إعادة تحميل"
-          >
-            <ExternalLink size={16} />
+          <button onClick={reload} className="p-2 bg-white/5 text-white rounded-lg hover:bg-white/10 transition-all border border-white/5" title="إعادة تحميل">
+            <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />
           </button>
-          
+
           {isPdf && (
-            <button 
-              onClick={() => setUseGoogleViewer(!useGoogleViewer)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs md:text-sm transition-all border ${useGoogleViewer ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' : 'bg-white/5 text-white border-white/10'}`}
-              title={useGoogleViewer ? "استخدام العرض المباشر" : "استخدام عرض Google"}
+            <button
+              onClick={() => { setUseGoogleViewer(!useGoogleViewer); setKey(k => k + 1); setIsLoading(true); setLoadError(false); }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs sm:text-sm transition-all border ${useGoogleViewer ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' : 'bg-white/5 text-white border-white/10'}`}
             >
               <Eye size={16} />
               <span className="hidden sm:inline">{useGoogleViewer ? 'عرض مباشر' : 'عرض Google'}</span>
             </button>
           )}
 
-          <a 
-            href={downloadUrl} 
-            target="_blank" 
-            rel="noopener noreferrer" 
+          <a
+            href={downloadUrl}
+            target="_blank"
+            rel="noopener noreferrer"
             download={displayFileName}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-gold text-dark text-xs md:text-sm font-bold rounded-lg hover:brightness-110 transition-all"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-gold text-dark text-xs sm:text-sm font-bold rounded-lg hover:brightness-110 transition-all"
           >
             <Download size={16} />
             <span className="hidden sm:inline">تحميل</span>
           </a>
-          
-          <button 
+
+          <button
             onClick={onClose}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/20 text-red-400 text-xs md:text-sm rounded-lg hover:bg-red-500/30 transition-all border border-red-500/10"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/20 text-red-400 text-xs sm:text-sm rounded-lg hover:bg-red-500/30 transition-all border border-red-500/10"
           >
             <X size={18} />
             <span className="hidden sm:inline">إغلاق</span>
@@ -144,51 +130,41 @@ export function FilePreviewModal({ url, fileName, onClose }: FilePreviewModalPro
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-hidden bg-gray-900 relative">
-        {isLoading && (
-          <div className="absolute inset-0 flex items-center justify-center z-10 bg-gray-900">
+      <div className="flex-1 overflow-hidden bg-[#111] relative">
+        {/* Loading */}
+        {isLoading && !loadError && (
+          <div className="absolute inset-0 flex items-center justify-center z-10 bg-[#111]/90">
             <div className="text-center">
               <div className="relative w-16 h-16 mx-auto mb-4">
-                <div className="absolute inset-0 border-4 border-gold/20 rounded-full"></div>
-                <div className="absolute inset-0 border-4 border-gold border-t-transparent rounded-full animate-spin"></div>
+                <div className="absolute inset-0 border-4 border-gold/20 rounded-full" />
+                <div className="absolute inset-0 border-4 border-gold border-t-transparent rounded-full animate-spin" />
               </div>
-              <p className="text-gray-400 font-medium">جاري معالجة المحتوى...</p>
-              <p className="text-xs text-gray-500 mt-2">يرجى الانتظار قليلاً أو محاولة إعادة التحميل</p>
+              <p className="text-gray-400">جاري تحميل الملف...</p>
+              {isPdf && <p className="text-xs text-gray-600 mt-2">سيتم التبديل تلقائياً لعرض Google إذا تأخر التحميل</p>}
             </div>
           </div>
         )}
 
+        {/* Error */}
         {loadError && (
-          <div className="absolute inset-0 flex items-center justify-center z-20 bg-gray-900 p-6">
-            <div className="text-center p-8 bg-white/5 rounded-2xl border border-white/10 max-w-md shadow-2xl">
+          <div className="absolute inset-0 flex items-center justify-center z-20 bg-[#111] p-6">
+            <div className="text-center p-8 bg-white/5 rounded-2xl border border-white/10 max-w-md">
               <AlertCircle className="mx-auto mb-4 text-red-400" size={64} />
-              <h4 className="text-white font-black text-xl mb-2">عذراً، لم نتمكن من عرض الملف</h4>
-              <p className="text-gray-400 text-sm mb-6 leading-relaxed">
-                قد يكون الملف كبيراً جداً أو يحتاج للمعاينة في صفحة مستقلة أو عبر التحميل المباشر.
-              </p>
+              <h4 className="text-white font-black text-xl mb-2">لم نتمكن من عرض الملف</h4>
+              <p className="text-gray-400 text-sm mb-6">قد يكون الملف كبيراً جداً أو يحتاج للمعاينة خارجياً.</p>
               <div className="flex flex-col gap-3">
-                <a 
-                  href={directUrl} 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="btn-gold flex items-center justify-center gap-2 py-3"
-                >
-                  <ExternalLink size={18} /> فتح في صفحة مستقلة
+                {isPdf && !useGoogleViewer && (
+                  <button onClick={() => { setUseGoogleViewer(true); reload(); }} className="btn-gold flex items-center justify-center gap-2 py-3">
+                    <Eye size={18} /> محاولة عبر Google Viewer
+                  </button>
+                )}
+                <a href={directUrl} target="_blank" rel="noopener noreferrer" className="btn-gold flex items-center justify-center gap-2 py-3">
+                  <ExternalLink size={18} /> فتح في نافذة مستقلة
                 </a>
-                <a 
-                  href={downloadUrl} 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="btn-outline flex items-center justify-center gap-2 py-3 border-white/10"
-                >
-                  <Download size={18} /> تحميل الملف الآن
+                <a href={downloadUrl} target="_blank" rel="noopener noreferrer" className="btn-outline flex items-center justify-center gap-2 py-3 border-white/10">
+                  <Download size={18} /> تحميل الملف
                 </a>
-                <button 
-                  onClick={reload}
-                  className="text-gold text-xs font-bold hover:underline mt-2"
-                >
-                  إعادة محاولة التحميل
-                </button>
+                <button onClick={reload} className="text-gold text-xs font-bold hover:underline mt-2">إعادة المحاولة</button>
               </div>
             </div>
           </div>
@@ -199,55 +175,43 @@ export function FilePreviewModal({ url, fileName, onClose }: FilePreviewModalPro
           {isPdf ? (
             <div className="w-full h-full bg-white relative">
               <iframe
-                key={key + (useGoogleViewer ? '_g' : '_d')}
+                key={key}
                 src={useGoogleViewer ? googleViewerUrl : directUrl}
                 className="w-full h-full border-0 absolute inset-0"
                 title="PDF Preview"
-                onLoad={() => {
-                  // Wait a bit to ensure it actually rendered
-                  setTimeout(() => setIsLoading(false), 1000);
-                }}
-                onError={() => {
-                  setIsLoading(false);
-                  setLoadError(true);
-                }}
-                // Remove sandbox or allow-top-navigation to ensure direct PDFs work
-                // sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
+                onLoad={() => setTimeout(() => setIsLoading(false), 800)}
+                onError={() => { setIsLoading(false); if (!useGoogleViewer) { setLoadError(false); setUseGoogleViewer(true); setKey(k => k + 1); } else { setLoadError(true); } }}
               />
               {!useGoogleViewer && isLoading && (
                 <div className="absolute inset-x-0 bottom-4 px-4 text-center z-20 pointer-events-none">
-                  <p className="text-[10px] text-gray-500 bg-black/60 py-1 px-3 rounded-full inline-block">
-                    إذا لم يظهر الملف، جرب زر &quot;عرض Google&quot; بالأعلى
+                  <p className="text-[10px] text-gray-500 bg-black/70 py-1 px-3 rounded-full inline-block">
+                    إذا لم يظهر الملف، سيتم التبديل تلقائياً لعرض Google
                   </p>
                 </div>
               )}
             </div>
           ) : isImage ? (
-            <div className="w-full h-full flex items-center justify-center p-4">
-              <img 
+            <div className="w-full h-full flex items-center justify-center p-4 bg-black">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
                 key={key}
-                src={directUrl} 
-                alt={fileName || 'معاينة الصورة'} 
-                className="max-w-full max-h-full object-contain rounded-lg shadow-2xl animate-scale-in"
+                src={directUrl}
+                alt={displayFileName}
+                className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
                 onLoad={() => setIsLoading(false)}
-                onError={() => {
-                  setIsLoading(false);
-                  setLoadError(true);
-                }}
+                onError={() => { setIsLoading(false); setLoadError(true); }}
+                style={{ display: isLoading ? 'none' : 'block' }}
               />
             </div>
           ) : isVideo ? (
             <div className="w-full h-full flex items-center justify-center p-4">
-              <video 
+              <video
                 key={key}
-                src={directUrl} 
-                controls 
+                src={directUrl}
+                controls
                 className="max-w-full max-h-full rounded-lg shadow-2xl"
                 onLoadedData={() => setIsLoading(false)}
-                onError={() => {
-                  setIsLoading(false);
-                  setLoadError(true);
-                }}
+                onError={() => { setIsLoading(false); setLoadError(true); }}
               >
                 المتصفح لا يدعم تشغيل هذا الفيديو
               </video>
@@ -255,19 +219,9 @@ export function FilePreviewModal({ url, fileName, onClose }: FilePreviewModalPro
           ) : isAudio ? (
             <div className="w-full h-full flex items-center justify-center p-4">
               <div className="bg-white/5 p-8 rounded-xl text-center border border-white/10">
-                <FileText className="mx-auto mb-4 text-gold animate-bounce-subtle" size={64} />
-                <p className="text-white font-bold mb-4">ملف صوتي</p>
-                <audio 
-                  key={key}
-                  src={directUrl} 
-                  controls 
-                  className="w-full max-w-md"
-                  onLoadedData={() => setIsLoading(false)}
-                  onError={() => {
-                    setIsLoading(false);
-                    setLoadError(true);
-                  }}
-                >
+                <FileText className="mx-auto mb-4 text-gold" size={64} />
+                <p className="text-white font-bold mb-4">{displayFileName}</p>
+                <audio key={key} src={directUrl} controls className="w-full max-w-md" onLoadedData={() => setIsLoading(false)} onError={() => { setIsLoading(false); setLoadError(true); }}>
                   المتصفح لا يدعم تشغيل هذا الملف الصوتي
                 </audio>
               </div>
@@ -277,16 +231,9 @@ export function FilePreviewModal({ url, fileName, onClose }: FilePreviewModalPro
               <div className="text-center p-10 bg-white/5 rounded-2xl border border-white/10 shadow-2xl">
                 <FileText className="mx-auto mb-4 text-gold" size={80} />
                 <h4 className="text-white font-bold text-xl mb-2">لا يمكن عرض هذا الملف مباشرة</h4>
-                <p className="text-gray-400 text-sm mb-6 max-w-xs">
-                  نوع هذا الملف يحتاج للتحميل لعرضه على جهازك الشخصي.
-                </p>
+                <p className="text-gray-400 text-sm mb-6 max-w-xs">نوع هذا الملف يحتاج للتحميل لعرضه.</p>
                 <div className="flex flex-col gap-3">
-                  <a 
-                    href={downloadUrl} 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="btn-gold flex items-center justify-center gap-2 py-3 px-8"
-                  >
+                  <a href={downloadUrl} target="_blank" rel="noopener noreferrer" className="btn-gold flex items-center justify-center gap-2 py-3 px-8">
                     <Download size={18} /> تحميل الملف
                   </a>
                   <button onClick={onClose} className="text-gray-500 text-xs hover:text-white transition-colors">إغلاق</button>
@@ -304,26 +251,16 @@ export function FilePreviewModal({ url, fileName, onClose }: FilePreviewModalPro
 export function useFilePreview() {
   const [previewFile, setPreviewFile] = useState<{ url: string; fileName?: string } | null>(null);
 
-  const openPreview = (url: string, fileName?: string) => {
+  const openPreview = useCallback((url: string, fileName?: string) => {
+    if (!url) return;
     setPreviewFile({ url, fileName });
-  };
+  }, []);
 
-  const closePreview = () => {
-    setPreviewFile(null);
-  };
+  const closePreview = useCallback(() => setPreviewFile(null), []);
 
   const PreviewModal = previewFile ? (
-    <FilePreviewModal
-      url={previewFile.url}
-      fileName={previewFile.fileName}
-      onClose={closePreview}
-    />
+    <FilePreviewModal url={previewFile.url} fileName={previewFile.fileName} onClose={closePreview} />
   ) : null;
 
-  return {
-    openPreview,
-    closePreview,
-    PreviewModal,
-    isOpen: !!previewFile,
-  };
+  return { openPreview, closePreview, PreviewModal, isOpen: !!previewFile };
 }

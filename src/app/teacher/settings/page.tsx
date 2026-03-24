@@ -8,6 +8,7 @@ import { saveSettings, uploadFileToStorage, wipeAllData, saveTeacher, getSuperAd
 import type { Settings } from '@/types';
 import { Save, Eye, EyeOff, Copy, Upload, Loader2, MessageCircle, Phone, Trash2, AlertTriangle } from 'lucide-react';
 import { showToast } from '@/lib/toast';
+import { GlobalFileUpload } from '@/components/GlobalFileUpload';
 
 const DEFAULT_SETTINGS: Settings = {
   teacherId: '',
@@ -187,19 +188,15 @@ export default function SettingsPage() {
                 <img src={form.logoUrl} alt="شعار المنصة" className="w-14 h-14 object-contain rounded-xl border border-white/10 bg-white/5 p-1 flex-shrink-0" />
               )}
               <div className="flex-1 space-y-2">
-                {uploadingLogo && (
-                  <div className="w-full bg-white/10 rounded-full h-2 overflow-hidden">
-                    <div 
-                      className="bg-gold h-full transition-all duration-300" 
-                      style={{ width: `${logoProgress}%` }}
-                    />
-                  </div>
-                )}
-                <label className="btn-outline cursor-pointer w-full justify-center relative overflow-hidden flex items-center gap-2">
-                  {uploadingLogo ? <Loader2 size={15} className="animate-spin" /> : <Upload size={15} />}
-                  {uploadingLogo ? `جاري الرفع... ${logoProgress}%` : 'رفع شعار من جهازك'}
-                  <input type="file" accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer" onChange={handleLogoUpload} disabled={uploadingLogo} />
-                </label>
+                <GlobalFileUpload 
+                  accept="image/*"
+                  onChange={handleLogoUpload}
+                  disabled={uploadingLogo}
+                  uploadedUrl={form.logoUrl}
+                  isUploading={uploadingLogo}
+                  uploadProgress={logoProgress}
+                  label="رفع شعار من جهازك"
+                />
                 <input
                   value={form.logoUrl || ''}
                   onChange={e => update('logoUrl', e.target.value)}
@@ -379,19 +376,15 @@ export default function SettingsPage() {
                 </div>
               )}
               <div className="flex-1 space-y-2">
-                {uploadingSignature && (
-                  <div className="w-full bg-white/10 rounded-full h-2 overflow-hidden">
-                    <div 
-                      className="bg-gold h-full transition-all duration-300" 
-                      style={{ width: `${signatureProgress}%` }}
-                    />
-                  </div>
-                )}
-                <label className="btn-outline cursor-pointer w-full justify-center relative overflow-hidden flex items-center gap-2">
-                  {uploadingSignature ? <Loader2 size={15} className="animate-spin" /> : <Upload size={15} />}
-                  {uploadingSignature ? `جاري الرفع... ${signatureProgress}%` : (form.certSignatureUrl ? 'تغيير التوقيع/الختم' : 'رفع توقيع أو ختم')}
-                  <input type="file" accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer" onChange={handleSignatureUpload} disabled={uploadingSignature} />
-                </label>
+                <GlobalFileUpload 
+                  accept="image/*"
+                  onChange={handleSignatureUpload}
+                  disabled={uploadingSignature}
+                  uploadedUrl={form.certSignatureUrl}
+                  isUploading={uploadingSignature}
+                  uploadProgress={signatureProgress}
+                  label={form.certSignatureUrl ? 'تغيير التوقيع/الختم' : 'رفع توقيع أو ختم'}
+                />
                 {form.certSignatureUrl && (
                   <button onClick={() => update('certSignatureUrl', '')} className="text-xs text-red-400 hover:text-red-300 w-full text-center">
                     🗑️ إزالة التوقيع

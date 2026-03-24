@@ -242,7 +242,7 @@ export interface AssignmentSubmission {
   maxScore: number;
   teacherComment?: string;
   submittedAt: string;
-  status: 'pending' | 'graded';
+  status: 'pending' | 'graded' | 'redo';
 }
 
 export interface Message {

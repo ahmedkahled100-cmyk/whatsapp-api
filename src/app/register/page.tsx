@@ -8,6 +8,7 @@ import type { Settings, TeacherUser } from '@/types';
 import { showToast } from '@/lib/toast';
 import { GraduationCap, ShieldCheck, Mail, Phone, Calculator, CheckCircle2, User, FileText, Upload, Image as ImageIcon, Loader2 } from 'lucide-react';
 import { PDFCompressionModal } from '@/components/PDFCompressionModal';
+import { GlobalFileUpload } from '@/components/GlobalFileUpload';
 
 export default function RegisterPage() {
   const { queue } = useFileProcessingStore();
@@ -312,20 +313,12 @@ export default function RegisterPage() {
               {/* Student Image / Photo Upload */}
               <div className="relative">
                 <label className="block text-sm mb-2 text-gray-300 font-bold px-1">صورة الطالب الشخصية (اختياري)</label>
-                <label className="btn-outline w-full border-white/10 text-gray-400 hover:text-white cursor-pointer group flex items-center justify-center gap-2 py-4 rounded-xl border-dashed">
-                  {imageUploadProgress > 0 && imageUploadProgress < 100 ? (
-                    <Loader2 size={18} className="animate-spin group-hover:text-gold transition-colors" />
-                  ) : (
-                    <ImageIcon size={18} className="group-hover:text-gold transition-colors" />
-                  )}
-                  <span className="text-xs sm:text-sm truncate px-2">
-                    {imageUploadProgress > 0 && imageUploadProgress < 100 ? `جاري الرفع... ${imageUploadProgress}%` : (studentImageFile ? studentImageFile.name : 'اختر صورة شخصية للطالب')}
-                  </span>
-                  <input 
-                      type="file" 
-                      accept="image/*"
-                      className="hidden" 
-                      onChange={async (e) => {
+                <GlobalFileUpload 
+                    accept="image/*"
+                    isUploading={submitting || (queue.some(f => f.status !== 'completed' && f.status !== 'failed' && f.path.startsWith('students/')))}
+                    uploadProgress={imageUploadProgress}
+                    label={studentImageFile ? studentImageFile.name : 'اختر صورة شخصية للطالب'}
+                    onChange={async (e) => {
                         const file = e.target.files?.[0];
                         if (file) {
                           if (file.size > 20 * 1024 * 1024) {
@@ -344,10 +337,8 @@ export default function RegisterPage() {
                             setImageUploadProgress(0);
                           }
                         }
-                      }}
-                      disabled={submitting || (queue.some(f => f.status !== 'completed' && f.status !== 'failed' && f.path.startsWith('students/')))}
-                    />
-                </label>
+                    }}
+                />
                 {queue.some(f => f.status !== 'completed' && f.status !== 'failed' && f.path.startsWith('students/')) && (
                   <div className="w-full bg-white/10 rounded-full h-1.5 overflow-hidden mt-3">
                     <div className="bg-gold h-full transition-all duration-300 animate-pulse w-full" />
@@ -363,20 +354,12 @@ export default function RegisterPage() {
               {/* Receipt File Upload */}
               <div className="relative">
                 <label className="block text-sm mb-2 text-gray-300 font-bold px-1">إرفاق صورة الإيصال (اختياري)</label>
-                <label className="btn-outline w-full border-white/10 text-gray-400 hover:text-white cursor-pointer group flex items-center justify-center gap-2 py-4 rounded-xl border-dashed">
-                  {uploadProgress > 0 && uploadProgress < 100 ? (
-                    <Loader2 size={18} className="animate-spin group-hover:text-gold transition-colors" />
-                  ) : (
-                    <Upload size={18} className="group-hover:text-gold transition-colors" />
-                  )}
-                  <span className="text-xs sm:text-sm truncate px-2">
-                    {uploadProgress > 0 && uploadProgress < 100 ? `جاري الرفع... ${uploadProgress}%` : (receiptFile ? receiptFile.name : 'اختر صورة الفاتورة / سكرين شوت الحوالة')}
-                  </span>
-                  <input 
-                      type="file" 
-                      accept="image/*"
-                      className="hidden" 
-                      onChange={async (e) => {
+                <GlobalFileUpload 
+                    accept="image/*"
+                    isUploading={submitting || (queue.some(f => f.status !== 'completed' && f.status !== 'failed' && f.path.startsWith('receipts/')))}
+                    uploadProgress={uploadProgress}
+                    label={receiptFile ? receiptFile.name : 'اختر صورة الفاتورة / سكرين شوت الحوالة'}
+                    onChange={async (e) => {
                         const file = e.target.files?.[0];
                         if (file) {
                           if (file.size > 100 * 1024 * 1024) {
@@ -434,9 +417,7 @@ export default function RegisterPage() {
                             }
                           }
                         }}
-                      disabled={submitting || (queue.some(f => f.status !== 'completed' && f.status !== 'failed' && f.path.startsWith('receipts/')))}
-                    />
-                  </label>
+                />
                   {queue.some(f => f.status !== 'completed' && f.status !== 'failed' && f.path.startsWith('receipts/')) && (
                     <div className="w-full bg-white/10 rounded-full h-1.5 overflow-hidden mt-3">
                       <div className="bg-gold h-full transition-all duration-300 animate-pulse w-full" />

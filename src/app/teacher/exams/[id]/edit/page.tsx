@@ -9,6 +9,7 @@ import { showToast } from '@/lib/toast';
 import { generateId } from '@/lib/utils';
 import type { Question, Exam } from '@/types';
 import { PlusCircle, Trash2, Save, ChevronDown, ChevronUp, ArrowRight, Image as ImageIcon, FileText, Upload, X, Loader2 } from 'lucide-react';
+import { GlobalFileUpload } from '@/components/GlobalFileUpload';
 
 type QForm = Question & { expanded?: boolean };
 
@@ -16,7 +17,7 @@ export default function EditExamPage() {
   const router = useRouter();
   const params = useParams();
   const id = params.id as string;
-  const { groups } = useTeacherStore();
+  const { user, groups } = useTeacherStore();
   
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -141,7 +142,7 @@ export default function EditExamPage() {
     setSaving(true);
     try {
       const examData: Exam = {
-        id,
+        id, teacherId: user?.id || '',
         title, subject, desc, duration, passScore,
         questions: validQs.map(({ expanded, ...q }) => q as Question),
         shuffle, randomPickCount: randomPickCount > 0 ? randomPickCount : undefined,
@@ -310,18 +311,22 @@ export default function EditExamPage() {
               <label className="block text-xs font-bold text-gold uppercase tracking-wider">صورة الغلاف / توضيحية للاختبار</label>
               <div className="flex items-center gap-3">
                 {examImageUrl ? (
-                  <div className="relative w-20 h-20 rounded-xl overflow-hidden border border-gold/30">
+                  <div className="relative w-20 h-20 rounded-xl overflow-hidden border border-gold/30 flex-shrink-0">
                     <img src={examImageUrl} alt="Exam" className="w-full h-full object-cover" />
                     <button onClick={() => setExamImageUrl('')} className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-0.5 shadow-lg">
                       <X size={12} />
                     </button>
                   </div>
                 ) : (
-                  <label className="flex-1 flex flex-col items-center justify-center border-2 border-dashed border-white/10 rounded-xl p-4 cursor-pointer hover:border-gold/40 hover:bg-gold/5 transition-all">
-                    <ImageIcon size={20} className="text-muted mb-1" />
-                    <span className="text-[10px] font-bold">رفع صورة</span>
-                    <input type="file" accept="image/*" className="hidden" onChange={e => e.target.files?.[0] && handleMediaUpload(e.target.files[0], 'exam-image')} />
-                  </label>
+                  <div className="flex-1 max-w-[120px] h-20">
+                    <GlobalFileUpload 
+                      accept="image/*"
+                      variant="compact"
+                      onChange={e => e.target.files?.[0] && handleMediaUpload(e.target.files[0], 'exam-image')}
+                      isUploading={uploadingExamMedia === 'image'}
+                      label={<span className="text-[10px] font-bold">رفع صورة</span>}
+                    />
+                  </div>
                 )}
               </div>
             </div>
@@ -339,11 +344,15 @@ export default function EditExamPage() {
                     </button>
                   </div>
                 ) : (
-                  <label className="flex-1 flex flex-col items-center justify-center border-2 border-dashed border-white/10 rounded-xl p-4 cursor-pointer hover:border-blue-400/40 hover:bg-blue-400/5 transition-all">
-                    <Upload size={20} className="text-muted mb-1" />
-                    <span className="text-[10px] font-bold">رفع PDF</span>
-                    <input type="file" accept=".pdf" className="hidden" onChange={e => e.target.files?.[0] && handleMediaUpload(e.target.files[0], 'exam-pdf')} />
-                  </label>
+                  <div className="flex-1 max-w-[120px] h-20">
+                    <GlobalFileUpload 
+                      accept=".pdf"
+                      variant="compact"
+                      onChange={e => e.target.files?.[0] && handleMediaUpload(e.target.files[0], 'exam-pdf')}
+                      isUploading={uploadingExamMedia === 'pdf'}
+                      label={<span className="text-[10px] font-bold">رفع PDF</span>}
+                    />
+                  </div>
                 )}
               </div>
             </div>
@@ -403,10 +412,14 @@ export default function EditExamPage() {
                           </button>
                         </div>
                       ) : (
-                        <label className="w-full h-12 flex items-center justify-center border border-dashed border-white/10 rounded-lg cursor-pointer hover:bg-white/5 transition-colors">
-                          <ImageIcon size={14} className="text-muted" />
-                          <input type="file" accept="image/*" className="hidden" onChange={e => e.target.files?.[0] && handleMediaUpload(e.target.files[0], { qId: q.id, type: 'image' })} />
-                        </label>
+                        <div className="w-full h-16">
+                          <GlobalFileUpload 
+                            accept="image/*"
+                            variant="compact"
+                            onChange={e => e.target.files?.[0] && handleMediaUpload(e.target.files[0], { qId: q.id, type: 'image' })}
+                            label={<span className="text-[10px] font-bold mt-1">صورة</span>}
+                          />
+                        </div>
                       )}
                     </div>
                     <div className="space-y-1.5">
@@ -419,10 +432,14 @@ export default function EditExamPage() {
                           </button>
                         </div>
                       ) : (
-                        <label className="w-full h-12 flex items-center justify-center border border-dashed border-white/10 rounded-lg cursor-pointer hover:bg-white/5 transition-colors">
-                          <Upload size={14} className="text-muted" />
-                          <input type="file" accept=".pdf" className="hidden" onChange={e => e.target.files?.[0] && handleMediaUpload(e.target.files[0], { qId: q.id, type: 'pdf' })} />
-                        </label>
+                        <div className="w-full h-16">
+                          <GlobalFileUpload 
+                            accept=".pdf"
+                            variant="compact"
+                            onChange={e => e.target.files?.[0] && handleMediaUpload(e.target.files[0], { qId: q.id, type: 'pdf' })}
+                            label={<span className="text-[10px] font-bold mt-1">PDF</span>}
+                          />
+                        </div>
                       )}
                     </div>
                   </div>

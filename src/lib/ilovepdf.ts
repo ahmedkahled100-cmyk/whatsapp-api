@@ -114,6 +114,38 @@ export class ILovePDFClient {
     }
   }
 
+  static async compressImage(fileBuffer: Buffer): Promise<Buffer> {
+    const startTime = Date.now();
+    console.log('[iLovePDF] 🚀 Starting image compression...');
+    
+    try {
+      if (!fileBuffer || fileBuffer.length === 0) {
+        throw new Error('Invalid or empty image buffer');
+      }
+      
+      console.log('[iLovePDF] Image size:', `${(fileBuffer.length / 1024 / 1024).toFixed(2)}MB`);
+      
+      if (this.isConfigured() && instance) {
+        console.log('[iLovePDF] 📤 Attempting iLovePDF API image compression...');
+        try {
+          const result = await this.compressImageWithAPI(fileBuffer);
+          const duration = Date.now() - startTime;
+          console.log(`[iLovePDF] ✅ API image compression complete in ${duration}ms`);
+          return result;
+        } catch (apiError: any) {
+          console.warn('[iLovePDF] ⚠️  API image compression failed:', apiError?.message || apiError);
+        }
+      }
+      
+      console.warn('[iLovePDF] ⚠️  Returning original image (no local fallback for images)...');
+      return fileBuffer;
+      
+    } catch (error: any) {
+      console.error('[iLovePDF] ❌ Image compression failed:', error?.message || error);
+      return fileBuffer; 
+    }
+  }
+
   /**
    * Compress PDF using iLovePDF API
    */
@@ -174,6 +206,50 @@ export class ILovePDFClient {
     } catch (error: any) {
       const errorMsg = error?.message || error;
       console.error('[iLovePDF] ❌ API error:', errorMsg);
+      throw error;
+    }
+  }
+
+  /**
+   * Compress Image using iLovePDF API
+   */
+  private static async compressImageWithAPI(fileBuffer: Buffer): Promise<Buffer> {
+    if (!instance) throw new Error('iLovePDF API not initialized');
+    
+    let task: any = null;
+    try {
+      task = instance.newTask('compressimage');
+      console.log('[iLovePDF] Image compress task created');
+      
+      await Promise.race([
+        task.start(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Task start timeout')), 15000))
+      ]);
+      
+      const file = new ILovePDFFile(fileBuffer as any);
+      
+      await Promise.race([
+        task.addFile(file),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Add file timeout')), 15000))
+      ]);
+      
+      await Promise.race([
+        task.process(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Process timeout')), 30000))
+      ]);
+      
+      const data = await Promise.race([
+        task.download(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Download timeout')), 15000))
+      ]);
+      
+      if (!data || data.length === 0) throw new Error('Downloaded data is empty');
+      
+      console.log('[iLovePDF] ✅ Image download complete, size:', `${(data.length / 1024 / 1024).toFixed(2)}MB`);
+      return Buffer.from(data);
+      
+    } catch (error: any) {
+      console.error('[iLovePDF] ❌ Image API error:', error?.message || error);
       throw error;
     }
   }

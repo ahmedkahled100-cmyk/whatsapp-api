@@ -147,6 +147,7 @@ export default function ExamPage() {
     });
 
     const attempt: Omit<Attempt, 'id'> = {
+      teacherId: exam.teacherId,
       examId: exam.id,
       examTitle: exam.title,
       studentId: student.id,

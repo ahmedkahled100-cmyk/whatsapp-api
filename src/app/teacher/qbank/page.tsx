@@ -7,12 +7,13 @@ import { getQBank, addToQBank, deleteFromQBank, uploadFileToStorage } from '@/li
 import { showToast } from '@/lib/toast';
 import { QuestionBankItem } from '@/types';
 import { Database, PlusCircle, Search, Trash2, Filter, Image as ImageIcon, FileText, Upload, X } from 'lucide-react';
+import { GlobalFileUpload } from '@/components/GlobalFileUpload';
 
 import { useRouter } from 'next/navigation';
 
 export default function QBankPage() {
   const router = useRouter();
-  const { setTempExamQuestions } = useTeacherStore();
+  const { user, setTempExamQuestions } = useTeacherStore();
   const [questions, setQuestions] = useState<QuestionBankItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -47,9 +48,10 @@ export default function QBankPage() {
   const [uploadingMedia, setUploadingMedia] = useState<'image' | 'pdf' | null>(null);
 
   const loadQuestions = async () => {
+    if (!user?.id) return;
     setLoading(true);
     try {
-      const data = await getQBank();
+      const data = await getQBank(user.id);
       setQuestions(data);
     } catch (error) {
       console.error("Error loading question bank:", error);
@@ -280,11 +282,15 @@ export default function QBankPage() {
                   </button>
                 </div>
               ) : (
-                <label className="flex flex-col items-center justify-center border-2 border-dashed border-white/10 rounded-xl p-6 cursor-pointer hover:border-gold/40 hover:bg-gold/5 transition-all h-32">
-                  <ImageIcon size={24} className="text-muted mb-2" />
-                  <span className="text-xs font-bold">رفع صورة</span>
-                  <input type="file" accept="image/*" className="hidden" onChange={e => e.target.files?.[0] && handleMediaUpload(e.target.files[0], 'image')} />
-                </label>
+                <div className="w-full h-32">
+                  <GlobalFileUpload 
+                    accept="image/*"
+                    variant="compact"
+                    onChange={e => e.target.files?.[0] && handleMediaUpload(e.target.files[0], 'image')}
+                    isUploading={uploadingMedia === 'image'}
+                    label={<span className="text-xs font-bold mt-2">رفع صورة</span>}
+                  />
+                </div>
               )}
             </div>
             <div className="space-y-2">
@@ -300,11 +306,15 @@ export default function QBankPage() {
                   </button>
                 </div>
               ) : (
-                <label className="flex flex-col items-center justify-center border-2 border-dashed border-white/10 rounded-xl p-6 cursor-pointer hover:border-blue-400/40 hover:bg-blue-400/5 transition-all h-32">
-                  <Upload size={24} className="text-muted mb-2" />
-                  <span className="text-xs font-bold">رفع PDF</span>
-                  <input type="file" accept=".pdf" className="hidden" onChange={e => e.target.files?.[0] && handleMediaUpload(e.target.files[0], 'pdf')} />
-                </label>
+                <div className="w-full h-32">
+                  <GlobalFileUpload 
+                    accept=".pdf"
+                    variant="compact"
+                    onChange={e => e.target.files?.[0] && handleMediaUpload(e.target.files[0], 'pdf')}
+                    isUploading={uploadingMedia === 'pdf'}
+                    label={<span className="text-xs font-bold mt-2">رفع PDF</span>}
+                  />
+                </div>
               )}
             </div>
           </div>

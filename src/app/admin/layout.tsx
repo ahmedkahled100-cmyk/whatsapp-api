@@ -3,11 +3,13 @@ import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useTeacherStore } from '@/lib/store';
-import { LayoutDashboard, Users, Settings, LogOut, Menu, X, ShieldCheck, GraduationCap } from 'lucide-react';
+import { LayoutDashboard, Users, Settings, LogOut, Menu, X, ShieldCheck, GraduationCap, MessageSquare, CreditCard } from 'lucide-react';
 
 const NAV_ITEMS = [
   { href: '/admin', icon: LayoutDashboard, label: 'لوحة التحكم الشاملة' },
   { href: '/admin/teachers', icon: Users, label: 'إدارة المعلمين' },
+  { href: '/admin/subscriptions', icon: CreditCard, label: 'إدارة الاشتراكات' },
+  { href: '/admin/messages', icon: MessageSquare, label: 'رسائل المعلمين' },
   { href: '/admin/settings', icon: Settings, label: 'إعدادات المنصة' },
   { href: '/teacher/dashboard', icon: GraduationCap, label: 'لوحة المعلم الخاصة بي' },
 ];

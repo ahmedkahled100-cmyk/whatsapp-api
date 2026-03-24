@@ -12,6 +12,7 @@ export default function AssignmentsPage() {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   
   // Submissions state
@@ -60,7 +61,7 @@ export default function AssignmentsPage() {
     }
     setSaving(true);
     try {
-      await saveAssignment({
+      const payload: Partial<Assignment> & { teacherId: string } = {
         teacherId: user!.id,
         title: newAssign.title,
         description: newAssign.description || '',
@@ -68,12 +69,20 @@ export default function AssignmentsPage() {
         maxScore: Number(newAssign.maxScore),
         targetGroup: newAssign.targetGroup || '',
         fileUrl: newAssign.fileUrl || '',
-        createdAt: new Date().toISOString()
-      });
+      };
+      
+      if (editingId) {
+        payload.id = editingId;
+      } else {
+        payload.createdAt = new Date().toISOString();
+      }
+
+      await saveAssignment(payload as any);
       await loadData();
       setShowAddForm(false);
+      setEditingId(null);
       setNewAssign({ title: '', description: '', dueDate: '', targetGroup: '', fileUrl: '', maxScore: 10 });
-      showToast('تم إضافة الواجب بنجاح');
+      showToast(editingId ? 'تم تعديل الواجب بنجاح' : 'تم إضافة الواجب بنجاح');
     } catch (e) {
       showToast('حدث خطأ أثناء الحفظ');
     } finally {
@@ -133,6 +142,19 @@ export default function AssignmentsPage() {
     }
   };
 
+  const handleRequestRedo = async (sub: AssignmentSubmission) => {
+    setSavingGrade(sub.id);
+    try {
+      await gradeSubmission(sub.id, 0, gradingComments[sub.id] || 'يرجى إعادة الواجب مره اخرى', 'redo');
+      setSubmissions(prev => prev.map(s => s.id === sub.id ? { ...s, score: 0, teacherComment: gradingComments[sub.id] || 'يرجى إعادة الواجب مره اخرى', status: 'redo' as const } : s));
+      showToast('تم طلب إرسال الواجب مجدداً من الطالب');
+    } catch (e) {
+      showToast('حدث خطأ أثناء طلب الإعادة');
+    } finally {
+      setSavingGrade(null);
+    }
+  };
+
   const openVFile = (url: string, fileName?: string) => {
     openPreview(url, fileName);
   };
@@ -162,8 +184,8 @@ export default function AssignmentsPage() {
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-3">
                       <h3 className="font-bold text-lg">{sub.studentName}</h3>
-                      <span className={`badge ${sub.status === 'graded' ? 'badge-green' : 'badge-gold'}`}>
-                        {sub.status === 'graded' ? 'تم التصحيح' : 'قيد المراجعة'}
+                      <span className={`badge ${sub.status === 'graded' ? 'badge-green' : sub.status === 'redo' ? 'badge-danger' : 'badge-gold'}`}>
+                        {sub.status === 'graded' ? 'تم التصحيح' : sub.status === 'redo' ? 'مطلوب إعادته' : 'قيد المراجعة'}
                       </span>
                     </div>
 
@@ -218,13 +240,23 @@ export default function AssignmentsPage() {
                           onChange={(e) => setGradingComments(prev => ({...prev, [sub.id]: e.target.value}))}
                         />
                       </div>
-                      <button 
-                        onClick={() => handleSaveGrade(sub)}
-                        disabled={savingGrade === sub.id}
-                        className="btn-gold w-full flex items-center justify-center gap-2"
-                      >
-                        {savingGrade === sub.id ? 'جاري الحفظ...' : <><CheckCircle size={16} /> حفظ التقييم</>}
-                      </button>
+                      <div className="flex gap-2">
+                        <button 
+                          onClick={() => handleSaveGrade(sub)}
+                          disabled={savingGrade === sub.id}
+                          className="btn-gold flex-[2] flex items-center justify-center gap-2"
+                        >
+                          {savingGrade === sub.id ? 'جاري الحفظ...' : <><CheckCircle size={16} /> حفظ التقييم</>}
+                        </button>
+                        <button 
+                          onClick={() => handleRequestRedo(sub)}
+                          disabled={savingGrade === sub.id}
+                          className="btn-danger flex-1 flex items-center justify-center gap-1 text-xs px-1"
+                          title="اطلب من الطالب تصحيح أو إعادة الواجب"
+                        >
+                          إعادة
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -246,7 +278,11 @@ export default function AssignmentsPage() {
           <ClipboardList size={28} className="text-gold" />
           <h1 className="text-2xl font-cairo font-black gold-text">الواجبات المنزلية</h1>
         </div>
-        <button onClick={() => setShowAddForm(!showAddForm)} className="btn-gold flex items-center gap-2">
+        <button onClick={() => {
+          setEditingId(null);
+          setNewAssign({ title: '', description: '', dueDate: '', targetGroup: '', fileUrl: '', maxScore: 10 });
+          setShowAddForm(!showAddForm);
+        }} className="btn-gold flex items-center gap-2">
           {showAddForm ? 'إلغاء' : <><PlusCircle size={18} /> إضافة واجب</>}
         </button>
       </div>
@@ -302,9 +338,9 @@ export default function AssignmentsPage() {
             </div>
           </div>
           <div className="flex justify-end gap-3 mt-4">
-            <button onClick={() => setShowAddForm(false)} className="btn-outline px-6">إلغاء</button>
+            <button onClick={() => { setShowAddForm(false); setEditingId(null); }} className="btn-outline px-6">إلغاء</button>
             <button onClick={handleSave} disabled={saving} className="btn-gold px-6">
-               {saving ? 'جاري الحفظ...' : 'حفظ التكليف'}
+               {saving ? 'جاري الحفظ...' : (editingId ? 'حفظ التعديلات' : 'حفظ التكليف')}
             </button>
           </div>
         </div>
@@ -328,9 +364,23 @@ export default function AssignmentsPage() {
                  <div>
                    <div className="flex justify-between items-start mb-2">
                      <h3 className="font-bold text-lg leading-tight">{assign.title}</h3>
-                     <button onClick={() => handleDelete(assign.id)} className="text-red-400 hover:text-red-300 transition-colors">
-                       <Trash2 size={16} />
-                     </button>
+                     <div className="flex gap-2">
+                       <button onClick={() => {
+                         setEditingId(assign.id);
+                         setNewAssign({
+                           title: assign.title, description: assign.description,
+                           dueDate: assign.dueDate, targetGroup: assign.targetGroup,
+                           fileUrl: assign.fileUrl, maxScore: assign.maxScore
+                         });
+                         setShowAddForm(true);
+                         window.scrollTo({ top: 0, behavior: 'smooth' });
+                       }} className="text-blue-400 hover:text-blue-300 transition-colors">
+                         <ClipboardList size={16} />
+                       </button>
+                       <button onClick={() => handleDelete(assign.id)} className="text-red-400 hover:text-red-300 transition-colors">
+                         <Trash2 size={16} />
+                       </button>
+                     </div>
                    </div>
                    <p className="text-sm opacity-70 line-clamp-2 mb-4">{assign.description || 'لا يوجد وصف'}</p>
                    

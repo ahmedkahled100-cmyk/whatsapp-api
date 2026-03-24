@@ -7,6 +7,7 @@ import { useFileProcessingStore } from '@/lib/store';
 import type { Settings, TeacherUser } from '@/types';
 import { showToast } from '@/lib/toast';
 import { GraduationCap, ShieldCheck, Mail, Phone, Calculator, CheckCircle2, User, FileText, Upload, Image as ImageIcon, Loader2, BookOpen, Sparkles, CreditCard } from 'lucide-react';
+import { GlobalFileUpload } from '@/components/GlobalFileUpload';
 import { PDFCompressionModal } from '@/components/PDFCompressionModal';
 
 export default function TeacherRegisterPage() {
@@ -215,38 +216,31 @@ export default function TeacherRegisterPage() {
               {/* Profile Image Upload */}
               <div className="relative">
                 <label className="text-xs text-gray-400 px-1">صورة شخصية للمعلم (اختياري)</label>
-                <label className="btn-outline w-full border-dashed border-white/20 py-6 flex flex-col items-center gap-2 cursor-pointer hover:border-purple-500 hover:text-purple-400 mb-4">
-                  {imageUploadProgress > 0 && imageUploadProgress < 100 ? (
-                    <Loader2 size={24} className="animate-spin text-purple-500" />
-                  ) : (
-                    <ImageIcon size={24} />
-                  )}
-                  <span className="text-sm">
-                    {imageUploadProgress > 0 && imageUploadProgress < 100 
-                      ? `جاري الرفع... ${imageUploadProgress}%` 
-                      : (teacherImageFile ? teacherImageFile.name : 'ارفع صورة شخصية لعرضها في حسابك')}
-                  </span>
-                  <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
-                    const file = e.target.files?.[0];
-                    if (file) {
-                      setTeacherImageFile(file);
-                      setImageUploadProgress(10);
-                      const path = `teachers/profile_${Date.now()}_${file.name}`;
-                      try {
-                        await FileProcessor.queueFile(file, path);
-                        showToast('جاري رفع الصورة...');
-                      } catch (err) {
-                        setImageUploadProgress(0);
+                <div className="mt-2 mb-4">
+                  <GlobalFileUpload 
+                    accept="image/*"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        setTeacherImageFile(file);
+                        setImageUploadProgress(10);
+                        const path = `teachers/profile_${Date.now()}_${file.name}`;
+                        try {
+                          await FileProcessor.queueFile(file, path);
+                          showToast('جاري رفع الصورة...');
+                        } catch (err) {
+                          setImageUploadProgress(0);
+                        }
                       }
-                    }
-                  }} disabled={submitting || queue.some(f => f.status !== 'completed' && f.status !== 'failed' && f.path.startsWith('teachers/'))} />
-                </label>
-                {queue.some(f => f.status !== 'completed' && f.status !== 'failed' && f.path.startsWith('teachers/')) && (
-                  <div className="w-full bg-white/10 rounded-full h-1.5 overflow-hidden mt-3 mb-2">
-                    <div className="bg-purple-500 h-full transition-all duration-300 animate-pulse w-full" />
-                  </div>
-                )}
-                {form.imageUrl && <div className="text-[10px] text-green-400 text-center mt-2 mb-2">✅ تم رفع الصورة بنجاح</div>}
+                    }}
+                    disabled={submitting || queue.some(f => f.status !== 'completed' && f.status !== 'failed' && f.path.startsWith('teachers/'))}
+                    currentFile={teacherImageFile}
+                    uploadedUrl={form.imageUrl}
+                    isUploading={imageUploadProgress > 0 && imageUploadProgress < 100}
+                    uploadProgress={imageUploadProgress}
+                    label="ارفع صورة شخصية لعرضها في حسابك"
+                  />
+                </div>
               </div>
 
               <div className="relative">
@@ -256,20 +250,24 @@ export default function TeacherRegisterPage() {
 
               <div className="relative">
                 <label className="text-xs text-gray-400 px-1">صورة الإيصال (اختياري)</label>
-                <label className="btn-outline w-full border-dashed border-white/20 py-6 flex flex-col items-center gap-2 cursor-pointer hover:border-purple-500 hover:text-purple-400">
-                  <Upload size={24} />
-                  <span className="text-sm">{receiptFile ? receiptFile.name : 'ارفع صورة الإيصال لتسريع عملية التفعيل'}</span>
-                  <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
-                    const file = e.target.files?.[0];
-                    if (file) {
-                      setReceiptFile(file);
-                      const path = `receipts/teacher_${Date.now()}_${file.name}`;
-                      await FileProcessor.queueFile(file, path);
-                      showToast('جاري رفع الإيصال...');
-                    }
-                  }} />
-                </label>
-                {form.receiptUrl && <div className="text-[10px] text-green-400 text-center mt-2">✅ تم الرفع والإرفاق</div>}
+                <div className="mt-2">
+                  <GlobalFileUpload 
+                    accept="image/*"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        setReceiptFile(file);
+                        const path = `receipts/teacher_${Date.now()}_${file.name}`;
+                        await FileProcessor.queueFile(file, path);
+                        showToast('جاري رفع الإيصال...');
+                      }
+                    }}
+                    disabled={submitting || queue.some(f => f.status !== 'completed' && f.status !== 'failed' && f.path.startsWith('receipts/'))}
+                    currentFile={receiptFile}
+                    uploadedUrl={form.receiptUrl}
+                    label="ارفع صورة الإيصال لتسريع عملية التفعيل"
+                  />
+                </div>
               </div>
             </div>
 

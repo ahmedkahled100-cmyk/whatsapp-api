@@ -4,15 +4,16 @@ import { useState, useEffect, useRef } from 'react';
 import { useTeacherStore } from '@/lib/store';
 import { 
   sendMessage, subscribeToMessages, markMessagesAsRead,
-  getSuperAdmin
+  getSuperAdmin, setUserOnlineStatus, subscribeToUserOnlineStatus, uploadFileToStorage
 } from '@/lib/db';
 import { Message, Conversation, Student, TeacherUser } from '@/types';
 import { 
   Search, Send, User, Clock, Check, CheckCheck, 
   MessageSquare, Plus, X, Loader2, Phone, GraduationCap,
-  ShieldCheck, MoreVertical, Image as ImageIcon, Paperclip
+  ShieldCheck, MoreVertical, Image as ImageIcon, Paperclip, FileText, Trash2
 } from 'lucide-react';
 import { showToast } from '@/lib/toast';
+import { useFilePreview } from '@/components/FilePreviewModal';
 
 export default function TeacherMessagesPage() {
   const { user, students, conversations } = useTeacherStore();
@@ -24,8 +25,32 @@ export default function TeacherMessagesPage() {
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [sending, setSending] = useState(false);
   const [superAdmin, setSuperAdmin] = useState<TeacherUser | null>(null);
+  const [otherUserOnline, setOtherUserOnline] = useState(false);
+  const [otherUserLastActive, setOtherUserLastActive] = useState<number | undefined>();
+
+  const [uploadingFile, setUploadingFile] = useState(false);
+  const [attachmentUrl, setAttachmentUrl] = useState('');
+  const [attachmentType, setAttachmentType] = useState<'text' | 'image' | 'file'>('text');
+  const { openPreview, PreviewModal } = useFilePreview();
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Track teacher's own presence
+  useEffect(() => {
+    if (user) {
+      setUserOnlineStatus(user.id, 'teachers', true);
+      
+      const handleUnload = () => {
+        setUserOnlineStatus(user.id, 'teachers', false);
+      };
+      window.addEventListener('beforeunload', handleUnload);
+      
+      return () => {
+        window.removeEventListener('beforeunload', handleUnload);
+        setUserOnlineStatus(user.id, 'teachers', false);
+      };
+    }
+  }, [user]);
 
   useEffect(() => {
     getSuperAdmin().then(setSuperAdmin);
@@ -34,12 +59,31 @@ export default function TeacherMessagesPage() {
   useEffect(() => {
     if (selectedConv && user) {
       setLoadingMessages(true);
-      const unsub = subscribeToMessages(selectedConv.id, (msgs: Message[]) => {
+      const unsubMsgs = subscribeToMessages(selectedConv.id, (msgs: Message[]) => {
         setMessages(msgs);
         setLoadingMessages(false);
         markMessagesAsRead(selectedConv.id, user.id);
       });
-      return () => unsub();
+
+      const otherParticipantId = selectedConv.participants.find(p => p !== user.id);
+      let unsubPresence = () => {};
+      
+      if (otherParticipantId) {
+        const isStudent = students.some(s => s.id === otherParticipantId);
+        unsubPresence = subscribeToUserOnlineStatus(
+          otherParticipantId, 
+          isStudent ? 'student' : 'teachers', 
+          (isOnline, lastActive) => {
+            setOtherUserOnline(isOnline);
+            setOtherUserLastActive(lastActive);
+          }
+        );
+      }
+
+      return () => {
+        unsubMsgs();
+        unsubPresence();
+      };
     } else {
       setMessages([]);
     }
@@ -51,7 +95,7 @@ export default function TeacherMessagesPage() {
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newMessage.trim() || !selectedConv || !user) return;
+    if ((!newMessage.trim() && !attachmentUrl) || !selectedConv || !user) return;
 
     setSending(true);
     try {
@@ -65,14 +109,42 @@ export default function TeacherMessagesPage() {
         receiverName,
         content: newMessage.trim(),
         teacherId: user.id,
-        type: 'text'
+        type: attachmentUrl ? attachmentType : 'text',
+        fileUrl: attachmentUrl || undefined
       });
       setNewMessage('');
+      setAttachmentUrl('');
+      setAttachmentType('text');
     } catch (err: any) {
       console.error('Send Error:', err);
       showToast('فشل إرسال الرسالة');
     } finally {
       setSending(false);
+    }
+  };
+
+  const handleAttachment = async (e: React.ChangeEvent<HTMLInputElement>, type: 'image' | 'file') => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 25 * 1024 * 1024) {
+      showToast('حجم الملف كبير جداً (الأقصى 25 ميجابايت)');
+      e.target.value = '';
+      return;
+    }
+
+    setUploadingFile(true);
+    try {
+      const path = `chat-attachments/${Date.now()}_${file.name}`;
+      const url = await uploadFileToStorage(file, path);
+      setAttachmentUrl(url);
+      setAttachmentType(type);
+      showToast('تم إرفاق الملف بنجاح');
+    } catch (err) {
+      showToast('فشل رفع الملف');
+    } finally {
+      setUploadingFile(false);
+      e.target.value = '';
     }
   };
 
@@ -197,15 +269,14 @@ export default function TeacherMessagesPage() {
                 <div>
                   <h3 className="font-bold text-sm text-white">{getOtherParticipant(selectedConv).name}</h3>
                   <div className="flex items-center gap-1.5 mt-0.5">
-                     <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
-                     <span className="text-[10px] text-gray-500">متصل الآن</span>
+                     <span className={`w-1.5 h-1.5 rounded-full ${otherUserOnline ? 'bg-green-500' : 'bg-gray-500'}`} />
+                     <span className="text-[10px] text-gray-500">
+                       {otherUserOnline ? 'نشط الآن' : (otherUserLastActive ? `آخر ظهور: ${new Date(otherUserLastActive).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}` : 'غير متصل')}
+                     </span>
                   </div>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                 <button className="w-9 h-9 rounded-lg bg-white/5 flex items-center justify-center text-gray-400 hover:text-white transition-colors"><Phone size={18}/></button>
-                 <button className="w-9 h-9 rounded-lg bg-white/5 flex items-center justify-center text-gray-400 hover:text-white transition-colors"><MoreVertical size={18}/></button>
-              </div>
+              {/* Removed phone and more buttons */}
             </div>
 
             {/* Messages Area */}
@@ -232,7 +303,23 @@ export default function TeacherMessagesPage() {
                       <div className={`max-w-[80%] p-3 rounded-2xl shadow-lg relative group ${
                         isMine ? 'bg-gold text-black rounded-tr-none' : 'bg-white/10 text-white rounded-tl-none border border-white/5'
                       }`}>
-                         <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                         {msg.type === 'image' && msg.fileUrl && (
+                           <div className="mb-2 rounded-xl overflow-hidden cursor-pointer bg-black/10" onClick={() => openPreview(msg.fileUrl!, 'مرفق صورة')}>
+                             <img src={msg.fileUrl} alt="Attachment" className="max-w-full h-auto max-h-60 object-contain hover:opacity-90 transition-opacity" />
+                           </div>
+                         )}
+                         {msg.type === 'file' && msg.fileUrl && (
+                           <div className="mb-2 p-3 rounded-xl bg-black/20 flex items-center gap-3 cursor-pointer hover:bg-black/30 transition-colors" onClick={() => openPreview(msg.fileUrl!, 'مرفق ملف')}>
+                             <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${isMine ? 'bg-black/10 text-black' : 'bg-white/10 text-white'}`}>
+                               <FileText size={20} />
+                             </div>
+                             <div className="flex-1 min-w-0">
+                               <p className="font-bold text-sm truncate">ملف مرفق</p>
+                               <span className="text-[10px] opacity-70">اضغط للفتح</span>
+                             </div>
+                           </div>
+                         )}
+                         {msg.content && <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.content}</p>}
                          <div className={`flex items-center gap-1 mt-1 justify-end opacity-60`}>
                             <span className="text-[9px]">{new Date(msg.timestamp).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}</span>
                             {isMine && (
@@ -248,11 +335,28 @@ export default function TeacherMessagesPage() {
             </div>
 
             {/* Input Area */}
-            <div className="p-4 border-t border-white/5 bg-white/5">
-              <form onSubmit={handleSendMessage} className="flex items-end gap-3">
+            <div className="p-4 border-t border-white/5 bg-white/5 flex flex-col gap-2">
+              {attachmentUrl && (
+                <div className="flex items-center gap-3 p-2 bg-black/20 rounded-xl w-max">
+                  <div className="w-8 h-8 rounded-lg bg-gold/20 flex items-center justify-center text-gold">
+                    {attachmentType === 'image' ? <ImageIcon size={16} /> : <FileText size={16} />}
+                  </div>
+                  <div className="text-xs text-gold font-bold">ملف مرفق جاهز للإرسال</div>
+                  <button onClick={() => { setAttachmentUrl(''); setAttachmentType('text'); }} className="text-red-400 hover:text-red-300 bg-red-400/10 p-1.5 rounded-lg">
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              )}
+              <form onSubmit={handleSendMessage} className="flex items-end gap-3 w-full">
                  <div className="flex gap-2 mb-1">
-                    <button type="button" className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-gray-400 hover:text-white transition-colors"><Paperclip size={20}/></button>
-                    <button type="button" className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-gray-400 hover:text-white transition-colors"><ImageIcon size={20}/></button>
+                    <label className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-gray-400 hover:text-white transition-colors cursor-pointer relative overflow-hidden">
+                      {uploadingFile && attachmentType === 'file' ? <Loader2 size={18} className="animate-spin text-gold" /> : <Paperclip size={20}/>}
+                      <input type="file" className="hidden" accept="application/pdf,.doc,.docx,.txt" onChange={(e) => handleAttachment(e, 'file')} disabled={uploadingFile || !!attachmentUrl} />
+                    </label>
+                    <label className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-gray-400 hover:text-white transition-colors cursor-pointer relative overflow-hidden">
+                      {uploadingFile && attachmentType === 'image' ? <Loader2 size={18} className="animate-spin text-gold" /> : <ImageIcon size={20}/>}
+                      <input type="file" className="hidden" accept="image/*" onChange={(e) => handleAttachment(e, 'image')} disabled={uploadingFile || !!attachmentUrl} />
+                    </label>
                  </div>
                  <div className="flex-1 relative">
                     <textarea 
@@ -271,7 +375,7 @@ export default function TeacherMessagesPage() {
                  </div>
                  <button 
                    type="submit" 
-                   disabled={!newMessage.trim() || sending}
+                   disabled={(!newMessage.trim() && !attachmentUrl) || sending || uploadingFile}
                    className="w-12 h-12 rounded-xl bg-gold text-black flex items-center justify-center shadow-lg shadow-gold/20 hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:grayscale"
                  >
                    {sending ? <Loader2 size={24} className="animate-spin" /> : <Send size={24} />}
@@ -304,9 +408,9 @@ export default function TeacherMessagesPage() {
 
                 <div className="space-y-2 overflow-y-auto max-h-[50vh] pr-1">
                    {/* Option to chat with Admin */}
-                   {superAdmin && superAdmin.id !== user.id && (
+                   {superAdmin && user && superAdmin.id !== user.id && (
                      <button 
-                       onClick={() => startNewChat(superAdmin)}
+                       onClick={() => startNewChat(superAdmin as TeacherUser)}
                        className="w-full p-4 rounded-2xl bg-purple-500/10 border border-purple-500/20 flex items-center gap-3 hover:bg-purple-500/20 transition-all text-right"
                      >
                        <div className="w-12 h-12 rounded-xl bg-purple-500 flex items-center justify-center text-white shadow-lg shadow-purple-500/20">
@@ -344,6 +448,8 @@ export default function TeacherMessagesPage() {
           </div>
         </div>
       )}
+      
+      {PreviewModal}
 
       <style jsx global>{`
         .custom-scrollbar::-webkit-scrollbar { width: 4px; }

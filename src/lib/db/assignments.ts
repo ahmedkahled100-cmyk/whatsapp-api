@@ -59,11 +59,11 @@ export const submitAssignment = async (submission: Omit<AssignmentSubmission, 'i
   return refer.id;
 };
 
-export const gradeSubmission = async (submissionId: string, score: number, comment?: string) => {
+export const gradeSubmission = async (submissionId: string, score: number, comment?: string, status: string = 'graded') => {
   await updateDoc(doc(db, ASSIGN_SUBS, submissionId), {
     score,
     teacherComment: comment || '',
-    status: 'graded'
+    status
   });
 };
 

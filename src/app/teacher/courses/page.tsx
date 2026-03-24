@@ -18,6 +18,7 @@ import { FileProcessor } from '@/lib/file-processor';
 import { useFileProcessingStore } from '@/lib/store';
 import { PDFCompressionModal } from '@/components/PDFCompressionModal';
 import { useFilePreview } from '@/components/FilePreviewModal';
+import { GlobalFileUpload } from '@/components/GlobalFileUpload';
 
 const GRADES = [
   "الصف الأول الإعدادي", "الصف الثاني الإعدادي", "الصف الثالث الإعدادي",
@@ -165,10 +166,13 @@ export default function CoursesPage() {
       showToast('يرجى إدخال عنوان الدرس والمادة الدراسية');
       return;
     }
-    // If we have a file URL from upload or existing fileUrl or url, we're good
     const hasContent = form.url?.trim() || form.fileUrl?.trim();
     if (!hasContent && !form.uploadFile) {
       showToast('يرجى إدخال رابط أو رفع ملف');
+      return;
+    }
+    if (form.uploadFile && !form.fileUrl) {
+      showToast('⏳ يرجى الانتظار حتى يكتمل حفظ ورفع الملف أولاً');
       return;
     }
 
@@ -178,6 +182,7 @@ export default function CoursesPage() {
       let finalUrl = form.url || '';
       
       const materialData: Omit<CourseMaterial, 'id'> = {
+        teacherId: useTeacherStore.getState().user?.id || '',
         title: form.title!,
         type: form.type as any || 'link',
         url: finalUrl || fileUrl,
@@ -365,12 +370,12 @@ export default function CoursesPage() {
               </label>
               {['file', 'pdf', 'image', 'video'].includes(form.type || '') ? (
                 <div className="space-y-3">
-                  <label className="btn-outline cursor-pointer flex items-center gap-2 justify-center relative overflow-hidden py-3">
-                    {uploadingFile ? <Loader2 size={15} className="animate-spin" /> : <Upload size={15} />}
-                    {uploadingFile ? `جاري الرفع... ${uploadProgress}%` : (form.uploadFile ? form.uploadFile.name : (form.fileUrl ? 'ملف محفوظ - اختر ملف جديد' : 'اختر ملفاً للرفع'))}
-                    <input
-                      type="file"
-                      className="absolute inset-0 opacity-0 cursor-pointer"
+                  <GlobalFileUpload
+                      accept="application/pdf,image/jpeg,image/png,video/mp4,video/quicktime"
+                      isUploading={uploadingFile}
+                      uploadProgress={uploadProgress}
+                      currentFile={form.uploadFile || undefined}
+                      label={form.uploadFile ? form.uploadFile.name : (form.fileUrl ? 'ملف محفوظ - اختر ملف جديد' : 'اختر ملفاً للرفع')}
                       onChange={async (e) => {
                         const fileRaw = e.target.files?.[0];
                         if (!fileRaw) return;
@@ -431,19 +436,7 @@ export default function CoursesPage() {
                           showToast(err.message || 'فشل إضافة الملف لمركز المعالجة.');
                         }
                       }}
-                      disabled={uploadingFile}
-                    />
-                  </label>
-                  
-                  {/* Progress Bar */}
-                  {uploadingFile && (
-                    <div className="w-full bg-white/10 rounded-full h-2 overflow-hidden">
-                      <div 
-                        className="bg-gold h-full transition-all duration-300 animate-pulse" 
-                        style={{ width: `${uploadProgress}%` }}
-                      />
-                    </div>
-                  )}
+                  />
                   
                   {form.fileUrl && !uploadingFile && (
                     <p className="text-xs text-green-400 px-1 flex items-center gap-1">

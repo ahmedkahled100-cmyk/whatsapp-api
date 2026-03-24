@@ -76,3 +76,29 @@ export const markMessagesAsRead = async (conversationId: string, userId: string)
   snap.docs.forEach(d => batch.update(d.ref, { isRead: true }));
   await batch.commit();
 };
+
+export const setUserOnlineStatus = async (userId: string, role: string, isOnline: boolean) => {
+  if (!userId || !role) return;
+  // Fallback map: super_admin might be in users or teachers, assume 'teachers' since there's no 'users' constants typically except maybe 'users', let's use string directly or check if admin is in 'teachers'. Usually admin is in 'teachers' but let's check. 
+  const collectionName = role === 'student' ? 'students' : 'teachers';
+  try {
+    await setDoc(doc(db, collectionName, userId), { isOnline, lastActive: Date.now() }, { merge: true });
+  } catch (e) {
+    console.error('Failed to update online status', e);
+  }
+};
+
+export const subscribeToUserOnlineStatus = (userId: string, role: string, callback: (isOnline: boolean, lastActive?: number) => void) => {
+  if (!userId || !role) return () => {};
+  const collectionName = role === 'student' ? 'students' : 'teachers';
+  return onSnapshot(doc(db, collectionName, userId), (docSnap) => {
+    if (docSnap.exists()) {
+      const data = docSnap.data();
+      // Consider online if isOnline is true OR lastActive is within last 2 minutes just in case
+      const isRecentlyActive = data.lastActive ? (Date.now() - data.lastActive < 2 * 60 * 1000) : false;
+      callback(!!data.isOnline || isRecentlyActive, data.lastActive);
+    } else {
+      callback(false);
+    }
+  });
+};

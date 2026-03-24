@@ -36,12 +36,17 @@ export default function GroupsPage() {
     if (!name.trim()) { showToast('❗ أدخل اسم الفصل'); return; }
     setSaving(true);
     try {
-      const group: Group = {
-        id: editingGroup?.id || generateId('grp'),
+      const teacherId = useTeacherStore.getState().user?.id || '';
+      const groupData: any = {
+        teacherId,
         name, desc, studentIds: selectedStudents,
         createdAt: editingGroup?.createdAt || new Date().toLocaleDateString('ar-EG'),
       };
-      await saveGroup(group);
+      if (editingGroup?.id) {
+        groupData.id = editingGroup.id;
+      }
+      
+      await saveGroup(groupData);
       setShowModal(false);
     } catch { showToast('فشل الحفظ'); }
     finally { setSaving(false); }
