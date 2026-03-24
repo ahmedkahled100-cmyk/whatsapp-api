@@ -15,6 +15,7 @@ import {
 import { showToast } from '@/lib/toast';
 import { useFilePreview } from '@/components/FilePreviewModal';
 import { usePDFCompression } from '@/components/PDFCompressionModal';
+import { FileProcessor } from '@/lib/file-processor';
 
 export default function TeacherMessagesPage() {
   const { user, students, conversations } = useTeacherStore();
@@ -138,7 +139,7 @@ export default function TeacherMessagesPage() {
     const uploadFile = async (fileToUpload: File | Blob) => {
       setUploadingFile(true);
       try {
-        const path = `chat-attachments/${Date.now()}_${file.name}`;
+        const path = `chat-attachments/${Date.now()}_${file.name.replace(/\.[^/.]+$/, "").replace(/[^a-z0-9]/gi, '_').toLowerCase()}`;
         const url = await uploadFileToStorage(fileToUpload, path);
         setAttachmentUrl(url);
         setAttachmentType(type);
@@ -152,15 +153,20 @@ export default function TeacherMessagesPage() {
     };
 
     if (type === 'file' && (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) && file.size > 10 * 1024 * 1024) {
-      showToast('ملف PDF كبير، سيتم ضغطه أولاً باستخدام ILovePDF...');
-      openCompression(file, async (compressedBlob) => {
-        await uploadFile(compressedBlob);
-      });
+      showToast('جاري ضغط ملف الـ PDF قبل الرفع...');
+      setUploadingFile(true);
+      try {
+        const compressedFile = await FileProcessor.compressPdfFileLocally(file);
+        await uploadFile(compressedFile);
+      } catch (err) {
+        // Fallback to original if compression fails
+        await uploadFile(file);
+      }
       return;
     }
 
     if (type === 'image' && file.size > 4 * 1024 * 1024) {
-      showToast('صورة كبيرة، جاري الضغط...');
+      showToast('جاري ضغط الصورة...');
       setUploadingFile(true);
       try {
         const imageCompression = (await import('browser-image-compression')).default;
@@ -174,6 +180,7 @@ export default function TeacherMessagesPage() {
 
     await uploadFile(file);
   };
+
 
   const startNewChat = (target: Student | TeacherUser) => {
     if (!user) return;

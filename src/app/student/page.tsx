@@ -819,6 +819,15 @@ export default function StudentPortal() {
                           type: attachUrl ? attachType : 'text',
                           ...(attachUrl ? { fileUrl: attachUrl } : {})
                         });
+
+                        // Notify the teacher about the new message
+                        await dispatchNotification({
+                          teacherId: student.teacherId || recId,
+                          msg: `رسالة جديدة من الطالب ${student.name}`,
+                          targetRoles: ['admin'],
+                          channels: { inApp: true, whatsapp: false },
+                          actionPath: '/teacher/messages'
+                        });
                       } catch (err: any) {
                         showToast('فشل الإرسال: ' + (err?.message || 'خطأ غير معروف'));
                         setNewMsg(msgContent); // restore message

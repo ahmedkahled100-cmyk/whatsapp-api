@@ -106,6 +106,16 @@ export const dispatchNotification = async (options: DispatchOptions) => {
     if (targetUsers && targetUsers.length > 0) data.targetUsers = targetUsers;
     if (targetRoles && targetRoles.length > 0) data.targetRoles = targetRoles;
     await addDoc(collection(db, NOTIFICATIONS), clean(data));
+
+    // Log the In-App notification
+    await saveNotificationLog({
+      teacherId,
+      type: 'inApp',
+      target: targetRoles?.includes('admin') ? 'مختص' : (targetUsers?.length ? 'طالب محدد' : 'الكل'),
+      status: 'sent',
+      message: msg,
+      createdAt: Date.now()
+    } as any);
   }
 
   if (channels.whatsapp && whatsappNumbers && whatsappNumbers.length > 0) {
