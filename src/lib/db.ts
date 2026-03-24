@@ -16,3 +16,4 @@ export * from './db/stats';
 export * from './db/calendar';
 export * from './db/admin';
 export * from './db/messages';
+export * from './db/app-settings';

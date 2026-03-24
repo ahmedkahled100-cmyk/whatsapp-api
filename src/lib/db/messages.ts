@@ -1,4 +1,3 @@
-// src/lib/db/messages.ts
 import { 
   collection, addDoc, getDocs, setDoc, onSnapshot, 
   query, where, orderBy, limit, writeBatch, doc,
@@ -6,6 +5,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { MESSAGES, CONVERSATIONS } from './constants';
+import { clean } from './utils';
 import type { Message, Conversation } from '@/types';
 
 if (!db) throw new Error('Firebase Firestore not initialized');
@@ -13,27 +13,26 @@ if (!db) throw new Error('Firebase Firestore not initialized');
 export const sendMessage = async (msg: Omit<Message, 'id' | 'timestamp' | 'isRead'>) => {
   const convId = [msg.senderId, msg.receiverId].sort().join('_');
   
-  const messageData = {
+  const messageData = clean({
     ...msg,
     timestamp: Date.now(),
     isRead: false,
     conversationId: convId
-  };
+  });
 
   const msgRef = await addDoc(collection(db, MESSAGES), messageData);
-  
+
   // Update or create conversation
   const convRef = doc(db, CONVERSATIONS, convId);
-  await setDoc(convRef, {
+  const convData = clean({
     id: convId,
     participants: [msg.senderId, msg.receiverId],
     participantNames: [msg.senderName, msg.receiverName],
     lastMessage: { ...messageData, id: msgRef.id },
     updatedAt: Date.now(),
     teacherId: msg.teacherId,
-    // We'll increment unread count for the receiver in a more complex setup, 
-    // but for now let's just update the timestamp
-  }, { merge: true });
+  });
+  await setDoc(convRef, convData, { merge: true });
 
   return msgRef.id;
 };

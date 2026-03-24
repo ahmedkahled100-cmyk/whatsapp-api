@@ -23,18 +23,25 @@ export interface QueuedFile {
 }
 
 export const openDB = (): Promise<IDBDatabase> => {
+  if (typeof window === 'undefined' || !window.indexedDB) {
+    return Promise.reject(new Error('IndexedDB is not available in this environment'));
+  }
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
-
-    request.onerror = () => reject(request.error);
-    request.onsuccess = () => resolve(request.result);
-
-    request.onupgradeneeded = (event) => {
-      const db = (event.target as IDBOpenDBRequest).result;
-      if (!db.objectStoreNames.contains(STORE_NAME)) {
-        db.createObjectStore(STORE_NAME, { keyPath: 'id' });
-      }
-    };
+    try {
+      const request = indexedDB.open(DB_NAME, DB_VERSION);
+  
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve(request.result);
+  
+      request.onupgradeneeded = (event) => {
+        const db = (event.target as IDBOpenDBRequest).result;
+        if (!db.objectStoreNames.contains(STORE_NAME)) {
+          db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+        }
+      };
+    } catch (e) {
+      reject(e);
+    }
   });
 };
 

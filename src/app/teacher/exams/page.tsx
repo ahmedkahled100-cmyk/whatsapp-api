@@ -31,7 +31,7 @@ export default function ExamsPage() {
   };
 
   const shareExam = (id: string) => {
-    const url = `${window.location.origin}/exam/${id}`;
+    const url = `${window.location.origin}/exam?id=${id}`;
     navigator.clipboard.writeText(url);
     showToast('✅ تم نسخ رابط الاختبار للطلاب!');
   };

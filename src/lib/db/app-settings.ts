@@ -1,0 +1,97 @@
+// src/lib/db/app-settings.ts
+// Mobile app configuration (sliders, ticker, categories)
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { db } from '../firebase';
+import { clean } from './utils';
+
+export const APP_HOME_SETTINGS_KEY = 'app_home';
+export const APP_HOME_DOC = 'config';
+
+export type SliderItem = {
+  id: string;
+  imageUrl: string;
+  title?: string;
+  link?: string;
+  order: number;
+};
+
+export type CategoryItem = {
+  id: string;
+  title: string;
+  icon: string; // emoji or icon name
+  color: string; // gradient color for bg
+  targetTab: 'exams' | 'courses' | 'assignments' | 'results' | 'messages' | 'link';
+  link?: string; // if targetTab=link
+  order: number;
+};
+
+export type BottomNavItem = {
+  id: string;
+  label: string;
+  icon: string;
+  targetTab: string;
+  order: number;
+};
+
+export type AppHomeSettings = {
+  ticker: string; // scrolling news text
+  sliders: SliderItem[];
+  categories: CategoryItem[];
+  bottomNav: BottomNavItem[];
+  appName: string;
+  primaryColor: string;
+  showDailyReward: boolean;
+  dailyRewardText?: string;
+  welcomeMessage?: string;
+};
+
+const defaultSettings: AppHomeSettings = {
+  ticker: '🎓 مرحباً بكم في AN Academy — منصة التعليم الذكي 🌟',
+  appName: 'AN Academy',
+  primaryColor: '#f5c518',
+  showDailyReward: true,
+  dailyRewardText: 'افتح التطبيق يومياً لمتابعة الأسئلة الحصرية',
+  welcomeMessage: 'مرحباً بك',
+  sliders: [
+    {
+      id: 'slide1',
+      imageUrl: '',
+      title: 'أهلاً بك في AN Academy',
+      link: '',
+      order: 0,
+    },
+  ],
+  categories: [
+    { id: 'c1', title: 'اختباراتي', icon: '📋', color: '#f5c518', targetTab: 'exams', order: 0 },
+    { id: 'c2', title: 'المناهج', icon: '📚', color: '#3b82f6', targetTab: 'courses', order: 1 },
+    { id: 'c3', title: 'الواجبات', icon: '📝', color: '#8b5cf6', targetTab: 'assignments', order: 2 },
+    { id: 'c4', title: 'نتائجي', icon: '📊', color: '#10b981', targetTab: 'results', order: 3 },
+    { id: 'c5', title: 'الرسائل', icon: '💬', color: '#ec4899', targetTab: 'messages', order: 4 },
+    { id: 'c6', title: 'حسابي', icon: '👤', color: '#f97316', targetTab: 'results', order: 5 },
+  ],
+  bottomNav: [
+    { id: 'home', label: 'الرئيسية', icon: 'Home', targetTab: 'home', order: 0 },
+    { id: 'courses', label: 'الكورسات', icon: 'BookOpen', targetTab: 'courses', order: 1 },
+    { id: 'exams', label: 'اختباراتي', icon: 'ClipboardList', targetTab: 'exams', order: 2 },
+    { id: 'account', label: 'حسابي', icon: 'User', targetTab: 'results', order: 3 },
+    { id: 'settings', label: 'الإعدادات', icon: 'Settings', targetTab: 'settings', order: 4 },
+  ],
+};
+
+export const getAppHomeSettings = async (): Promise<AppHomeSettings> => {
+  try {
+    const docRef = doc(db, APP_HOME_SETTINGS_KEY, APP_HOME_DOC);
+    const snap = await getDoc(docRef);
+    if (snap.exists()) {
+      return { ...defaultSettings, ...snap.data() } as AppHomeSettings;
+    }
+    return defaultSettings;
+  } catch {
+    return defaultSettings;
+  }
+};
+
+export const updateAppHomeSettings = async (settings: Partial<AppHomeSettings>): Promise<void> => {
+  const docRef = doc(db, APP_HOME_SETTINGS_KEY, APP_HOME_DOC);
+  await setDoc(docRef, clean(settings), { merge: true });
+};

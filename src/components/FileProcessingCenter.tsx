@@ -4,7 +4,6 @@
 import React, { useEffect, useState } from 'react';
 import { useFileProcessingStore } from '@/lib/store';
 import { uploadFileToStorage } from '@/lib/db';
-import { testILovePDFConnectionAction } from '@/lib/actions';
 import { updateQueuedFileStatus, QueuedFile } from '@/lib/idb';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, CheckCircle, AlertCircle, Loader2, ChevronDown, ChevronUp, FileText, Image as ImageIcon } from 'lucide-react';
@@ -23,15 +22,7 @@ export const FileProcessingCenter = () => {
         console.error('Error loading queue:', err);
       }
       
-      // Test iLovePDF Connection silently with timeout
-      try {
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Timeout')), 5000)
-        );
-        await Promise.race([testILovePDFConnectionAction(), timeoutPromise]);
-      } catch (err) {
-        console.warn('iLovePDF connection test failed (will use fallback):', err);
-      }
+      // Skipping iLovePDF connection test for static export (APK)
 
       // Resume any stale processes
       try {

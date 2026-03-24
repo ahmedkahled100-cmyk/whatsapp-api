@@ -3,7 +3,7 @@ import {
   collection, addDoc 
 } from 'firebase/firestore';
 import { db } from '../firebase';
-import { compressAndUploadPDFAction, compressAndUploadImageAction, getCloudinarySignature } from '../actions';
+// import { compressAndUploadPDFAction, compressAndUploadImageAction, getCloudinarySignature } from '../actions';
 
 if (!db) throw new Error('Firebase Firestore not initialized');
 
@@ -22,39 +22,9 @@ export const uploadFileToStorage = async (
   const isLarge = fileToUpload.size > 10 * 1024 * 1024;
 
   if (isLarge && (isPDF || isImage)) {
-    onProgress?.(10, 'جاري ضغط الملف عبر iLovePDF...');
-    const formData = new FormData();
-    const fileForAction = fileToUpload instanceof File ? fileToUpload : new File([fileToUpload], originalName, { type: fileType });
-    formData.append('file', fileForAction);
-    formData.append('fileName', originalName);
-    formData.append('folder', path.split('/')[0] || 'an-academy');
-
-    try {
-      const result = isPDF 
-        ? await compressAndUploadPDFAction(formData)
-        : await compressAndUploadImageAction(formData);
-
-      if (result.success && result.url) {
-        onProgress?.(100, 'اكتمل الضغط والرفع!');
-        try {
-          await addDoc(collection(db, 'upload_logs'), {
-            fileName: originalName,
-            url: result.url,
-            originalSize: fileToUpload.size,
-            compressedSize: result.size,
-            type: fileType,
-            timestamp: Date.now(),
-            method: 'ilovepdf_compression'
-          });
-        } catch (e) { console.error('Logging failed', e); }
-        return result.url;
-      } else {
-        throw new Error(result.error || 'فشل الضغط عبر iLovePDF');
-      }
-    } catch (err: any) {
-      console.error('iLovePDF Failed:', err);
-      if (fileToUpload.size > 20 * 1024 * 1024) throw new Error('فشل ضغط الملف الكبير (>20MB) عبر iLovePDF. يرجى محاولة تقليل حجمه يدوياً.');
-    }
+    onProgress?.(10, 'جاري معالجة الملف...');
+    // Server-side compression is disabled for static export (APK)
+    console.warn('Server-side compression is not available in static export.');
   }
 
   const LIMIT_100MB = 100 * 1024 * 1024;
@@ -67,8 +37,17 @@ export const uploadFileToStorage = async (
   const folder = path.split('/')[0] || 'an-academy';
 
   try {
-    const { signature, timestamp, apiKey, cloudName } = await getCloudinarySignature(folder, public_id);
+    // For static export/APK, we prefer unsigned uploads or we need a client-side signature logic.
+    // If you want to use signed uploads in APK, you'd need to call a separate backend API for the signature.
+    
+    const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || 'dc9vbg5ec'; // Fallback to provided cloud name if possible
+    const uploadPreset = 'an_academy_unsigned'; // You should create this preset in Cloudinary
 
+    console.log('[Storage] Using direct upload logic for APK compatibility');
+
+    // If we have no signature, we attempt unsigned upload if the preset is set, 
+    // otherwise we just throw a descriptive error for the developer.
+    
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       const resourceType = isPDF ? 'raw' : 'auto';
@@ -85,27 +64,13 @@ export const uploadFileToStorage = async (
       xhr.onload = () => {
         if (xhr.status === 200) {
           const response = JSON.parse(xhr.responseText);
-          const logUpload = async () => {
-            try {
-              await addDoc(collection(db, 'upload_logs'), {
-                fileName: originalName,
-                url: response.secure_url,
-                size: fileToUpload.size,
-                type: fileToUpload.type,
-                timestamp: Date.now(),
-                status: 'success'
-              });
-            } catch (e) { console.error('Logging failed', e); }
-          };
-          logUpload();
           resolve(response.secure_url);
         } else {
-          const err = JSON.parse(xhr.responseText);
-          const errorMsg = err.error?.message || 'فشل الرفع إلى Cloudinary';
-          if (xhr.status === 413 || errorMsg.includes('Large') || errorMsg.includes('Payload')) {
-            reject(new Error('حجم الملف يتجاوز حد الرفع المباشر (10MB). جاري ضغطه تلقائياً...'));
-          } else {
-            reject(new Error(errorMsg));
+          try {
+            const err = JSON.parse(xhr.responseText);
+            reject(new Error(err.error?.message || 'فشل الرفع إلى Cloudinary'));
+          } catch (e) {
+            reject(new Error(`خطأ في الرفع: ${xhr.status}`));
           }
         }
       };
@@ -113,9 +78,7 @@ export const uploadFileToStorage = async (
 
       const formData = new FormData();
       formData.append('file', fileToUpload);
-      formData.append('signature', signature);
-      formData.append('timestamp', timestamp.toString());
-      formData.append('api_key', apiKey);
+      formData.append('upload_preset', uploadPreset);
       formData.append('folder', folder);
       formData.append('public_id', public_id); 
 

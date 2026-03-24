@@ -201,7 +201,7 @@ export default function DashboardPage() {
                       <span className={`badge ${exam.published ? 'badge-green' : 'badge-red'}`}>
                         {exam.published ? '✅ منشور' : '📝 مسودة'}
                       </span>
-                      <Link href={`/teacher/exams/${exam.id}`} className="btn-outline text-xs py-1 px-2">
+                      <Link href={`/teacher/exams/view?id=${exam.id}`} className="btn-outline text-xs py-1 px-2">
                         <Eye size={12} />
                       </Link>
                     </div>

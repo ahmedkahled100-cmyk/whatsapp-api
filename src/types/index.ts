@@ -138,6 +138,7 @@ export interface Notification {
   createdAt: number;
   targetUsers?: string[]; 
   targetRoles?: ('admin' | 'student')[];
+  actionPath?: string;
 }
 
 export interface NotificationLog {

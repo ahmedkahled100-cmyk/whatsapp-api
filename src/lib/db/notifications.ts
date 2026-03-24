@@ -1,10 +1,11 @@
 // src/lib/db/notifications.ts
-import { 
-  collection, addDoc, getDocs, setDoc, onSnapshot, 
-  query, where, orderBy, limit, writeBatch, doc 
+import {
+  collection, addDoc, getDocs, setDoc, onSnapshot,
+  query, where, orderBy, limit, writeBatch, doc
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { NOTIFICATIONS, NOTIFICATION_LOGS } from './constants';
+import { clean } from './utils';
 import type { Notification, NotificationLog } from '@/types';
 
 if (!db) throw new Error('Firebase Firestore not initialized');
@@ -18,7 +19,7 @@ export const addNotification = async (teacherId: string, msg: string, type: Noti
   if (targetUsers && targetUsers.length > 0) {
     data.targetUsers = targetUsers;
   }
-  await addDoc(collection(db, NOTIFICATIONS), data);
+  await addDoc(collection(db, NOTIFICATIONS), clean(data));
 };
 
 export const markAllNotificationsRead = async (teacherId: string) => {
@@ -47,10 +48,10 @@ export const subscribeToNotifications = (teacherId: string, callback: (notifs: N
 // Notification Logs
 export const saveNotificationLog = async (log: Omit<NotificationLog, 'id'> & { id?: string }): Promise<string> => {
   if (log.id) {
-    await setDoc(doc(db, NOTIFICATION_LOGS, log.id), { ...log, updatedAt: Date.now() }, { merge: true });
+    await setDoc(doc(db, NOTIFICATION_LOGS, log.id), clean({ ...log, updatedAt: Date.now() }), { merge: true });
     return log.id;
   }
-  const ref = await addDoc(collection(db, NOTIFICATION_LOGS), { ...log, createdAt: Date.now(), updatedAt: Date.now() });
+  const ref = await addDoc(collection(db, NOTIFICATION_LOGS), clean({ ...log, createdAt: Date.now(), updatedAt: Date.now() }));
   return ref.id;
 };
 
@@ -78,7 +79,7 @@ export const subscribeToNotificationLogs = (teacherId: string, callback: (logs: 
 };
 
 export const updateNotificationLog = async (id: string, updates: Partial<NotificationLog>) => {
-  await setDoc(doc(db, NOTIFICATION_LOGS, id), { ...updates, updatedAt: Date.now() }, { merge: true });
+  await setDoc(doc(db, NOTIFICATION_LOGS, id), clean({ ...updates, updatedAt: Date.now() }), { merge: true });
 };
 
 export interface DispatchOptions {
@@ -89,10 +90,11 @@ export interface DispatchOptions {
   targetRoles?: ('admin' | 'student')[];
   channels: { inApp: boolean; whatsapp: boolean };
   whatsappNumbers?: string[];
+  actionPath?: string;
 }
 
 export const dispatchNotification = async (options: DispatchOptions) => {
-  const { teacherId, msg, type = 'info', targetUsers, targetRoles, channels, whatsappNumbers } = options;
+  const { teacherId, msg, type = 'info', targetUsers, targetRoles, channels, whatsappNumbers, actionPath } = options;
 
   if (channels.inApp) {
     const data: any = {
@@ -100,9 +102,10 @@ export const dispatchNotification = async (options: DispatchOptions) => {
       time: new Date().toLocaleString('ar-EG'),
       createdAt: Date.now(),
     };
+    if (actionPath) data.actionPath = actionPath;
     if (targetUsers && targetUsers.length > 0) data.targetUsers = targetUsers;
     if (targetRoles && targetRoles.length > 0) data.targetRoles = targetRoles;
-    await addDoc(collection(db, NOTIFICATIONS), data);
+    await addDoc(collection(db, NOTIFICATIONS), clean(data));
   }
 
   if (channels.whatsapp && whatsappNumbers && whatsappNumbers.length > 0) {

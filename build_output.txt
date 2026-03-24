@@ -1,0 +1,24 @@
+
+> an-academy@0.1.0 build
+> next build
+
+  Γû▓ Next.js 14.2.0
+  - Environments: .env.local, .env
+
+   Creating an optimized production build ...
+ Γ£ô Compiled successfully
+   Skipping validation of types
+   Skipping linting
+   Collecting page data ...
+
+> Build error occurred
+Error: Page "/exam/[id]" is missing "generateStaticParams()" so it cannot be used with "output: export" config.
+    at C:\Users\Ahmed Khaled\Desktop\AN-Academy-NextJS\node_modules\next\dist\build\index.js:1294:59
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async Span.traceAsyncFn (C:\Users\Ahmed Khaled\Desktop\AN-Academy-NextJS\node_modules\next\dist\trace\trace.js:154:20)
+    at async Promise.all (index 21)
+    at async C:\Users\Ahmed Khaled\Desktop\AN-Academy-NextJS\node_modules\next\dist\build\index.js:1172:17
+    at async Span.traceAsyncFn (C:\Users\Ahmed Khaled\Desktop\AN-Academy-NextJS\node_modules\next\dist\trace\trace.js:154:20)
+    at async C:\Users\Ahmed Khaled\Desktop\AN-Academy-NextJS\node_modules\next\dist\build\index.js:1095:124
+    at async Span.traceAsyncFn (C:\Users\Ahmed Khaled\Desktop\AN-Academy-NextJS\node_modules\next\dist\trace\trace.js:154:20)
+    at async build (C:\Users\Ahmed Khaled\Desktop\AN-Academy-NextJS\node_modules\next\dist\build\index.js:366:9)

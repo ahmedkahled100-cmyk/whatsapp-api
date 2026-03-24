@@ -5,6 +5,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { TEACHERS } from './constants';
+import { clean } from './utils';
 import type { TeacherUser } from '@/types';
 
 if (!db) throw new Error('Firebase Firestore not initialized');
@@ -51,21 +52,21 @@ export const saveTeacher = async (teacher: Omit<TeacherUser, 'id'> & { id?: stri
   }
 
   if (teacher.id) {
-    await setDoc(doc(db, TEACHERS, teacher.id), cleanTeacher, { merge: true });
+    await setDoc(doc(db, TEACHERS, teacher.id), clean(cleanTeacher), { merge: true });
     return teacher.id;
   }
-  const ref = await addDoc(collection(db, TEACHERS), { 
+  const ref = await addDoc(collection(db, TEACHERS), clean({ 
     ...cleanTeacher, 
     createdAt: Date.now(), 
     isActive: teacher.isActive !== undefined ? teacher.isActive : true 
-  });
+  }));
   return ref.id;
 };
 
 export const updateSuperAdminCredentials = async (id: string, username: string, password?: string) => {
   const data: any = { username: username.trim().toLowerCase() };
   if (password) data.password = password;
-  await updateDoc(doc(db, TEACHERS, id), data);
+  await updateDoc(doc(db, TEACHERS, id), clean(data));
 };
 
 export const deleteTeacher = async (id: string) => {

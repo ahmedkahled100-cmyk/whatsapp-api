@@ -16,3 +16,4 @@ export const NOTIFICATION_LOGS = 'notificationLogs';
 export const UPLOAD_LOGS = 'upload_logs';
 export const MESSAGES = 'messages';
 export const CONVERSATIONS = 'conversations';
+export const APP_HOME = 'app_home';

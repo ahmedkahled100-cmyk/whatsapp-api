@@ -7,12 +7,15 @@ import type { NotificationLog } from '@/types';
 import { showToast } from '@/lib/toast';
 import { Send, AlertCircle, CheckCircle2, Search, RefreshCw, MessageSquare, Clock, Filter, Users, ShieldAlert, RotateCcw, Bell } from 'lucide-react';
 import { formatDateAr } from '@/lib/utils';
+import { useRouter } from 'next/navigation';
 
 export default function NotificationsAdmin() {
-  const { students, groups, user } = useTeacherStore();
+  const router = useRouter();
+  const { students, groups, user, notifications } = useTeacherStore();
   const [logs, setLogs] = useState<NotificationLog[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'compose' | 'logs'>('compose');
+  const [activeTab, setActiveTab] = useState<'inbox' | 'compose' | 'logs'>('inbox');
+
 
   // Compose State
   const [msg, setMsg] = useState('');
@@ -130,6 +133,17 @@ export default function NotificationsAdmin() {
         </h1>
         <div className="flex bg-white/5 rounded-xl p-1">
           <button 
+            onClick={() => setActiveTab('inbox')}
+            className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'inbox' ? 'bg-gold text-dark' : 'text-gray-400 hover:text-white'}`}
+          >
+            الوارد
+            {notifications.filter(n => !n.read).length > 0 && (
+              <span className="ml-2 bg-red-500 text-white rounded-full px-2 py-0.5 text-xs">
+                {notifications.filter(n => !n.read).length}
+              </span>
+            )}
+          </button>
+          <button 
             onClick={() => setActiveTab('compose')}
             className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'compose' ? 'bg-gold text-dark' : 'text-gray-400 hover:text-white'}`}
           >
@@ -241,6 +255,48 @@ export default function NotificationsAdmin() {
               <li>إرسال رسائل الواتساب يتطلب تفعيل وتسجيل أرقام مقبولة في Meta if in Dev mode، أو رصيد كافٍ وAPI Key مفعل in Live mode.</li>
               <li>يرجى التأكد من اختيار الجمهور الصحيح قبل الضغط على إرسال حيث لا يمكن التراجع.</li>
             </ul>
+          </div>
+        </div>
+      ) : activeTab === 'inbox' ? (
+        <div className="card-base p-6 animate-fade-in">
+          <h2 className="text-lg font-bold mb-6">الإشعارات الواردة</h2>
+          <div className="space-y-4">
+            {notifications.length === 0 ? (
+              <div className="text-center p-12 text-gray-500 flex flex-col items-center justify-center h-full gap-3">
+                <Bell size={48} className="text-white/5" />
+                <p className="font-bold">لا توجد إشعارات واردة حالياً</p>
+              </div>
+            ) : notifications.map(n => (
+              <div 
+                key={n.id} 
+                onClick={() => {
+                  if (n.actionPath) {
+                    router.push(n.actionPath);
+                  }
+                }}
+                className={`p-4 rounded-xl border relative overflow-hidden transition-all ${
+                  n.actionPath ? 'cursor-pointer hover:border-gold/50' : ''
+                } ${
+                  n.read
+                    ? 'border-white/5 bg-white/5 opacity-70'
+                    : 'border-gold/20 bg-gradient-to-br from-gold/10 to-transparent shadow-md'
+                }`}>
+                {n.type === 'error' && <div className="absolute top-0 right-0 w-1 h-full bg-red-500 rounded-l" />}
+                {n.type === 'success' && <div className="absolute top-0 right-0 w-1 h-full bg-green-500 rounded-l" />}
+                {n.type === 'warning' && <div className="absolute top-0 right-0 w-1 h-full bg-yellow-500 rounded-l" />}
+                {n.type === 'info' && <div className="absolute top-0 right-0 w-1 h-full bg-blue-500 rounded-l" />}
+                
+                <p className="text-sm font-bold text-white mb-2 pr-3">{n.msg}</p>
+                
+                <div className="flex justify-between items-center mt-3 pt-2 border-t border-white/5">
+                  <span className="text-[10px] text-gray-500 flex items-center gap-1">
+                    <Clock size={12} />
+                    {n.time || formatDateAr(n.createdAt)}
+                  </span>
+                  {!n.read && <span className="w-2 h-2 rounded-full bg-gold shadow-[0_0_6px_rgba(245,197,24,0.8)] animate-pulse" />}
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       ) : (

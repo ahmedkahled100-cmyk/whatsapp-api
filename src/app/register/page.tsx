@@ -113,7 +113,8 @@ export default function RegisterPage() {
           teacherId: selectedTeacherId,
           msg: `طلب اشتراك جديد: ${form.name} (${form.subType})`,
           targetRoles: ['admin'],
-          channels: { inApp: true, whatsapp: false }
+          channels: { inApp: true, whatsapp: false },
+          actionPath: '/teacher/students'
         });
         if (form.phone) {
           await dispatchNotification({

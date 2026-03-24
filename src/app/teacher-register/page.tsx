@@ -96,7 +96,8 @@ export default function TeacherRegisterPage() {
           teacherId: superAdmin.id,
           msg: `طلب انضمام معلم جديد: ${form.name} (${form.subject})`,
           targetRoles: ['admin'],
-          channels: { inApp: true, whatsapp: false }
+          channels: { inApp: true, whatsapp: false },
+          actionPath: '/admin'
         });
       } catch (e) { console.error(e); }
 

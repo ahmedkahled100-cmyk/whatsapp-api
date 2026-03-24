@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { showToast } from '@/lib/toast';
 import { useFilePreview } from '@/components/FilePreviewModal';
+import { usePDFCompression } from '@/components/PDFCompressionModal';
 
 export default function TeacherMessagesPage() {
   const { user, students, conversations } = useTeacherStore();
@@ -32,6 +33,7 @@ export default function TeacherMessagesPage() {
   const [attachmentUrl, setAttachmentUrl] = useState('');
   const [attachmentType, setAttachmentType] = useState<'text' | 'image' | 'file'>('text');
   const { openPreview, PreviewModal } = useFilePreview();
+  const { openCompression, CompressionModal } = usePDFCompression({ showSelection: true });
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -110,7 +112,7 @@ export default function TeacherMessagesPage() {
         content: newMessage.trim(),
         teacherId: user.id,
         type: attachmentUrl ? attachmentType : 'text',
-        fileUrl: attachmentUrl || undefined
+        ...(attachmentUrl ? { fileUrl: attachmentUrl } : {})
       });
       setNewMessage('');
       setAttachmentUrl('');
@@ -133,19 +135,44 @@ export default function TeacherMessagesPage() {
       return;
     }
 
-    setUploadingFile(true);
-    try {
-      const path = `chat-attachments/${Date.now()}_${file.name}`;
-      const url = await uploadFileToStorage(file, path);
-      setAttachmentUrl(url);
-      setAttachmentType(type);
-      showToast('تم إرفاق الملف بنجاح');
-    } catch (err) {
-      showToast('فشل رفع الملف');
-    } finally {
-      setUploadingFile(false);
-      e.target.value = '';
+    const uploadFile = async (fileToUpload: File | Blob) => {
+      setUploadingFile(true);
+      try {
+        const path = `chat-attachments/${Date.now()}_${file.name}`;
+        const url = await uploadFileToStorage(fileToUpload, path);
+        setAttachmentUrl(url);
+        setAttachmentType(type);
+        showToast('تم إرفاق الملف بنجاح');
+      } catch (err) {
+        showToast('فشل رفع الملف');
+      } finally {
+        setUploadingFile(false);
+        e.target.value = '';
+      }
+    };
+
+    if (type === 'file' && (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) && file.size > 10 * 1024 * 1024) {
+      showToast('ملف PDF كبير، سيتم ضغطه أولاً باستخدام ILovePDF...');
+      openCompression(file, async (compressedBlob) => {
+        await uploadFile(compressedBlob);
+      });
+      return;
     }
+
+    if (type === 'image' && file.size > 4 * 1024 * 1024) {
+      showToast('صورة كبيرة، جاري الضغط...');
+      setUploadingFile(true);
+      try {
+        const imageCompression = (await import('browser-image-compression')).default;
+        const compressed = await imageCompression(file, { maxSizeMB: 2, maxWidthOrHeight: 1920, useWebWorker: true });
+        await uploadFile(compressed);
+      } catch (err) {
+        await uploadFile(file);
+      }
+      return;
+    }
+
+    await uploadFile(file);
   };
 
   const startNewChat = (target: Student | TeacherUser) => {
@@ -450,6 +477,7 @@ export default function TeacherMessagesPage() {
       )}
       
       {PreviewModal}
+      {CompressionModal}
 
       <style jsx global>{`
         .custom-scrollbar::-webkit-scrollbar { width: 4px; }

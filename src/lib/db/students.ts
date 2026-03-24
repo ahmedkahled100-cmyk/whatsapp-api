@@ -5,6 +5,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { STUDENTS, ATTEMPTS, GROUPS, REG_REQUESTS } from './constants';
+import { clean } from './utils';
 import type { Student, Group, RegistrationRequest } from '@/types';
 
 if (!db) throw new Error('Firebase Firestore not initialized');
@@ -37,10 +38,10 @@ export const getStudentByParentPhone = async (parentPhone: string): Promise<Stud
 
 export const saveStudent = async (student: Omit<Student, 'id'> & { id?: string }): Promise<string> => {
   if (student.id) {
-    await setDoc(doc(db, STUDENTS, student.id), student);
+    await setDoc(doc(db, STUDENTS, student.id), clean(student));
     return student.id;
   }
-  const ref = await addDoc(collection(db, STUDENTS), { ...student, createdAt: Date.now() });
+  const ref = await addDoc(collection(db, STUDENTS), clean({ ...student, createdAt: Date.now() }));
   return ref.id;
 };
 
@@ -74,10 +75,10 @@ export const getGroups = async (teacherId: string): Promise<Group[]> => {
 
 export const saveGroup = async (group: Omit<Group, 'id'> & { id?: string }): Promise<string> => {
   if (group.id) {
-    await setDoc(doc(db, GROUPS, group.id), group);
+    await setDoc(doc(db, GROUPS, group.id), clean(group));
     return group.id;
   }
-  const ref = await addDoc(collection(db, GROUPS), { ...group, createdAt: new Date().toISOString() });
+  const ref = await addDoc(collection(db, GROUPS), clean({ ...group, createdAt: new Date().toISOString() }));
   return ref.id;
 };
 
@@ -105,10 +106,10 @@ export const getRegistrationRequests = async (teacherId: string): Promise<Regist
 
 export const saveRegistrationRequest = async (req: Omit<RegistrationRequest, 'id'> & { id?: string }): Promise<string> => {
   if (req.id) {
-    await setDoc(doc(db, REG_REQUESTS, req.id), req);
+    await setDoc(doc(db, REG_REQUESTS, req.id), clean(req));
     return req.id;
   }
-  const ref = await addDoc(collection(db, REG_REQUESTS), { ...req, createdAt: Date.now() });
+  const ref = await addDoc(collection(db, REG_REQUESTS), clean({ ...req, createdAt: Date.now() }));
   return ref.id;
 };
 

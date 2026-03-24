@@ -90,20 +90,10 @@ export default function AIPage() {
     // Auto-compress if > 10MB
     if (file.size > COMPRESS_THRESHOLD) {
       if (isPDF) {
-        showToast(`📦 الملف كبير (${(file.size / 1024 / 1024).toFixed(1)}MB)، جاري الضغط تلقائياً...`);
-        setCompressing(true);
-        try {
-          const compressed = await FileProcessor.compressPdfFileLocally(file);
-          showToast(`✅ تم الضغط: ${(file.size / 1024 / 1024).toFixed(1)}MB → ${(compressed.size / 1024 / 1024).toFixed(1)}MB`);
-          await encodeFile(compressed, compressed.type || 'application/pdf');
-        } catch {
-          // Try iLovePDF compression modal as fallback
-          openCompression(file, async (blob) => {
-            await encodeFile(blob, 'application/pdf');
-          });
-        } finally {
-          setCompressing(false);
-        }
+        showToast(`📦 الملف كبير (${(file.size / 1024 / 1024).toFixed(1)}MB)، سيتم الضغط باستخدام ILovePDF...`);
+        openCompression(file, async (blob) => {
+          await encodeFile(blob, 'application/pdf');
+        });
         return;
       } else if (isImage) {
         showToast(`🖼️ جاري ضغط الصورة...`);
