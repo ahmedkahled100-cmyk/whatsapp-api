@@ -185,10 +185,13 @@ export default function StudentPortal() {
     if (!selectedConv || !student) return;
     
     setLoadingChat(true);
-    const unsubMsgs = subscribeToMessages(selectedConv.id, (msgs: any[]) => {
+    const unsub = subscribeToMessages(selectedConv.id, msgs => {
       setChatMessages(msgs);
       setLoadingChat(false);
       markMessagesAsRead(selectedConv.id, student.id);
+    }, (error) => {
+      setLoadingChat(false);
+      showToast('مشكلة في تحميل الرسائل');
     });
 
     const otherParticipantId = selectedConv.participants.find(p => p !== student.id);

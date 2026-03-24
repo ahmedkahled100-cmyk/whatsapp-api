@@ -49,16 +49,21 @@ export const subscribeToConversations = (userId: string, callback: (convs: Conve
   });
 };
 
-export const subscribeToMessages = (conversationId: string, callback: (msgs: Message[]) => void) => {
+export const subscribeToMessages = (conversationId: string, callback: (msgs: Message[]) => void, onError?: (err: Error) => void) => {
   const q = query(
     collection(db, MESSAGES),
     where('conversationId', '==', conversationId),
-    orderBy('timestamp', 'asc'),
-    limit(100)
+    limit(200)
   );
 
   return onSnapshot(q, (snap) => {
-    callback(snap.docs.map(d => ({ ...d.data(), id: d.id } as Message)));
+    const messages = snap.docs.map(d => ({ ...d.data(), id: d.id } as Message));
+    // Sort locally to bypass Firebase composite index requirements
+    messages.sort((a, b) => a.timestamp - b.timestamp);
+    callback(messages);
+  }, (error) => {
+    console.error("Messages Subscription Error: ", error);
+    if (onError) onError(error);
   });
 };
 

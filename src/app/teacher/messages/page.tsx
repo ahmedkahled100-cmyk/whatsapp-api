@@ -66,6 +66,9 @@ export default function TeacherMessagesPage() {
         setMessages(msgs);
         setLoadingMessages(false);
         markMessagesAsRead(selectedConv.id, user.id);
+      }, (error) => {
+        setLoadingMessages(false);
+        showToast('مشكلة في تحميل رسائل هذه المحادثة');
       });
 
       const otherParticipantId = selectedConv.participants.find(p => p !== user.id);
