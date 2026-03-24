@@ -51,22 +51,7 @@ Each object must match this interface:
     if (fileData && fileData.inlineData && fileData.mimeType) {
         let finalInlineData = fileData.inlineData;
         
-        // Auto-compress PDFs if they are potentially large (> 5MB in base64 is ~3.75MB raw, let's check base64 length)
-        // A 5MB raw file is ~6.67MB in base64.
-        if (fileData.mimeType === 'application/pdf' && fileData.inlineData.length > 6.5 * 1024 * 1024) {
-          try {
-            const { ILovePDFClient } = await import('@/lib/ilovepdf');
-            if (ILovePDFClient.isConfigured()) {
-              console.log('[AI API] PDF is large, attempting compression...');
-              const buffer = Buffer.from(fileData.inlineData, 'base64');
-              const compressedBuffer = await ILovePDFClient.compress(buffer);
-              finalInlineData = compressedBuffer.toString('base64');
-              console.log(`[AI API] Compression complete: ${buffer.length} -> ${compressedBuffer.length}`);
-            }
-          } catch (compErr) {
-            console.error('[AI API] Compression failed, proceeding with original:', compErr);
-          }
-        }
+        // Client already compresses the PDF if it's too large before sending it.
 
         contents.push({
             inlineData: {

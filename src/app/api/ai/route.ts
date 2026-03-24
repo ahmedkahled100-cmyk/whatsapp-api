@@ -17,19 +17,6 @@ export async function POST(req: Request) {
 
     // Process file if provided
     let processedFileData = fileData;
-    if (fileData?.inlineData && fileData?.mimeType === 'application/pdf') {
-      // Server-side PDF compression if > 6MB (base64)
-      if (fileData.inlineData.length > 6 * 1024 * 1024) {
-        try {
-          const { ILovePDFClient } = await import('@/lib/ilovepdf');
-          if (ILovePDFClient.isConfigured()) {
-            const buffer = Buffer.from(fileData.inlineData, 'base64');
-            const compressed = await ILovePDFClient.compress(buffer);
-            processedFileData = { ...fileData, inlineData: compressed.toString('base64') };
-          }
-        } catch { /* use original */ }
-      }
-    }
 
     switch (mode) {
       case 'questions':
