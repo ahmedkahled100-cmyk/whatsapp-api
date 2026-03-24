@@ -99,12 +99,17 @@ export default function StudentPortal() {
       }
     };
 
-    // Large PDF → compress via iLovePDF
+    // Large PDF → compress via FileProcessor locally
     if (!isImage && file.type === 'application/pdf' && file.size > 10 * 1024 * 1024) {
-      showToast('ملف PDF كبير، سيتم ضغطه أولاً...');
-      openCompression(file, async (compressedBlob) => {
-        await uploadFile(compressedBlob);
-      });
+      showToast('جاري ضغط ملف الـ PDF قبل الرفع...');
+      setChatUploadingFile(true);
+      try {
+        const compressedFile = await FileProcessor.compressPdfFileLocally(file);
+        await uploadFile(compressedFile);
+      } catch (err) {
+        // Fallback to original if compression fails
+        await uploadFile(file);
+      }
       return;
     }
 

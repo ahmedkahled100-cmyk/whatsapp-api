@@ -71,8 +71,15 @@ export const markMessagesAsRead = async (conversationId: string, userId: string)
   );
 
   const snap = await getDocs(q);
+  if (snap.empty) return; // Nothing to update
+  
   const batch = writeBatch(db);
   snap.docs.forEach(d => batch.update(d.ref, { isRead: true }));
+  
+  // Also update the parent conversation's lastMessage to reflect the read status
+  const convRef = doc(db, CONVERSATIONS, conversationId);
+  batch.update(convRef, { 'lastMessage.isRead': true });
+  
   await batch.commit();
 };
 

@@ -8,7 +8,7 @@ import {
 } from '@/lib/db';
 import { Message, Conversation, Student, TeacherUser } from '@/types';
 import { 
-  Search, Send, User, Clock, Check, CheckCheck, 
+  Search, Send, User, Clock, Check, CheckCheck, Users,
   MessageSquare, Plus, X, Loader2, Phone, GraduationCap,
   ShieldCheck, MoreVertical, Image as ImageIcon, Paperclip, FileText, Trash2
 } from 'lucide-react';
@@ -103,7 +103,7 @@ export default function TeacherMessagesPage() {
     setSending(true);
     try {
       const receiverId = selectedConv.participants.find(p => p !== user.id)!;
-      const receiverName = selectedConv.participantNames[selectedConv.participants.indexOf(receiverId)];
+      const receiverName = selectedConv.participantNames[selectedConv.participants.indexOf(receiverId)] || 'المستخدم';
 
       await sendMessage({
         senderId: user.id,
@@ -118,6 +118,9 @@ export default function TeacherMessagesPage() {
       setNewMessage('');
       setAttachmentUrl('');
       setAttachmentType('text');
+      // Reset textarea height after sending
+      const textarea = document.querySelector('textarea') as HTMLTextAreaElement;
+      if (textarea) textarea.style.height = '48px';
     } catch (err: any) {
       console.error('Send Error:', err);
       showToast('فشل إرسال الرسالة');
@@ -244,7 +247,13 @@ export default function TeacherMessagesPage() {
 
         <div className="flex-1 overflow-y-auto custom-scrollbar">
           {filteredConversations.length === 0 ? (
-            <div className="p-10 text-center text-gray-500 text-sm">لا توجد محادثات بدأت بعد.</div>
+            <div className="flex flex-col items-center justify-center p-8 text-center opacity-60 space-y-3 mt-10">
+               <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-2">
+                 <Users size={28} className="text-gray-500" />
+               </div>
+               <p className="text-sm font-bold text-gray-300">لا توجد محادثات بعد</p>
+               <p className="text-xs text-gray-500">ابحث عن طالب أو إدارة لبدء المراسلة فوراً.</p>
+            </div>
           ) : (
             filteredConversations.map(conv => {
               const other = getOtherParticipant(conv);
@@ -255,21 +264,22 @@ export default function TeacherMessagesPage() {
                 <button 
                   key={conv.id}
                   onClick={() => setSelectedConv(conv)}
-                  className={`w-full p-4 flex items-center gap-3 transition-all border-b border-white/5 text-right ${active ? 'bg-gold/10 border-r-2 border-r-gold' : 'hover:bg-white/5'}`}
+                  className={`w-full p-4 flex items-center gap-3 transition-all border-b border-white/5 text-right relative overflow-hidden group ${active ? 'bg-gradient-to-l from-gold/10 to-transparent' : 'hover:bg-white/5'}`}
                 >
-                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center font-black text-lg shadow-lg ${active ? 'bg-gold text-black' : 'bg-white/10 text-gray-400'}`}>
+                  {active && <div className="absolute top-0 right-0 w-[3px] h-full bg-gold shadow-[0_0_10px_var(--gold)]" />}
+                  <div className={`w-12 h-12 rounded-xl flex shrink-0 items-center justify-center font-black text-lg shadow-lg border ${active ? 'bg-gold text-black border-gold/50' : 'bg-white/5 text-gray-400 border-white/10 group-hover:bg-white/10'}`}>
                     {other.name[0]}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex justify-between items-center mb-1">
-                      <span className={`font-bold truncate text-sm ${hasUnread ? 'text-white' : 'text-gray-300'}`}>{other.name}</span>
-                      {conv.lastMessage && <span className="text-[10px] text-gray-500">{new Date(conv.lastMessage.timestamp).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}</span>}
+                      <span className={`font-bold truncate text-sm transition-colors ${hasUnread ? 'text-white' : (active ? 'text-gold' : 'text-gray-300')}`}>{other.name}</span>
+                      {conv.lastMessage && <span className="text-[10px] text-gray-500 shrink-0 mr-2">{new Date(conv.lastMessage.timestamp).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}</span>}
                     </div>
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between gap-2">
                        <p className={`text-xs truncate ${hasUnread ? 'text-gold font-bold' : 'text-gray-500'}`}>
                          {conv.lastMessage?.content || 'ابدأ المحادثة الآن...'}
                        </p>
-                       {hasUnread && <span className="w-2 h-2 rounded-full bg-gold shadow-[0_0_8px_var(--gold)]" />}
+                       {hasUnread && <span className="w-2 h-2 shrink-0 rounded-full bg-gold shadow-[0_0_8px_var(--gold)] animate-pulse" />}
                     </div>
                   </div>
                 </button>
@@ -282,14 +292,12 @@ export default function TeacherMessagesPage() {
       {/* Main Chat Area */}
       <div className={`flex-1 flex flex-col bg-[#0d121f] ${!selectedConv ? 'hidden md:flex items-center justify-center p-10 text-center' : 'flex'}`}>
         {!selectedConv ? (
-          <div className="space-y-4">
-             <div className="w-20 h-20 bg-gold/5 rounded-full flex items-center justify-center mx-auto border border-gold/10">
-                <MessageSquare size={40} className="text-gold/20" />
+          <div className="flex flex-col items-center justify-center p-10 h-full w-full bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-gold/5 via-[#0d121f] to-[#0d121f]">
+             <div className="w-24 h-24 bg-gradient-to-br from-gold/20 to-gold/5 rounded-3xl flex items-center justify-center mx-auto border border-gold/10 shadow-2xl mb-8 transform -rotate-6 transition-transform hover:rotate-0">
+                <MessageSquare size={48} className="text-gold/60" />
              </div>
-             <div>
-                <h3 className="text-xl font-bold text-gray-400">مرحباً بك في نظام المراسلة</h3>
-                <p className="text-sm text-gray-500">اختر محادثة من القائمة الجانبية أو ابدأ محادثة جديدة مع طالب أو الأدمن.</p>
-             </div>
+             <h3 className="text-2xl font-black text-white mb-2 tracking-tight">مرحباً بك في <span className="text-gold">نظام المراسلة</span></h3>
+             <p className="text-sm text-gray-400 max-w-sm text-center leading-relaxed">اختر محادثة من القائمة الجانبية أو ابدأ محادثة جديدة للتواصل بسهولة واحترافية.</p>
           </div>
         ) : (
           <>
@@ -398,11 +406,17 @@ export default function TeacherMessagesPage() {
                       placeholder="اكتب رسالتك هنا..." 
                       className="input-base w-full pr-4 py-3 min-h-[48px] max-h-32 resize-none overflow-y-auto"
                       value={newMessage}
-                      onChange={e => setNewMessage(e.target.value)}
+                      onChange={e => {
+                        setNewMessage(e.target.value);
+                        e.target.style.height = 'auto';
+                        e.target.style.height = `${e.target.scrollHeight}px`;
+                      }}
                       onKeyDown={e => {
                         if (e.key === 'Enter' && !e.shiftKey) {
                           e.preventDefault();
-                          handleSendMessage(e);
+                          if (newMessage.trim() || attachmentUrl) {
+                            handleSendMessage(e as any);
+                          }
                         }
                       }}
                     />
