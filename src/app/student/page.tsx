@@ -66,6 +66,11 @@ export default function StudentPortal() {
   const [chatUploadingFile, setChatUploadingFile] = useState(false);
   const [chatAttachmentUrl, setChatAttachmentUrl] = useState('');
   const [chatAttachmentType, setChatAttachmentType] = useState<'text' | 'image' | 'file'>('text');
+  
+  // ILovePDF Compression States
+  const [isCompressing, setIsCompressing] = useState(false);
+  const [compressionProgress, setCompressionProgress] = useState(0);
+  const [compressionMessage, setCompressionMessage] = useState('');
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   const handleChatAttachment = async (e: React.ChangeEvent<HTMLInputElement>, _type: 'image' | 'file') => {
@@ -99,16 +104,23 @@ export default function StudentPortal() {
       }
     };
 
-    // Large PDF → compress via FileProcessor locally
+    // Large PDF → compress via iLovePDF Client
     if (!isImage && file.type === 'application/pdf' && file.size > 10 * 1024 * 1024) {
-      showToast('جاري ضغط ملف الـ PDF قبل الرفع...');
-      setChatUploadingFile(true);
+      setIsCompressing(true);
+      setCompressionProgress(0);
+      setCompressionMessage('جاري التحضير للضغط عبر سيرفرات iLovePDF...');
       try {
-        const compressedFile = await FileProcessor.compressPdfFileLocally(file);
+        const { compressWithILovePDF } = await import('@/lib/ilovepdf-client');
+        const compressedFile = await compressWithILovePDF(file, (progress, message) => {
+          setCompressionProgress(progress);
+          setCompressionMessage(message);
+        });
         await uploadFile(compressedFile);
-      } catch (err) {
-        // Fallback to original if compression fails
+      } catch (err: any) {
+        showToast(err.message || 'فشل الضغط الذكي، جاري الرفع بالحجم الأصلي...');
         await uploadFile(file);
+      } finally {
+        setIsCompressing(false);
       }
       return;
     }
@@ -795,7 +807,24 @@ export default function StudentPortal() {
                     ))}
                     <div ref={chatEndRef} />
                   </div>
-                  <div className="p-3 bg-white/5 flex flex-col gap-2">
+                  <div className="p-3 bg-white/5 flex flex-col gap-2 relative">
+                    
+                    {/* Inline ILovePDF Compression Progress UI */}
+                    {isCompressing && (
+                      <div className="flex items-center gap-4 bg-gold/10 border border-gold/20 p-3 rounded-xl mb-1 animate-fade-in shadow-glow">
+                        <div className="w-8 h-8 rounded-full border-2 border-gold/30 border-t-gold animate-spin shrink-0 shadow-[0_0_10px_var(--gold)]" />
+                        <div className="flex-1">
+                          <div className="flex justify-between items-center mb-1">
+                            <span className="text-xs font-bold text-gold">{compressionMessage}</span>
+                            <span className="text-[10px] text-gold font-black bg-gold/10 px-2 py-0.5 rounded-md">{compressionProgress}%</span>
+                          </div>
+                          <div className="h-1.5 w-full bg-black/40 rounded-full overflow-hidden">
+                            <div className="h-full bg-gold transition-all duration-300 shadow-[0_0_8px_var(--gold)]" style={{ width: `${compressionProgress}%` }} />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     {chatAttachmentUrl && (
                       <div className="flex items-center justify-between p-2 bg-gold/10 rounded-lg border border-gold/20">
                         <span className="text-[9px] text-gold font-bold flex items-center gap-1">
@@ -852,7 +881,7 @@ export default function StudentPortal() {
                         </label>
                       </div>
                       <input type="text" placeholder="اكتب رسالتك..." className="input-base flex-1 h-10 text-xs px-3" value={newMsg} onChange={e => setNewMsg(e.target.value)} />
-                      <button type="submit" className="w-10 h-10 rounded-xl bg-gold text-black flex items-center justify-center shadow-lg active:scale-95 transition-transform"><Send size={18}/></button>
+                      <button type="submit" disabled={isCompressing || chatUploadingFile} className="w-10 h-10 rounded-xl bg-gold text-black flex items-center justify-center shadow-lg active:scale-95 transition-transform disabled:opacity-50"><Send size={18}/></button>
                     </form>
                   </div>
                 </>

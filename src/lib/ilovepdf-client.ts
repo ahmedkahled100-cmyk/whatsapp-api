@@ -1,82 +1,98 @@
-/**
- * Client-side utility for iLovePDF compression flow
- */
+export type ILovePDFProgressCallback = (progress: number, message: string) => void;
 
-export interface ILovePDFProgress {
-  stage: 'preparing' | 'uploading' | 'compressing' | 'completed' | 'error';
-  progress: number;
-  message: string;
-}
-
-export async function compressPDFWithILovePDF(
+export async function compressWithILovePDF(
   file: File,
-  onProgress: (status: ILovePDFProgress) => void
-): Promise<{ task: string; server: string; blob: Blob }> {
+  onProgress: ILovePDFProgressCallback,
+  level: 'extreme' | 'recommended' | 'low' = 'recommended'
+): Promise<Blob> {
   try {
-    onProgress({ stage: 'preparing', progress: 5, message: 'جاري التحضير للضغط...' });
+    // Stage 1: Init Task
+    onProgress(5, 'جاري بدء جلسة الضغط...');
+    
+    const initRes = await fetch('/api/ilovepdf/start');
+    const data = await initRes.json();
+    
+    if (!initRes.ok || data.success === false) {
+      throw new Error(data.error || 'فشل بدء جلسة iLovePDF');
+    }
+    
+    const { task, server, publicKey, token } = data;
 
-    // 1. Start Task
-    const startRes = await fetch('/api/ilovepdf/start');
-    const startData = await startRes.json();
-    if (!startRes.ok || !startData.success) throw new Error(startData.error || 'فشل بدء عملية الضغط');
-
-    const { task, server, token } = startData;
-
-    // 2. Upload File
-    onProgress({ stage: 'uploading', progress: 10, message: 'جاري رفع الملف للمدقق...' });
-
+    // Stage 2: Upload Direct to iLovePDF
+    onProgress(10, 'جاري الرفع لخوادم الضغط...');
+    
     const formData = new FormData();
     formData.append('task', task);
     formData.append('file', file);
 
     const xhr = new XMLHttpRequest();
-    const uploadPromise = new Promise<{ server_filename: string }>((resolve, reject) => {
+    const uploadPromise = new Promise((resolve, reject) => {
       xhr.upload.addEventListener('progress', (e) => {
         if (e.lengthComputable) {
           const percent = Math.round((e.loaded / e.total) * 60) + 10;
-          onProgress({ stage: 'uploading', progress: percent, message: 'جاري الرفع...' });
+          onProgress(percent, 'جاري الرفع لخوادم الضغط...');
         }
       });
       xhr.addEventListener('load', () => {
         if (xhr.status >= 200 && xhr.status < 300) resolve(JSON.parse(xhr.responseText));
-        else reject(new Error(`فشل الرفع: ${xhr.status}`));
+        else reject(new Error(`فشل الرفع لـ iLovePDF: ${xhr.status}`));
       });
-      xhr.addEventListener('error', () => reject(new Error('خطأ في الاتصال أثناء الرفع')));
+      xhr.addEventListener('error', () => reject(new Error('خطأ في الاتصال بالرفع')));
       xhr.open('POST', `https://${server}/v1/upload`);
-      if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+      
+      if (token) {
+        xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+      }
+      
       xhr.send(formData);
     });
 
-    const uploadData = await uploadPromise;
+    const uploadData = await uploadPromise as any;
 
-    // 3. Process File
-    onProgress({ stage: 'compressing', progress: 80, message: 'جاري الضغط الفائق...' });
-
+    // Stage 3: Server-side processing
+    onProgress(80, 'جاري الضغط والمعالجة...');
+    
     const processRes = await fetch('/api/ilovepdf/process', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        task,
-        server,
+      body: JSON.stringify({ 
+        task, 
+        server, 
         fileName: file.name,
         serverFilename: uploadData.server_filename,
-        mode: 'proxy' // We want the blob back to upload to Cloudinary
+        compression_level: level
       }),
     });
 
-    if (!processRes.ok) {
-      const errData = await processRes.json();
-      throw new Error(errData.error || 'فشل ضغط الملف');
+    const processData = await processRes.json();
+
+    if (!processRes.ok || processData.success === false) {
+      throw new Error(processData.error || 'فشل معالجة الملف');
     }
 
-    const blob = await processRes.blob();
-    
-    onProgress({ stage: 'completed', progress: 100, message: 'اكتمل الضغط بنجاح' });
+    const { url } = processData;
 
-    return { task, server, blob };
+    // Stage 4: Completed
+    onProgress(100, 'اكتملت المعالجة بنجاح');
+
+    const downloadRes = await fetch(url);
+    if (!downloadRes.ok) throw new Error('فشل جلب الملف المضغوط');
+    
+    return await downloadRes.blob();
 
   } catch (error: any) {
-    onProgress({ stage: 'error', progress: 0, message: error.message || 'حدث خطأ غير متوقع' });
-    throw error;
+    console.error('ILovePDF Compression error:', error);
+    throw new Error(error.message || 'حدث خطأ في عملية ضغط الملف');
   }
+}
+
+// Legacy wrapper for backwards compatibility with src/app/exam/page.tsx
+export async function compressPDFWithILovePDF(
+  file: File,
+  onProgress: (p: { progress: number; message: string }) => void
+): Promise<{ blob: Blob }> {
+  const blob = await compressWithILovePDF(file, (progress, message) => {
+    onProgress({ progress, message });
+  });
+  return { blob };
 }

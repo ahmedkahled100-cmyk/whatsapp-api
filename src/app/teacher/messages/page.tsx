@@ -33,6 +33,12 @@ export default function TeacherMessagesPage() {
   const [uploadingFile, setUploadingFile] = useState(false);
   const [attachmentUrl, setAttachmentUrl] = useState('');
   const [attachmentType, setAttachmentType] = useState<'text' | 'image' | 'file'>('text');
+  
+  // ILovePDF Compression States
+  const [isCompressing, setIsCompressing] = useState(false);
+  const [compressionProgress, setCompressionProgress] = useState(0);
+  const [compressionMessage, setCompressionMessage] = useState('');
+
   const { openPreview, PreviewModal } = useFilePreview();
   const { openCompression, CompressionModal } = usePDFCompression({ showSelection: true });
 
@@ -159,14 +165,21 @@ export default function TeacherMessagesPage() {
     };
 
     if (type === 'file' && (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) && file.size > 10 * 1024 * 1024) {
-      showToast('جاري ضغط ملف الـ PDF قبل الرفع...');
-      setUploadingFile(true);
+      setIsCompressing(true);
+      setCompressionProgress(0);
+      setCompressionMessage('جاري التحضير للضغط عبر سيرفرات iLovePDF...');
       try {
-        const compressedFile = await FileProcessor.compressPdfFileLocally(file);
+        const { compressWithILovePDF } = await import('@/lib/ilovepdf-client');
+        const compressedFile = await compressWithILovePDF(file, (progress, message) => {
+          setCompressionProgress(progress);
+          setCompressionMessage(message);
+        });
         await uploadFile(compressedFile);
-      } catch (err) {
-        // Fallback to original if compression fails
+      } catch (err: any) {
+        showToast(err.message || 'فشل الضغط الذكي، جاري الرفع بالحجم الأصلي...');
         await uploadFile(file);
+      } finally {
+        setIsCompressing(false);
       }
       return;
     }
@@ -380,7 +393,23 @@ export default function TeacherMessagesPage() {
             </div>
 
             {/* Input Area */}
-            <div className="p-4 border-t border-white/5 bg-white/5 flex flex-col gap-2">
+            <div className="p-4 border-t border-white/5 bg-white/5 flex flex-col gap-2 relative">
+              
+              {/* Inline ILovePDF Compression Progress UI */}
+              {isCompressing && (
+                <div className="flex items-center gap-4 bg-gold/10 border border-gold/20 p-3 rounded-xl mb-1 animate-fade-in shadow-glow">
+                  <div className="w-8 h-8 rounded-full border-2 border-gold/30 border-t-gold animate-spin shrink-0 shadow-[0_0_10px_var(--gold)]" />
+                  <div className="flex-1">
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="text-xs font-bold text-gold">{compressionMessage}</span>
+                      <span className="text-[10px] text-gold font-black bg-gold/10 px-2 py-0.5 rounded-md">{compressionProgress}%</span>
+                    </div>
+                    <div className="h-1.5 w-full bg-black/40 rounded-full overflow-hidden">
+                      <div className="h-full bg-gold transition-all duration-300 shadow-[0_0_8px_var(--gold)]" style={{ width: `${compressionProgress}%` }} />
+                    </div>
+                  </div>
+                </div>
+              )}
               {attachmentUrl && (
                 <div className="flex items-center gap-3 p-2 bg-black/20 rounded-xl w-max">
                   <div className="w-8 h-8 rounded-lg bg-gold/20 flex items-center justify-center text-gold">
@@ -426,7 +455,7 @@ export default function TeacherMessagesPage() {
                  </div>
                  <button 
                    type="submit" 
-                   disabled={(!newMessage.trim() && !attachmentUrl) || sending || uploadingFile}
+                   disabled={(!newMessage.trim() && !attachmentUrl) || sending || uploadingFile || isCompressing}
                    className="w-12 h-12 rounded-xl bg-gold text-black flex items-center justify-center shadow-lg shadow-gold/20 hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:grayscale"
                  >
                    {sending ? <Loader2 size={24} className="animate-spin" /> : <Send size={24} />}
