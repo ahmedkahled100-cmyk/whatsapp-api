@@ -15,6 +15,7 @@
     "@google/genai": "^1.44.0",
     "@google/generative-ai": "^0.24.1",
     "@ilovepdf/ilovepdf-nodejs": "^0.3.1",
+    "@supabase/supabase-js": "^2.100.0",
     "browser-image-compression": "^2.0.2",
     "cloudinary": "^2.9.0",
     "clsx": "^2.1.1",

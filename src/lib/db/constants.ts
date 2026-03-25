@@ -1,4 +1,6 @@
 // src/lib/db/constants.ts
+export const USE_SUPABASE = true; // Toggle this to switch between Firebase and Supabase
+
 export const TEACHERS = 'teachers';
 export const EXAMS = 'exams';
 export const STUDENTS = 'students';
