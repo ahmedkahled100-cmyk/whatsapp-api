@@ -4,17 +4,24 @@ import { useTeacherStore } from '@/lib/store';
 import { getAssignments, saveAssignment, deleteAssignment, getAssignmentSubmissions, gradeSubmission } from '@/lib/db';
 import { Assignment, AssignmentSubmission } from '@/types';
 import { showToast } from '@/lib/toast';
-import { ClipboardList, PlusCircle, Trash2, Users, CheckCircle, X, Download, Eye, FileText, Image as ImageIcon } from 'lucide-react';
+import { ClipboardList, PlusCircle, Trash2, Users, CheckCircle, X, Download, Eye, FileText, Image as ImageIcon, Sparkles, Loader2 } from 'lucide-react';
 import { useFilePreview, FilePreviewModal } from '@/components/FilePreviewModal';
+import { GlobalFileUpload } from '@/components/GlobalFileUpload';
 
 export default function AssignmentsPage() {
-  const { groups, students, user } = useTeacherStore();
-  const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const { groups, students, user, assignments, setAssignments } = useTeacherStore();
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   
+  // AI Generation State
+  const [isGeneratingAI, setIsGeneratingAI] = useState(false);
+  const [aiType, setAiType] = useState<'mcq' | 'tf' | 'essay' | 'mixed'>('mixed');
+  const [aiFile, setAiFile] = useState<File | null>(null);
+  const [aiTopic, setAiTopic] = useState('');
+  const [showAIOptions, setShowAIOptions] = useState(false);
+
   // Submissions state
   const [selectedAssignment, setSelectedAssignment] = useState<Assignment | null>(null);
   const [submissions, setSubmissions] = useState<AssignmentSubmission[]>([]);
@@ -37,10 +44,61 @@ export default function AssignmentsPage() {
     maxScore: 10
   });
 
+  const handleAIGenerate = async () => {
+    if (!aiTopic && !aiFile) {
+      showToast('يرجى إدخال موضوع أو رفع ملف للتحليل');
+      return;
+    }
+
+    setIsGeneratingAI(true);
+    try {
+      let fileData = null;
+      if (aiFile) {
+        const reader = new FileReader();
+        const base64Promise = new Promise<string>((resolve) => {
+          reader.onload = () => resolve((reader.result as string).split(',')[1]);
+          reader.readAsDataURL(aiFile);
+        });
+        const base64 = await base64Promise;
+        fileData = {
+          inlineData: base64,
+          mimeType: aiFile.type
+        };
+      }
+
+      const res = await fetch('/api/generate-homework', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: aiType,
+          topic: aiTopic,
+          fileData
+        })
+      });
+
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+
+      setNewAssign(prev => ({
+        ...prev,
+        title: data.title || prev.title,
+        description: data.description || prev.description
+      }));
+      
+      setShowAIOptions(false);
+      showToast('✨ تم توليد الواجب بنجاح!');
+    } catch (err: any) {
+      console.error(err);
+      showToast('فشل توليد الواجب: ' + err.message);
+    } finally {
+      setIsGeneratingAI(false);
+    }
+  };
+
   const loadData = async () => {
+    if (!user) return;
     setLoading(true);
     try {
-      if (!user) return;
       const data = await getAssignments(user.id);
       setAssignments(data);
     } catch (e) {
@@ -51,39 +109,49 @@ export default function AssignmentsPage() {
   };
 
   useEffect(() => {
-    loadData();
-  }, []);
+    if (assignments.length === 0) {
+      loadData();
+    } else {
+      setLoading(false);
+    }
+  }, [user?.id]);
 
   const handleSave = async () => {
     if (!newAssign.title || !newAssign.dueDate || !newAssign.maxScore) {
       showToast('الرجاء إدخال العنوان والموعد النهائي والدرجة القصوى');
       return;
     }
-    setSaving(true);
-    try {
-      const payload: Partial<Assignment> & { teacherId: string } = {
-        teacherId: user!.id,
-        title: newAssign.title,
-        description: newAssign.description || '',
-        dueDate: newAssign.dueDate,
-        maxScore: Number(newAssign.maxScore),
-        targetGroup: newAssign.targetGroup || '',
-        fileUrl: newAssign.fileUrl || '',
-      };
-      
-      if (editingId) {
-        payload.id = editingId;
-      } else {
-        payload.createdAt = new Date().toISOString();
-      }
+    if (!user) return;
 
-      await saveAssignment(payload as any);
-      await loadData();
+    setSaving(true);
+    const payload: Assignment = {
+      id: editingId || crypto.randomUUID(),
+      teacherId: user.id,
+      title: newAssign.title,
+      description: newAssign.description || '',
+      dueDate: newAssign.dueDate,
+      maxScore: Number(newAssign.maxScore),
+      targetGroup: newAssign.targetGroup || '',
+      fileUrl: newAssign.fileUrl || '',
+      createdAt: editingId ? (assignments.find(a => a.id === editingId)?.createdAt || new Date().toISOString()) : new Date().toISOString(),
+    };
+
+    // Optimistic Update
+    const previous = [...assignments];
+    if (editingId) {
+      setAssignments(previous.map(a => a.id === editingId ? payload : a));
+    } else {
+      setAssignments([...previous, payload]);
+    }
+
+    try {
+      await saveAssignment(payload);
       setShowAddForm(false);
       setEditingId(null);
       setNewAssign({ title: '', description: '', dueDate: '', targetGroup: '', fileUrl: '', maxScore: 10 });
-      showToast(editingId ? 'تم تعديل الواجب بنجاح' : 'تم إضافة الواجب بنجاح');
+      showToast(editingId ? '🙌 تم تعديل الواجب بنجاح' : '✅ تم إضافة الواجب بنجاح');
     } catch (e) {
+      setAssignments(previous);
       showToast('حدث خطأ أثناء الحفظ');
     } finally {
       setSaving(false);
@@ -92,10 +160,13 @@ export default function AssignmentsPage() {
 
   const handleDelete = async (id: string) => {
     if (!confirm('هل أنت متأكد من الحذف؟ سيتم حذف إجابات الطلاب المرتبطة به أيضاً.')) return;
+    const previous = [...assignments];
+    setAssignments(previous.filter(a => a.id !== id));
     try {
       await deleteAssignment(id);
-      setAssignments(prev => prev.filter(a => a.id !== id));
+      showToast('✅ تم حذف الواجب');
     } catch (e) {
+      setAssignments(previous);
       showToast('حدث خطأ أثناء الحذف');
     }
   };
@@ -288,8 +359,91 @@ export default function AssignmentsPage() {
       </div>
 
       {showAddForm && (
-        <div className="card-base p-6 animate-fade-in border border-yellow-500/30">
-          <h2 className="font-bold text-lg mb-4">إنشاء تكليف جديد</h2>
+        <div className="card-base p-6 animate-fade-in border border-yellow-500/30 overflow-hidden relative">
+          {/* AI Magic Header */}
+          <div className="flex items-center justify-between mb-6 pb-4 border-b border-white/5">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-gold/10 flex items-center justify-center">
+                <Sparkles size={18} className="text-gold" />
+              </div>
+              <div>
+                <h2 className="font-bold text-lg">إنشاء تكليف {editingId ? 'معدل' : 'جديد'}</h2>
+                <p className="text-[10px] text-gray-400">يمكنك كتابة التفاصيل يدوياً أو استخدام الذكاء الاصطناعي</p>
+              </div>
+            </div>
+            {!editingId && (
+              <button 
+                onClick={() => setShowAIOptions(!showAIOptions)}
+                className={`text-xs flex items-center gap-2 px-3 py-1.5 rounded-xl transition-all ${showAIOptions ? 'bg-gold text-black font-bold' : 'bg-white/5 text-gold hover:bg-white/10'}`}
+              >
+                <Sparkles size={14} /> {showAIOptions ? 'إخفاء خيارات الذكاء الاصطناعي' : 'سحر الذكاء الاصطناعي (AI)'}
+              </button>
+            )}
+          </div>
+
+          {/* AI Magic Options Panel */}
+          {showAIOptions && !editingId && (
+            <div className="mb-8 p-4 rounded-2xl bg-gold/5 border border-gold/10 animate-slide-down">
+              <div className="flex items-center gap-2 mb-4 text-gold">
+                <Sparkles size={16} />
+                <h3 className="text-sm font-bold">توليد الواجب بالذكاء الاصطناعي</h3>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="md:col-span-2">
+                  <label className="block text-xs mb-1.5 opacity-70">موضوع الدرس أو المادة الدراسية</label>
+                  <input 
+                    type="text" 
+                    className="input-base text-sm h-10" 
+                    placeholder="مثال: قوانين نيوتن للحركة - فيزياء"
+                    value={aiTopic}
+                    onChange={e => setAiTopic(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs mb-1.5 opacity-70">نوع الأسئلة</label>
+                  <select 
+                    className="input-base text-sm h-10"
+                    value={aiType}
+                    onChange={e => setAiType(e.target.value as any)}
+                  >
+                    <option value="mixed">أسئلة متنوعة (مختلط)</option>
+                    <option value="mcq">اختيار من متعدد (MCQ)</option>
+                    <option value="tf">صح أو خطأ</option>
+                    <option value="essay">أسئلة مقالية</option>
+                  </select>
+                </div>
+                <div className="md:col-span-3">
+                  <label className="block text-xs mb-1.5 opacity-70">تحليل ملف الدرس (اختياري - PDF أو صورة)</label>
+                  <GlobalFileUpload 
+                    accept="application/pdf,image/*"
+                    isUploading={isGeneratingAI}
+                    label={aiFile ? `تم اختيار: ${aiFile.name}` : "ارفع ملف الدرس للحصول على أسئلة دقيقة"}
+                    onChange={(e) => setAiFile(e.target.files?.[0] || null)}
+                  />
+                </div>
+              </div>
+              
+              <button 
+                onClick={handleAIGenerate}
+                disabled={isGeneratingAI || (!aiTopic && !aiFile)}
+                className="btn-gold w-full mt-4 flex items-center justify-center gap-2 py-3 shadow-glow-gold disabled:opacity-50"
+              >
+                {isGeneratingAI ? (
+                  <>
+                    <Loader2 size={18} className="animate-spin" />
+                    جاري تحليل المادة وتوليد الأسئلة...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles size={18} />
+                    توليد الواجب الآن
+                  </>
+                )}
+              </button>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             <div>
               <label className="block text-sm mb-1 opacity-70">عنوان الواجب *</label>

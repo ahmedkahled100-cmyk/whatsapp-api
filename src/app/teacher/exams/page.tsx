@@ -23,11 +23,27 @@ export default function ExamsPage() {
 
   const handleDelete = async (id: string, title: string) => {
     if (!confirm(`هل تريد حذف اختبار "${title}" نهائياً؟`)) return;
-    await deleteExam(id);
+    const previousExams = [...exams];
+    setExams(exams.filter(e => e.id !== id));
+    try {
+      await deleteExam(id);
+      showToast('✅ تم حذف الاختبار');
+    } catch (err) {
+      setExams(previousExams);
+      showToast('❌ فشل الحذف');
+    }
   };
 
   const handleTogglePublish = async (id: string, current: boolean) => {
-    await toggleExamPublish(id, !current);
+    const previousExams = [...exams];
+    setExams(exams.map(e => e.id === id ? { ...e, published: !current } : e));
+    try {
+      await toggleExamPublish(id, !current);
+      showToast(current ? '🚫 تم إخفاء الاختبار' : '✅ تم نشر الاختبار');
+    } catch (err) {
+      setExams(previousExams);
+      showToast('❌ فشل التحديث');
+    }
   };
 
   const shareExam = (id: string) => {

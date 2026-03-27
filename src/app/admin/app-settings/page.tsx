@@ -298,6 +298,7 @@ export default function AppSettingsPage() {
                   <option value="assignments">الواجبات</option>
                   <option value="results">نتائجي</option>
                   <option value="messages">الرسائل</option>
+                  <option value="games">الألعاب التعليمية</option>
                   <option value="link">رابط خارجي</option>
                 </select>
               </div>

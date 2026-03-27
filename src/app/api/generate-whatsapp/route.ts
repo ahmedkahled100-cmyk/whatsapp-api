@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenAI } from '@google/genai';
+
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
 
 // API Route for generating AI WhatsApp message
 export async function POST(req: Request) {
@@ -20,10 +22,7 @@ export async function POST(req: Request) {
 
     maxScore = maxScore || 100;
 
-    // Use environment variable for the API key, typically NEXT_PUBLIC_GEMINI_API_KEY
-    const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
-    
-    if (!apiKey) {
+    if (!process.env.GEMINI_API_KEY) {
       console.warn('Gemini API key is missing. Using fallback message.');
       const fallbackMsg = isPassed 
         ? `ألف مبروك! 🎉\nنود إعلامكم بنجاح الطالب/ة: *${studentName}*\nفي اختبار: *${examTitle}*\nبنتيجة: *${score}* من *${maxScore}*.\nمع تمنياتنا بدوام التفوق!`
@@ -31,9 +30,6 @@ export async function POST(req: Request) {
       
       return NextResponse.json({ message: fallbackMsg });
     }
-
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
     const prompt = `
     أنت أكاديمية تعليمية راقية تُدعى "A-N Academy". 
@@ -54,8 +50,13 @@ export async function POST(req: Request) {
     - اجعل الرسالة قصيرة قدر الإمكان (حوالي 3-4 أسطر).
     `;
 
-    const result = await model.generateContent(prompt);
-    const text = result.response.text();
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+    });
+
+    const text = response.text;
+    if (!text) throw new Error('No response from AI');
 
     return NextResponse.json({ message: text });
     

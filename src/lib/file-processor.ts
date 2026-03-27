@@ -62,14 +62,20 @@ export class FileProcessor {
 
       let processedBlob: Blob = fileData.blob;
 
-      // Always attempt local optimization to reduce bandwidth/costs
-      if (fileData.fileType.startsWith('image/')) {
+      // Rule: If > 10MB and PDF, use iLovePDF for better results
+      if (fileData.blob.size > LIMIT_10MB && (fileData.fileType === 'application/pdf' || fileData.fileName.toLowerCase().endsWith('.pdf'))) {
+        console.log('[FileProcessor] Using iLovePDF for large file:', fileData.fileName);
+        const { compressWithILovePDF } = await import('./ilovepdf-client');
+        processedBlob = await compressWithILovePDF(fileData.blob as File, (p, msg) => {
+          store.updateFile(id, { progress: p, statusText: `🚀 ${msg}` });
+        });
+      } else if (fileData.fileType.startsWith('image/')) {
         console.log('[FileProcessor] Compressing image:', fileData.fileName);
         processedBlob = await this.compressImage(fileData.blob, (p) => {
           store.updateFile(id, { progress: Math.round(p), statusText: '🖼️ ضغط الصورة...' });
         });
       } else if (fileData.fileType === 'application/pdf' || fileData.fileName.toLowerCase().endsWith('.pdf')) {
-        console.log('[FileProcessor] Optimizing PDF:', fileData.fileName);
+        console.log('[FileProcessor] Optimizing PDF locally:', fileData.fileName);
         processedBlob = await this.optimizePDF(fileData.blob, (p) => {
           store.updateFile(id, { progress: Math.round(p), statusText: '📄 ضغط الملف...' });
         });

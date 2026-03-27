@@ -377,16 +377,26 @@ export default function ResultsPage() {
                               return `${Math.round((mcqPoints + essayPoints)*10)/10} / ${totalPoints}`;
                             })()}
                           </span>
-                          <span className="text-[10px] sm:text-xs font-bold opacity-60">{score}% — {scoreLabel(score)}</span>
+                          {att.essayAnswers?.some(ea => ea.pending) ? (
+                            <span className="text-[10px] sm:text-xs font-bold text-purple-400">بانتظار تصحيح المقالي</span>
+                          ) : (
+                            <span className="text-[10px] sm:text-xs font-bold opacity-60">{score}% — {scoreLabel(score)}</span>
+                          )}
                         </div>
                       </td>
                       <td className="py-4 px-4 hidden sm:table-cell text-sm">
                         {att.mcqTotal > 0 ? `${Math.round((att.mcqScore * att.mcqTotal / 100)*10)/10} / ${att.mcqTotal}` : '—'}
                       </td>
                       <td className="py-4 px-4">
-                        <span className={`badge ${att.passed ? 'badge-green' : 'badge-red'} text-[10px] sm:text-xs py-1 px-2`}>
-                          {att.passed ? '✅ ناجح' : '❌ راسب'}
-                        </span>
+                        {att.essayAnswers?.some(ea => ea.pending) ? (
+                          <span className="badge badge-purple text-[10px] sm:text-xs py-1 px-2 animate-pulse">
+                            ⏳ قيد التصحيح
+                          </span>
+                        ) : (
+                          <span className={`badge ${att.passed ? 'badge-green' : 'badge-red'} text-[10px] sm:text-xs py-1 px-2`}>
+                            {att.passed ? '✅ ناجح' : '❌ راسب'}
+                          </span>
+                        )}
                         <div className="lg:hidden text-[10px] text-muted mt-1">{att.submittedAt ? formatDateAr(att.submittedAt, false) : ''}</div>
                       </td>
                       <td className="py-4 px-4 hidden lg:table-cell text-xs text-muted">

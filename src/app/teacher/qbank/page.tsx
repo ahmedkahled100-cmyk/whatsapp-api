@@ -70,29 +70,33 @@ export default function QBankPage() {
       return;
     }
 
-    try {
-      const q: any = {
-        ...newQuestion,
-        createdAt: new Date().toISOString(),
-        usageCount: 0
-      };
+    const q: any = {
+      ...newQuestion,
+      id: crypto.randomUUID(),
+      createdAt: new Date().toISOString(),
+      usageCount: 0
+    };
 
-      // Ensure correctAnswer is a string referencing the option name and correct is the index
-      if (q.type === 'mcq' || q.type === 'tf') {
-        if (q.correctAnswer === undefined || q.correctAnswer === null) {
-          showToast('الرجاء اختيار الإجابة الصحيحة');
-          return;
-        }
-        q.correct = q.options.indexOf(q.correctAnswer);
+    if (q.type === 'mcq' || q.type === 'tf') {
+      if (q.correctAnswer === undefined || q.correctAnswer === null) {
+        showToast('الرجاء اختيار الإجابة الصحيحة');
+        return;
       }
+      q.correct = q.options.indexOf(q.correctAnswer);
+    }
 
-      await addToQBank(q as any); // using any for now since strict type mapping depends on options logic
-      showToast('تم إضافة السؤال بنجاح');
-      setShowAddForm(false);
-      setNewQuestion({ type: 'mcq', text: '', options: ['', '', '', ''], correctAnswer: undefined, difficulty: 'medium', subject: '', unit: '', points: 1 });
-      loadQuestions();
+    // Optimistic Update
+    const previousQuestions = [...questions];
+    setQuestions([q, ...previousQuestions]);
+    setShowAddForm(false);
+    setNewQuestion({ type: 'mcq', text: '', options: ['', '', '', ''], correctAnswer: undefined, difficulty: 'medium', subject: '', unit: '', points: 1 });
+
+    try {
+      await addToQBank(q as any);
+      showToast('✅ تم إضافة السؤال بنجاح');
     } catch (error) {
-      showToast('حدث خطأ أثناء حفظ السؤال');
+      setQuestions(previousQuestions);
+      showToast('❌ حدث خطأ أثناء حفظ السؤال');
       console.error(error);
     }
   };
@@ -114,16 +118,22 @@ export default function QBankPage() {
 
   const handleDelete = async (id: string) => {
     if (!confirm('هل أنت متأكد من حذف هذا السؤال؟')) return;
+    
+    // Optimistic Update
+    const previousQuestions = [...questions];
+    setQuestions(q => q.filter(item => item.id !== id));
+    
     try {
       await deleteFromQBank(id);
-      setQuestions(q => q.filter(item => item.id !== id));
+      showToast('✅ تم حذف السؤال');
       setSelectedQuestions(prev => {
         const next = new Set(prev);
         next.delete(id);
         return next;
       });
     } catch (error) {
-      showToast('حدث خطأ أثناء الحذف');
+      setQuestions(previousQuestions);
+      showToast('❌ حدث خطأ أثناء الحذف');
     }
   };
 

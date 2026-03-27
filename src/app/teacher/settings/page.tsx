@@ -272,15 +272,26 @@ export default function SettingsPage() {
             <label className="block text-sm mb-1.5 font-medium" style={{ color: 'var(--text-muted)' }}>
               📱 رقم واتساب المعلم (للتواصل مع الطلاب)
             </label>
-            <div className="flex items-center gap-2">
-              <Phone size={16} className="text-gray-400 flex-shrink-0" />
-              <input
-                value={form.whatsappNumber || ''}
-                onChange={e => update('whatsappNumber', e.target.value)}
-                className="input-base has-icon flex-1"
-                placeholder="مثال: 201012345678 (بدون + أو 00)"
-                style={{ direction: 'ltr' }}
-              />
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 flex-1">
+                <Phone size={16} className="text-gray-400 flex-shrink-0" />
+                <input
+                  value={form.whatsappNumber || ''}
+                  onChange={e => update('whatsappNumber', e.target.value)}
+                  className="input-base has-icon flex-1"
+                  placeholder="مثال: 201012345678 (بدون + أو 00)"
+                  style={{ direction: 'ltr' }}
+                />
+              </div>
+              <div className="flex items-center gap-2 bg-black/20 px-3 py-2 rounded-xl border border-white/5">
+                <span className="text-[10px] font-bold text-gray-400">تفعيل التواصل؟</span>
+                <button onClick={() => update('whatsappEnabled', !form.whatsappEnabled)}
+                  className="w-10 h-5 rounded-full transition-all relative flex-shrink-0"
+                  style={{ background: form.whatsappEnabled ? '#25D366' : 'rgba(255,255,255,0.1)' }}>
+                  <div className="absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all"
+                    style={{ right: form.whatsappEnabled ? '2px' : 'auto', left: form.whatsappEnabled ? 'auto' : '2px' }} />
+                </button>
+              </div>
             </div>
             <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
               سيظهر زر &quot;تواصل مع المعلم&quot; في صفحة الطالب يفتح واتساب مباشرة على هذا الرقم.
@@ -480,7 +491,7 @@ export default function SettingsPage() {
           <div>
             <h3 className="font-bold text-red-400 mb-1">مسح جميع بيانات المنصة</h3>
             <p className="text-sm text-gray-400">
-              سيتم حذف جميع حسابات الطلاب، الامتحانات، والإجابات. سيتم تصفير قاعدة البيانات بالكامل للبدء من جديد وتوفير المساحة. (لا يشمل الملفات المرفوعة يدوياً، يجب حذفها من Firebase Storage لاحقاً إذا لزم الأمر).
+              سيتم حذف جميع حسابات الطلاب، الامتحانات، والإجابات. سيتم تصفير قاعدة البيانات بالكامل للبدء من جديد وتوفير المساحة. (لا يشمل الملفات المرفوعة يدوياً، يجب حذفها من Cloudinary لاحقاً إذا لزم الأمر).
             </p>
           </div>
           <button 

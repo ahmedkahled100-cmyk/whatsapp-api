@@ -177,51 +177,41 @@ export default function CoursesPage() {
     }
 
     setLoading(true);
+    const materialData: CourseMaterial = {
+      id: editingId || crypto.randomUUID(),
+      teacherId: useTeacherStore.getState().user?.id || '',
+      title: form.title!,
+      type: form.type as any || 'link',
+      url: form.url || form.fileUrl || '',
+      fileUrl: form.fileUrl || undefined,
+      additionalLinks: (form.additionalLinks || []).filter((l: any) => l.url),
+      grade: form.grade || '',
+      targetGroups: form.targetGroups || [],
+      subject: form.subject!,
+      sequence: Number(form.sequence) || 1,
+      isFree: form.isFree || false,
+      exceptionalStudents: form.exceptionalStudents || [],
+      linkedExamId: form.linkedExamId || undefined,
+      linkedAssignmentId: form.linkedAssignmentId || undefined,
+      createdAt: editingId ? (form.createdAt || Date.now()) : Date.now(),
+    };
+
+    // Optimistic Update
+    const previousMaterials = [...useTeacherStore.getState().materials];
+    if (editingId) {
+      useTeacherStore.getState().setMaterials(previousMaterials.map(m => m.id === editingId ? materialData : m));
+    } else {
+      useTeacherStore.getState().setMaterials([...previousMaterials, materialData]);
+    }
+
     try {
-      let fileUrl = form.fileUrl || '';
-      let finalUrl = form.url || '';
-      
-      const materialData: Omit<CourseMaterial, 'id'> = {
-        teacherId: useTeacherStore.getState().user?.id || '',
-        title: form.title!,
-        type: form.type as any || 'link',
-        url: finalUrl || fileUrl,
-        fileUrl: fileUrl || undefined,
-        additionalLinks: (form.additionalLinks || []).filter((l: any) => l.url),
-        grade: form.grade || '',
-        targetGroups: form.targetGroups || [],
-        subject: form.subject!,
-        sequence: Number(form.sequence) || 1,
-        isFree: form.isFree || false,
-        exceptionalStudents: form.exceptionalStudents || [],
-        linkedExamId: form.linkedExamId || undefined,
-        linkedAssignmentId: form.linkedAssignmentId || undefined,
-        createdAt: editingId ? (form.createdAt || Date.now()) : Date.now(),
-      };
-
-
-
-      // Remove undefined fields for Firestore
-      Object.keys(materialData).forEach(k => {
-        if ((materialData as any)[k] === undefined || (materialData as any)[k] === '') {
-          delete (materialData as any)[k];
-        }
-      });
-
-      // Ensure additionalLinks is an array and not containing undefined
-      if (materialData.additionalLinks) {
-        materialData.additionalLinks = materialData.additionalLinks.map(l => ({
-          label: l.label || '',
-          url: l.url || ''
-        }));
-      }
-
-      await saveMaterial(editingId ? { ...materialData, id: editingId } : materialData);
-
+      await saveMaterial(materialData);
       setShowAddForm(false);
       setForm({ ...EMPTY_FORM });
       setEditingId(null);
+      showToast('✅ تم حفظ الدرس بنجاح');
     } catch (e) {
+      useTeacherStore.getState().setMaterials(previousMaterials);
       console.error(e);
       showToast('حدث خطأ أثناء الحفظ');
     } finally {
@@ -233,7 +223,15 @@ export default function CoursesPage() {
 
   const handleDelete = async (id: string) => {
     if (!confirm('هل أنت متأكد من حذف هذه المادة؟')) return;
-    try { await deleteMaterial(id); } catch { showToast('حدث خطأ أثناء الحذف'); }
+    const previousMaterials = [...useTeacherStore.getState().materials];
+    useTeacherStore.getState().setMaterials(previousMaterials.filter(m => m.id !== id));
+    try { 
+      await deleteMaterial(id); 
+      showToast('✅ تم حذف الدرس');
+    } catch { 
+      useTeacherStore.getState().setMaterials(previousMaterials);
+      showToast('حدث خطأ أثناء الحذف'); 
+    }
   };
 
   const getIcon = (type: string) => {

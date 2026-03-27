@@ -35,26 +35,44 @@ export default function GroupsPage() {
   const handleSave = async () => {
     if (!name.trim()) { showToast('❗ أدخل اسم الفصل'); return; }
     setSaving(true);
+    const teacherId = useTeacherStore.getState().user?.id || '';
+    const groupData: any = {
+      id: editingGroup?.id || crypto.randomUUID(),
+      teacherId,
+      name, desc, studentIds: selectedStudents,
+      createdAt: editingGroup?.createdAt || new Date().toISOString(),
+    };
+    
+    // Optimistic Update
+    const previousGroups = [...useTeacherStore.getState().groups];
+    if (editingGroup) {
+      useTeacherStore.getState().setGroups(previousGroups.map(g => g.id === editingGroup.id ? groupData : g));
+    } else {
+      useTeacherStore.getState().setGroups([...previousGroups, groupData]);
+    }
+
     try {
-      const teacherId = useTeacherStore.getState().user?.id || '';
-      const groupData: any = {
-        teacherId,
-        name, desc, studentIds: selectedStudents,
-        createdAt: editingGroup?.createdAt || new Date().toLocaleDateString('ar-EG'),
-      };
-      if (editingGroup?.id) {
-        groupData.id = editingGroup.id;
-      }
-      
       await saveGroup(groupData);
+      showToast('✅ تم حفظ الفصل');
       setShowModal(false);
-    } catch { showToast('فشل الحفظ'); }
+    } catch (err) {
+      useTeacherStore.getState().setGroups(previousGroups);
+      showToast('❌ فشل الحفظ'); 
+    }
     finally { setSaving(false); }
   };
 
   const handleDelete = async (id: string, name: string) => {
     if (!confirm(`حذف الفصل "${name}"؟`)) return;
-    await deleteGroup(id);
+    const previousGroups = [...useTeacherStore.getState().groups];
+    useTeacherStore.getState().setGroups(previousGroups.filter(g => g.id !== id));
+    try {
+      await deleteGroup(id);
+      showToast('✅ تم حذف الفصل');
+    } catch (err) {
+      useTeacherStore.getState().setGroups(previousGroups);
+      showToast('❌ فشل الحذف');
+    }
   };
 
   const toggleStudent = (id: string) => {

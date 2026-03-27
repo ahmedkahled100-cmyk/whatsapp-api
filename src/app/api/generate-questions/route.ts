@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { GoogleGenAI } from '@google/genai';
 
 // Initialize the SDK. It automatically picks up GEMINI_API_KEY from the environment.
-const ai = new GoogleGenAI({});
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
 
 export async function POST(req: Request) {
   try {

@@ -3,6 +3,9 @@
     "src/app/api/compress-pdf/route.ts": {
       "maxDuration": 60,
       "memory": 2048
+    },
+    "src/app/api/generate-game/route.ts": {
+      "maxDuration": 300
     }
   }
 }

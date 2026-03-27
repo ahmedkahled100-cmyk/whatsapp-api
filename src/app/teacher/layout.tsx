@@ -7,12 +7,12 @@ import Image from 'next/image';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useTeacherStore } from '@/lib/store';
-import { subscribeToExams, subscribeToStudents, subscribeToAttempts, subscribeToGroups, subscribeToNotifications, subscribeToRegistrationRequests, subscribeToMaterials, subscribeToAssignments, subscribeToTeacherProfile, subscribeToConversations } from '@/lib/db';
+import { subscribeToExams, subscribeToStudents, subscribeToAttempts, subscribeToGroups, subscribeToNotifications, subscribeToRegistrationRequests, subscribeToMaterials, subscribeToAssignments, subscribeToTeacherProfile, subscribeToConversations, getExams, getAllAttempts, getStudents, getGroups, getMaterials, getAssignments, getRegistrationRequests } from '@/lib/db';
 import {
   LayoutDashboard, PlusCircle, FileText, Users, BookOpen,
   BarChart2, ClipboardList, Calendar, Bot, TrendingUp,
   CreditCard, BookMarked, Settings, LogOut, Bell, Menu, X,
-  GraduationCap, Database, ChevronLeft, Zap, ShieldCheck, ExternalLink, MessageSquare
+  GraduationCap, Database, ChevronLeft, Zap, ShieldCheck, ExternalLink, MessageSquare, Gamepad2
 } from 'lucide-react';
 
 const NAV_ITEMS = [
@@ -26,6 +26,7 @@ const NAV_ITEMS = [
   { href: '/teacher/results', icon: BarChart2, label: 'النتائج', section: 'exams', permission: 'students' },
   { href: '/teacher/qbank', icon: Database, label: 'بنك الأسئلة', section: 'exams', permission: 'exams' },
   { href: '/teacher/ai', icon: Bot, label: 'الذكاء الاصطناعي', section: 'exams', permission: 'ai' },
+  { href: '/teacher/games', icon: Gamepad2, label: 'الألعاب التعليمية', section: 'exams', permission: 'ai' },
   { href: '/teacher/students', icon: Users, label: 'الطلاب', section: 'students', permission: 'students' },
   { href: '/teacher/groups', icon: BookOpen, label: 'الفصول', section: 'students', permission: 'groups' },
   { href: '/teacher/subscriptions', icon: CreditCard, label: 'الاشتراكات', section: 'students', permission: 'subscriptions' },
@@ -47,7 +48,23 @@ const SECTION_LABELS: Record<string, string> = {
 export default function TeacherLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { user, setUser, logout, setExams, setStudents, setAttempts, setGroups, setNotifications, setRegistrationRequests, setMaterials, setAssignments, setConversations, notifications, settings, registrationRequests, conversations } = useTeacherStore();
+  const user = useTeacherStore(state => state.user);
+  const setUser = useTeacherStore(state => state.setUser);
+  const logout = useTeacherStore(state => state.logout);
+  const setExams = useTeacherStore(state => state.setExams);
+  const setStudents = useTeacherStore(state => state.setStudents);
+  const setAttempts = useTeacherStore(state => state.setAttempts);
+  const setGroups = useTeacherStore(state => state.setGroups);
+  const setNotifications = useTeacherStore(state => state.setNotifications);
+  const setRegistrationRequests = useTeacherStore(state => state.setRegistrationRequests);
+  const setMaterials = useTeacherStore(state => state.setMaterials);
+  const setAssignments = useTeacherStore(state => state.setAssignments);
+  const setConversations = useTeacherStore(state => state.setConversations);
+  const notifications = useTeacherStore(state => state.notifications);
+  const settings = useTeacherStore(state => state.settings);
+  const registrationRequests = useTeacherStore(state => state.registrationRequests);
+  const conversations = useTeacherStore(state => state.conversations);
+
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mounted, setMounted] = useState(false);
   const [syncStatus, setSyncStatus] = useState<'syncing' | 'synced' | 'offline'>('syncing');
@@ -56,7 +73,7 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
     setMounted(true);
     if (!user) { router.replace('/auth'); return; }
 
-    // Real-time subscriptions
+    // Real-time subscriptions — initial fetch + realtime updates
     setSyncStatus('syncing');
     const unsubs = [
       subscribeToExams(user.id, data => { setExams(data); setSyncStatus('synced'); }),
@@ -71,8 +88,21 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
       subscribeToConversations(user.id, setConversations),
     ];
 
+    // Initial fetch of static data that doesn't change often but is needed immediately
+    getExams(user.id).then(setExams);
+    getStudents(user.id).then(setStudents);
+    getGroups(user.id).then(setGroups);
+
     return () => unsubs.forEach(u => u());
   }, [user?.id]);
+
+  useEffect(() => {
+    if (settings?.primaryColor) {
+      document.documentElement.style.setProperty('--gold', settings.primaryColor);
+    }
+  }, [settings?.primaryColor]);
+
+  // Removed redundant fetch-on-navigation logic
 
   useEffect(() => {
     const handleResize = () => {
@@ -294,4 +324,3 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
     </div>
   );
 }
-

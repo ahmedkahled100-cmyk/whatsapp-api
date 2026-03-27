@@ -31,11 +31,20 @@ export default function EssaysPage() {
     const stillPending = essays.some(ea => ea.pending);
 
     if (!stillPending) {
-      // Calculate final score
-      const essayScore = essays.reduce((acc, ea) => acc + (ea.score || 0), 0);
-      const examObj = exams.find(e => e.id === attempt.examId);
-      updatedAttempt.finalScore = attempt.mcqScore + essayScore;
+      // Calculate final score as a percentage of total possible points
+      const mcqPoints = (attempt.mcqScore * attempt.mcqTotal) / 100;
+      const currentEssayPoints = essays.reduce((acc, ea) => acc + (ea.score || 0), 0);
+      const totalEssayMax = essays.reduce((acc, ea) => acc + (ea.maxScore || 10), 0);
       
+      const totalPoints = attempt.mcqTotal + totalEssayMax;
+      
+      if (totalPoints > 0) {
+        updatedAttempt.finalScore = Math.round(((mcqPoints + currentEssayPoints) / totalPoints) * 100);
+      } else {
+        updatedAttempt.finalScore = 0;
+      }
+      
+      const examObj = exams.find(e => e.id === attempt.examId);
       if (examObj) {
         updatedAttempt.passed = updatedAttempt.finalScore >= examObj.passScore;
       }

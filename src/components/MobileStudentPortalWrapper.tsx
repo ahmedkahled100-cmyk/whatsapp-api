@@ -9,7 +9,7 @@ import { getAppHomeSettings } from '@/lib/db/app-settings';
 import type { AppHomeSettings, CategoryItem } from '@/lib/db/app-settings';
 import type { Student, Notification, Conversation, Exam, CourseMaterial, Assignment } from '@/types';
 
-type TabId = 'home' | 'courses' | 'exams' | 'assignments' | 'results' | 'messages' | 'settings' | 'profile';
+type TabId = 'home' | 'courses' | 'exams' | 'assignments' | 'results' | 'messages' | 'settings' | 'profile' | 'discover' | 'link' | 'games' | 'schedule';
 
 interface Props {
   student: Student;
@@ -22,6 +22,8 @@ interface Props {
   onTabChange: (tab: string) => void;
   onNotifClick: () => void;
   onLogout: () => void;
+  onAcademySwitch: () => void;
+  hasMultipleAcademies: boolean;
   children: React.ReactNode;
 }
 
@@ -36,6 +38,8 @@ export function MobileStudentPortalWrapper({
   onTabChange,
   onNotifClick,
   onLogout,
+  onAcademySwitch,
+  hasMultipleAcademies,
   children,
 }: Props) {
   const [appSettings, setAppSettings] = useState<AppHomeSettings | null>(null);
@@ -72,15 +76,16 @@ export function MobileStudentPortalWrapper({
       msgCount={unreadMsgCount}
       onNotifClick={onNotifClick}
       onLogout={onLogout}
+      onAcademySwitch={onAcademySwitch}
+      hasMultipleAcademies={hasMultipleAcademies}
       appName={appSettings?.appName}
     >
       {/* Home Tab */}
-      {(activeTab === 'home' || !['exams','courses','assignments','results','messages','profile'].includes(activeTab)) && appSettings ? (
+      {(activeTab === 'home' || !['exams','courses','assignments','results','messages','profile','discover','games','schedule'].includes(activeTab)) && appSettings ? (
         <AppHome
           settings={appSettings}
           onCategoryClick={handleCategoryClick}
           examsCount={exams.length}
-          coursesCount={materials.length}
           assignmentsCount={assignments.length}
           studentName={student.name}
         />

@@ -30,6 +30,8 @@ export interface Student {
   parentPhone?: string;
   grade?: string;
   teacherName?: string; // Cache for easy UI/Messaging display
+  teacherImage?: string; // Cache for academy switcher UI
+  teacherSubject?: string; // Cache for academy switcher UI
   groupIds: string[];
   notes?: string;
   imageUrl?: string;
@@ -94,6 +96,38 @@ export interface Exam {
   pdfUrl?: string;
 }
 
+
+export type GameType = 'flashcards' | 'match' | 'quiz' | 'sentence' | 'sort' | 'tf_run';
+
+export interface EducationalGame {
+  id: string;
+  teacherId: string;
+  title: string;
+  type: GameType;
+  content: any; // FlashcardItem[] | MatchItem[] | Question[]
+  targetGroup?: string;
+  createdAt: string;
+}
+
+export interface GameResult {
+  id: string;
+  gameId: string;
+  studentId: string;
+  studentName?: string;
+  score: number;
+  total: number;
+  completedAt: string;
+}
+
+export interface FlashcardItem {
+  front: string;
+  back: string;
+}
+
+export interface MatchItem {
+  term: string;
+  definition: string;
+}
 
 export interface EssayAnswer {
   questionId: string;
@@ -175,6 +209,7 @@ export interface Settings {
   coursePrice?: number;
   sessionPrice?: number;
   whatsappNumber?: string; 
+  whatsappEnabled?: boolean;
   whatsappTemplate?: string; 
 }
 
@@ -275,8 +310,12 @@ export interface CalendarEvent {
   title: string;
   description?: string;
   date: string; 
-  type: 'exam' | 'assignment' | 'manual' | 'holiday' | 'live_session';
+  type: 'exam' | 'assignment' | 'manual' | 'holiday' | 'live_session' | 'fixed_class';
   referenceId?: string; 
+  isRecurring?: boolean;
+  recurringDays?: number[]; // 0=Sun, 1=Mon...
+  startTime?: string;
+  endTime?: string;
   createdAt: string;
 }
 

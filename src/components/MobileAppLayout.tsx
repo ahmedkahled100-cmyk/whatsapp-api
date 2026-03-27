@@ -3,9 +3,9 @@
 // الشريط السفلي للتنقل في التطبيق مع الهيدر
 
 import { useState, useEffect } from 'react';
-import { Home, BookOpen, ClipboardList, BarChart2, Settings, Bell, User, MessageSquare, LogOut } from 'lucide-react';
+import { Home, BookOpen, ClipboardList, BarChart2, Settings, Bell, User, MessageSquare, LogOut, LayoutGrid, Calendar } from 'lucide-react';
 
-type TabId = 'home' | 'courses' | 'exams' | 'assignments' | 'results' | 'messages' | 'settings' | 'profile';
+type TabId = 'home' | 'courses' | 'exams' | 'assignments' | 'results' | 'messages' | 'settings' | 'profile' | 'discover' | 'link' | 'games' | 'schedule';
 
 interface BottomNavConfig {
   id: TabId;
@@ -17,7 +17,7 @@ const DEFAULT_NAV: BottomNavConfig[] = [
   { id: 'courses',     label: 'الكورسات',   icon: <BookOpen size={20} /> },
   { id: 'exams',       label: 'الاختبارات', icon: <ClipboardList size={20} /> },
   { id: 'home',        label: 'الرئيسية',   icon: <Home size={26} /> },
-  { id: 'messages',    label: 'الرسائل',    icon: <MessageSquare size={20} /> },
+  { id: 'schedule',    label: 'الجدول',     icon: <Calendar size={20} /> },
   { id: 'results',     label: 'نتائجي',     icon: <BarChart2 size={20} /> },
 ];
 
@@ -31,6 +31,8 @@ interface Props {
   onNotifClick?: () => void;
   onLogout?: () => void;
   appName?: string;
+  onAcademySwitch?: () => void;
+  hasMultipleAcademies?: boolean;
   children: React.ReactNode;
 }
 
@@ -44,6 +46,8 @@ export function MobileAppLayout({
   onNotifClick,
   onLogout,
   appName = 'AN Academy',
+  onAcademySwitch,
+  hasMultipleAcademies = false,
   children,
 }: Props) {
   const [scrolled, setScrolled] = useState(false);
@@ -67,19 +71,31 @@ export function MobileAppLayout({
           borderBottom: '1px solid rgba(245,197,24,0.1)',
         }}
       >
-        {/* Left: Notification */}
-        <button
-          onClick={onNotifClick}
-          className="relative w-10 h-10 rounded-xl flex items-center justify-center"
-          style={{ background: 'rgba(255,255,255,0.05)' }}
-        >
-          <Bell size={20} className="text-gray-300" />
-          {notifCount > 0 && (
-            <span className="absolute top-1 right-1 w-4 h-4 rounded-full bg-red-500 text-[9px] font-bold flex items-center justify-center text-white animate-pulse">
-              {notifCount > 9 ? '9+' : notifCount}
-            </span>
+        {/* Left: Notification & Switcher */}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={onNotifClick}
+            className="relative w-10 h-10 rounded-xl flex items-center justify-center transition-all active:scale-95"
+            style={{ background: 'rgba(255,255,255,0.05)' }}
+          >
+            <Bell size={20} className="text-gray-300" />
+            {notifCount > 0 && (
+              <span className="absolute top-1 right-1 w-4 h-4 rounded-full bg-red-500 text-[9px] font-bold flex items-center justify-center text-white animate-pulse">
+                {notifCount > 9 ? '9+' : notifCount}
+              </span>
+            )}
+          </button>
+          
+          {hasMultipleAcademies && (
+            <button
+              onClick={onAcademySwitch}
+              className="w-10 h-10 rounded-xl flex items-center justify-center transition-all active:scale-95"
+              style={{ background: 'rgba(245,197,24,0.1)', border: '1px solid rgba(245,197,24,0.2)' }}
+            >
+              <LayoutGrid size={20} className="gold-text" />
+            </button>
           )}
-        </button>
+        </div>
 
         {/* Center: App name */}
         <div className="text-center">

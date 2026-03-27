@@ -1,8 +1,9 @@
 // src/lib/db/app-settings.ts
 // Mobile app configuration (sliders, ticker, categories)
-import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { db } from '../firebase';
+import { supabase } from '@/lib/supabase';
+import { APP_HOME } from './constants';
 import { clean } from './utils';
+import { fromDB, toDB } from './supabase/dbUtils';
 
 export const APP_HOME_SETTINGS_KEY = 'app_home';
 export const APP_HOME_DOC = 'config';
@@ -15,12 +16,14 @@ export type SliderItem = {
   order: number;
 };
 
+export type TabId = 'home' | 'courses' | 'exams' | 'assignments' | 'results' | 'messages' | 'settings' | 'profile' | 'discover' | 'link' | 'games';
+
 export type CategoryItem = {
   id: string;
   title: string;
   icon: string; // emoji or icon name
   color: string; // gradient color for bg
-  targetTab: 'exams' | 'courses' | 'assignments' | 'results' | 'messages' | 'link';
+  targetTab: TabId;
   link?: string; // if targetTab=link
   order: number;
 };
@@ -67,31 +70,47 @@ const defaultSettings: AppHomeSettings = {
     { id: 'c3', title: 'الواجبات', icon: '📝', color: '#8b5cf6', targetTab: 'assignments', order: 2 },
     { id: 'c4', title: 'نتائجي', icon: '📊', color: '#10b981', targetTab: 'results', order: 3 },
     { id: 'c5', title: 'الرسائل', icon: '💬', color: '#ec4899', targetTab: 'messages', order: 4 },
-    { id: 'c6', title: 'حسابي', icon: '👤', color: '#f97316', targetTab: 'results', order: 5 },
+    { id: 'c6', title: 'حسابي', icon: '👤', color: '#f97316', targetTab: 'profile', order: 5 },
+    { id: 'c7', title: 'اشتراك مع معلمين المنصة', icon: '🎓', color: '#f5c518', targetTab: 'discover', order: 6 },
+    { id: 'c8', title: 'الألعاب التعليمية', icon: '🎮', color: '#f5c518', targetTab: 'games', order: 7 },
   ],
   bottomNav: [
     { id: 'home', label: 'الرئيسية', icon: 'Home', targetTab: 'home', order: 0 },
     { id: 'courses', label: 'الكورسات', icon: 'BookOpen', targetTab: 'courses', order: 1 },
     { id: 'exams', label: 'اختباراتي', icon: 'ClipboardList', targetTab: 'exams', order: 2 },
-    { id: 'account', label: 'حسابي', icon: 'User', targetTab: 'results', order: 3 },
+    { id: 'account', label: 'حسابي', icon: 'User', targetTab: 'profile', order: 3 },
     { id: 'settings', label: 'الإعدادات', icon: 'Settings', targetTab: 'settings', order: 4 },
   ],
 };
 
 export const getAppHomeSettings = async (): Promise<AppHomeSettings> => {
   try {
-    const docRef = doc(db, APP_HOME_SETTINGS_KEY, APP_HOME_DOC);
-    const snap = await getDoc(docRef);
-    if (snap.exists()) {
-      return { ...defaultSettings, ...snap.data() } as AppHomeSettings;
+    const { data, error } = await supabase
+      .from(APP_HOME)
+      .select('*')
+      .eq('id', APP_HOME_DOC)
+      .maybeSingle();
+
+    if (error) throw error;
+    if (data) {
+      return { ...defaultSettings, ...fromDB<AppHomeSettings>(data) } as AppHomeSettings;
     }
     return defaultSettings;
-  } catch {
+  } catch (e) {
+    console.error('getAppHomeSettings error:', e);
     return defaultSettings;
   }
 };
 
 export const updateAppHomeSettings = async (settings: Partial<AppHomeSettings>): Promise<void> => {
-  const docRef = doc(db, APP_HOME_SETTINGS_KEY, APP_HOME_DOC);
-  await setDoc(docRef, clean(settings), { merge: true });
+  const payload = toDB({
+    ...settings,
+    id: APP_HOME_DOC
+  });
+
+  const { error } = await supabase
+    .from(APP_HOME)
+    .upsert([payload], { onConflict: 'id' });
+
+  if (error) throw error;
 };

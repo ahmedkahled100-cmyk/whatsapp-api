@@ -2,9 +2,7 @@
 // src/app/admin/subscriptions/page.tsx
 
 import { useState, useEffect, useMemo } from 'react';
-import { getDocs, collection, setDoc, doc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
-import { TEACHERS, STUDENTS } from '@/lib/db/constants';
+import { getTeachers, getAllStudents, saveTeacher, saveStudent } from '@/lib/db';
 import type { TeacherUser, Student } from '@/types';
 import { CreditCard, Users, Search, Bell, TrendingUp, DollarSign, Edit2, Save, X, RefreshCw, CheckCircle, AlertCircle, ArrowRight, Calendar } from 'lucide-react';
 import { showToast } from '@/lib/toast';
@@ -32,11 +30,11 @@ export default function AdminSubscriptionsPage() {
   const loadData = async () => {
     setLoading(true);
     try {
-      if (!db) throw new Error('Firebase not initialized');
-      const [tSnap, sSnap] = await Promise.all([getDocs(collection(db, TEACHERS)), getDocs(collection(db, STUDENTS))]);
-      setTeachers(tSnap.docs.map(d => ({ ...d.data(), id: d.id }) as TeacherUser));
-      setStudents(sSnap.docs.map(d => ({ ...d.data(), id: d.id }) as Student));
-    } catch {
+      const [tList, sList] = await Promise.all([getTeachers(), getAllStudents()]);
+      setTeachers(tList);
+      setStudents(sList);
+    } catch (e) {
+      console.error(e);
       showToast('خطأ في تحميل البيانات');
     } finally {
       setLoading(false);
@@ -98,20 +96,22 @@ export default function AdminSubscriptionsPage() {
   };
 
   const handleSaveTeacher = async () => {
-    if (!editingTeacher || !db) return;
+    if (!editingTeacher) return;
     setSaving(true);
     try {
       const update: Partial<TeacherUser> = {
+        ...editingTeacher,
         subType: editForm.subType as any,
         subExpiry: editForm.subExpiry ? new Date(editForm.subExpiry).getTime() : null,
         subPrice: parseFloat(editForm.subPrice) || 0,
         subLink: editForm.subLink,
       };
-      await setDoc(doc(db, TEACHERS, editingTeacher.id), { ...editingTeacher, ...update });
+      await saveTeacher(update as any);
       setTeachers(prev => prev.map(t => t.id === editingTeacher.id ? { ...t, ...update } as TeacherUser : t));
       showToast('✅ تم تحديث اشتراك المعلم');
       setEditingTeacher(null);
-    } catch {
+    } catch (e) {
+      console.error(e);
       showToast('❌ فشل الحفظ');
     } finally {
       setSaving(false);

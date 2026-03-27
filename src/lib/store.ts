@@ -87,7 +87,8 @@ export const useTeacherStore = create<TeacherStore>()(
 // STUDENT STORE
 // ==========================================
 interface StudentStore {
-  student: Student | null;
+  student: Student | null; // Currently active enrollment
+  allEnrollments: Student[]; // All teacher-student links for this student
   currentExam: Exam | null;
   currentAttempt: Partial<Attempt> | null;
   answers: Record<string, number>;
@@ -97,6 +98,7 @@ interface StudentStore {
   conversations: Conversation[];
 
   setStudent: (student: Student | null) => void;
+  setAllEnrollments: (enrollments: Student[]) => void;
   setCurrentExam: (exam: Exam | null) => void;
   setCurrentAttempt: (attempt: Partial<Attempt> | null) => void;
   setAnswer: (questionId: string, optionIndex: number) => void;
@@ -152,6 +154,7 @@ export const useStudentStore = create<StudentStore>()(
   persist(
     (set) => ({
       student: null,
+      allEnrollments: [],
       currentExam: null,
       currentAttempt: null,
       answers: {},
@@ -161,6 +164,7 @@ export const useStudentStore = create<StudentStore>()(
       conversations: [],
 
       setStudent: (student) => set({ student }),
+      setAllEnrollments: (enrollments) => set({ allEnrollments: enrollments }),
       setCurrentExam: (currentExam) => set({ currentExam }),
       setCurrentAttempt: (currentAttempt) => set({ currentAttempt }),
       setAnswer: (questionId, optionIndex) =>
@@ -174,12 +178,13 @@ export const useStudentStore = create<StudentStore>()(
       setExamPhase: (examPhase) => set({ examPhase }),
       setConversations: (conversations) => set({ conversations }),
       resetExam: () => set({ currentExam: null, currentAttempt: null, answers: {}, essayAnswers: {}, timeLeft: 0, examPhase: 'dashboard' }),
-      logout: () => set({ student: null, currentExam: null, currentAttempt: null, answers: {}, essayAnswers: {}, timeLeft: 0, examPhase: 'login' }),
+      logout: () => set({ student: null, allEnrollments: [], currentExam: null, currentAttempt: null, answers: {}, essayAnswers: {}, timeLeft: 0, examPhase: 'login' }),
     }),
     {
       name: 'an-academy-student',
       partialize: (state) => ({
         student: state.student,
+        allEnrollments: state.allEnrollments,
         currentAttempt: state.currentAttempt,
         answers: state.answers,
         essayAnswers: state.essayAnswers,

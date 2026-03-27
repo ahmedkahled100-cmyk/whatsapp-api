@@ -16,8 +16,11 @@ import { showToast } from '@/lib/toast';
 import { useFilePreview } from '@/components/FilePreviewModal';
 import { usePDFCompression } from '@/components/PDFCompressionModal';
 import { FileProcessor } from '@/lib/file-processor';
+import { useSearchParams } from 'next/navigation';
 
 export default function TeacherMessagesPage() {
+  const searchParams = useSearchParams();
+  const studentId = searchParams.get('studentId');
   const { user, students, conversations } = useTeacherStore();
   const [selectedConv, setSelectedConv] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -65,6 +68,28 @@ export default function TeacherMessagesPage() {
     getSuperAdmin().then(setSuperAdmin);
   }, []);
 
+  // Handle studentId from URL for automatic redirect
+  useEffect(() => {
+    if (studentId && students.length > 0 && user) {
+      const student = students.find(s => s.id === studentId);
+      if (student) {
+        const convId = [user.id, student.id].sort().join('_');
+        const existing = conversations.find(c => c.id === convId);
+        
+        if (existing) {
+          setSelectedConv(existing);
+        } else {
+          setSelectedConv({
+            id: convId,
+            participants: [user.id, student.id],
+            participantNames: [user.name, student.name],
+            updatedAt: Date.now()
+          });
+        }
+      }
+    }
+  }, [studentId, students, user, conversations]);
+
   useEffect(() => {
     if (selectedConv && user) {
       setLoadingMessages(true);
@@ -72,9 +97,6 @@ export default function TeacherMessagesPage() {
         setMessages(msgs);
         setLoadingMessages(false);
         markMessagesAsRead(selectedConv.id, user.id);
-      }, (error) => {
-        setLoadingMessages(false);
-        showToast('مشكلة في تحميل رسائل هذه المحادثة');
       });
 
       const otherParticipantId = selectedConv.participants.find(p => p !== user.id);

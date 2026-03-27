@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { getSettings, saveRegistrationRequest, uploadFileToStorage, dispatchNotification, getTeachers } from '@/lib/db';
 import { FileProcessor } from '@/lib/file-processor';
 import { useFileProcessingStore } from '@/lib/store';
@@ -11,6 +12,16 @@ import { PDFCompressionModal } from '@/components/PDFCompressionModal';
 import { GlobalFileUpload } from '@/components/GlobalFileUpload';
 
 export default function RegisterPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[#0a0f1c] flex items-center justify-center text-white"><Loader2 className="animate-spin" /></div>}>
+      <RegisterForm />
+    </Suspense>
+  );
+}
+
+function RegisterForm() {
+  const searchParams = useSearchParams();
+  const queryTeacherId = searchParams.get('teacherId');
   const { queue } = useFileProcessingStore();
   const [settings, setSettings] = useState<Settings | null>(null);
   const [loading, setLoading] = useState(true);
@@ -24,8 +35,8 @@ export default function RegisterPage() {
   const [imageUploadProgress, setImageUploadProgress] = useState(0);
 
   const [form, setForm] = useState({
-    name: '',
-    phone: '',
+    name: searchParams.get('name') || '',
+    phone: searchParams.get('phone') || '',
     parentPhone: '',
     grade: '',
     subType: 'monthly' as 'monthly' | 'yearly' | 'halfYearly' | 'course' | 'session',
@@ -45,15 +56,16 @@ export default function RegisterPage() {
   useEffect(() => {
     getTeachers().then(ts => {
       setTeachers(ts);
-      if (ts.length > 0) {
-        // Find super_admin or first teacher
+      if (queryTeacherId && ts.some(t => t.id === queryTeacherId)) {
+        setSelectedTeacherId(queryTeacherId);
+      } else if (ts.length > 0) {
         const defaultT = ts.find(t => t.role === 'super_admin') || ts[0];
         setSelectedTeacherId(defaultT.id);
       } else {
         setLoading(false);
       }
     });
-  }, []);
+  }, [queryTeacherId]);
 
   useEffect(() => {
     if (selectedTeacherId) {

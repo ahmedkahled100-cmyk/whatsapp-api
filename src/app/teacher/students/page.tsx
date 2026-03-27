@@ -4,10 +4,10 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useTeacherStore } from '@/lib/store';
 import { showToast } from '@/lib/toast';
-import { saveStudent, deleteStudent, uploadFileToStorage, deleteRegistrationRequest, getSettings } from '@/lib/db';
+import { saveStudent, deleteStudent, uploadFileToStorage, deleteRegistrationRequest, getSettings, wipeStudentInteraction } from '@/lib/db';
 import { generateCode, formatDateAr } from '@/lib/utils';
 import type { Student } from '@/types';
-import { UserPlus, Search, Trash2, Copy, Users, Phone, Upload, Loader2, FileSpreadsheet, Download, Edit, Eye, Printer, Calendar, Clock, Award, CheckCircle2, XCircle } from 'lucide-react';
+import { UserPlus, Search, Trash2, Copy, Users, Phone, Upload, Loader2, FileSpreadsheet, Download, Edit, Eye, Printer, Calendar, Clock, Award, CheckCircle2, XCircle, RotateCcw } from 'lucide-react';
 import { GlobalFileUpload } from '@/components/GlobalFileUpload';
 
 const EMPTY_STUDENT: Omit<Student, 'id'> = {
@@ -73,58 +73,114 @@ export default function StudentsPage() {
     if (!form.name.trim()) { showToast('❗ أدخل اسم الطالب'); return; }
     if (!user) { showToast('❗ خطأ في الجلسة'); return; }
 
-    const existing = students.find((s: any) => s.code === form.code);
-    if (existing && existing.id !== (form as any).id) { showToast('❗ الكود مستخدم بالفعل'); return; }
+    const studentData = { 
+      ...form, 
+      id: (form as any).id || crypto.randomUUID(),
+      teacherId: user.id,
+      teacherCode: user.code || ''
+    } as Student;
     
+    // Optimistic Update
+    const previousStudents = [...students];
+    if ((form as any).id) {
+      useTeacherStore.getState().setStudents(previousStudents.map(s => s.id === (form as any).id ? studentData : s));
+    } else {
+      useTeacherStore.getState().setStudents([...previousStudents, studentData]);
+    }
+
     setSaving(true);
     try {
-      await saveStudent({ 
-        ...form, 
-        teacherId: user.id,
-        teacherCode: user.code || ''
-      });
+      await saveStudent(studentData);
       setShowModal(false);
       showToast('✅ تم حفظ بيانات الطالب');
-    } catch { showToast('فشل الحفظ'); }
+    } catch (err: any) { 
+      useTeacherStore.getState().setStudents(previousStudents);
+      if (err.message === 'DUPLICATE_CODE_OR_PHONE') {
+        showToast('❗ خطأ: هذا الكود أو رقم الهاتف مسجل بالفعل لطالب آخر');
+      } else {
+        showToast('فشل الحفظ: يرجى التحقق من البيانات');
+      }
+    }
     finally { setSaving(false); setUploadProgress(0); }
   };
 
   const handleApproveRequest = async (req: any) => {
     if (!user) return;
+    const newStudent: Student = {
+      id: crypto.randomUUID(),
+      name: req.name,
+      phone: req.phone,
+      parentPhone: req.parentPhone,
+      grade: req.grade,
+      subType: req.subType,
+      subPrice: req.subPrice || 0,
+      imageUrl: req.imageUrl || '',
+      teacherId: user.id,
+      teacherCode: user.code || '',
+      code: generateCode(),
+      groupIds: [],
+      registeredAt: new Date().toLocaleDateString('ar-EG'),
+      createdAt: Date.now(),
+      notes: ''
+    };
+
+    // Optimistic Updates
+    const prevStudents = [...students];
+    const prevReqs = [...registrationRequests];
+    useTeacherStore.getState().setStudents([...prevStudents, newStudent]);
+    useTeacherStore.getState().setRegistrationRequests(prevReqs.filter(r => r.id !== req.id));
+
     setSaving(true);
     try {
-      await saveStudent({
-        name: req.name,
-        phone: req.phone,
-        parentPhone: req.parentPhone,
-        grade: req.grade,
-        subType: req.subType,
-        subPrice: req.subPrice || 0,
-        imageUrl: req.imageUrl || '',
-        teacherId: user.id,
-        teacherCode: user.code || '',
-        code: generateCode(),
-        groupIds: [],
-        registeredAt: new Date().toLocaleDateString('ar-EG'),
-        createdAt: Date.now()
-      });
+      await saveStudent(newStudent);
       await deleteRegistrationRequest(req.id);
       showToast('✅ تم قبول الطالب بنجاح');
-    } catch { showToast('فشل قبول الطلب'); }
+    } catch { 
+      useTeacherStore.getState().setStudents(prevStudents);
+      useTeacherStore.getState().setRegistrationRequests(prevReqs);
+      showToast('فشل قبول الطلب'); 
+    }
     finally { setSaving(false); }
   };
 
   const handleRejectRequest = async (id: string) => {
     if (!confirm('هل أنت متأكد من رفض هذا الطلب؟')) return;
+    const prevReqs = [...registrationRequests];
+    useTeacherStore.getState().setRegistrationRequests(prevReqs.filter(r => r.id !== id));
     try {
       await deleteRegistrationRequest(id);
       showToast('❌ تم رفض الطلب');
-    } catch { showToast('فشل رفض الطلب'); }
+    } catch { 
+      useTeacherStore.getState().setRegistrationRequests(prevReqs);
+      showToast('فشل رفض الطلب'); 
+    }
   };
 
   const handleDelete = async (id: string, name: string) => {
     if (!confirm(`حذف الطالب "${name}" وجميع سجلاته نهائياً؟`)) return;
-    await deleteStudent(id);
+    const prevStudents = [...students];
+    useTeacherStore.getState().setStudents(prevStudents.filter(s => s.id !== id));
+    try {
+      await deleteStudent(id);
+      showToast('✅ تم حذف الطالب');
+    } catch {
+      useTeacherStore.getState().setStudents(prevStudents);
+      showToast('❌ فشل الحذف');
+    }
+  };
+
+  const handleResetInteraction = async (studentId: string, name: string) => {
+    if (!confirm(`هل أنت متأكد من تصفير جميع تفاعلات الطالب "${name}"؟ سيتم حذف جميع المحاولات والواجبات ونتائج الألعاب.`)) return;
+    try {
+      await wipeStudentInteraction(studentId);
+      showToast('✅ تم تصفير تفاعلات الطالب بنجاح');
+      // Refresh state if needed, though most stats are computed from 'attempts' which should update if we refetch or update store
+      // For now, reload window or refetch is safer but optimistic UI is better.
+      // Since we don't have a global 'attempts' setter that's easy to use here, we'll just show toast and let them refresh or wait for sync.
+      window.location.reload(); 
+    } catch {
+      showToast('❌ فشل تصفير التفاعلات');
+    }
   };
 
   const copyCode = (code: string) => {
@@ -254,6 +310,7 @@ export default function StudentsPage() {
                           <td className="px-4 py-3 text-sm text-text-muted">{studentAttempts.length} محاولة</td>
                           <td className="px-4 py-3">
                             <div className="flex gap-2 justify-end">
+                              <button onClick={() => handleResetInteraction(student.id, student.name)} className="text-orange-400 hover:text-orange-300 p-1 bg-white/5 rounded" title="تصفير التفاعل"><RotateCcw size={16} /></button>
                               <button onClick={() => setViewStudent(student)} className="text-green-400 hover:text-green-300 p-1 bg-white/5 rounded" title="تفاصيل الطالب"><Eye size={16} /></button>
                               <button onClick={() => openEdit(student)} className="text-blue-400 hover:text-blue-300 p-1 bg-white/5 rounded"><Edit size={16} /></button>
                               <button onClick={() => handleDelete(student.id, student.name)} className="text-red-400 hover:text-red-300 p-1 bg-white/5 rounded"><Trash2 size={16} /></button>
@@ -273,6 +330,7 @@ export default function StudentsPage() {
                       <div className="text-[10px] text-text-muted mt-0.5">{student.grade} | {student.code}</div>
                     </div>
                     <div className="flex gap-2">
+                      <button onClick={() => handleResetInteraction(student.id, student.name)} className="p-2 bg-white/5 rounded-lg text-orange-400"><RotateCcw size={14} /></button>
                       <button onClick={() => setViewStudent(student)} className="p-2 bg-white/5 rounded-lg text-green-400"><Eye size={14} /></button>
                       <button onClick={() => openEdit(student)} className="p-2 bg-white/5 rounded-lg text-blue-400"><Edit size={14} /></button>
                       <button onClick={() => handleDelete(student.id, student.name)} className="p-2 bg-white/5 rounded-lg text-red-400"><Trash2 size={14} /></button>
@@ -323,6 +381,7 @@ export default function StudentsPage() {
             <div className="sticky top-0 z-10 flex items-center justify-between p-4 bg-[#0a0f18]/90 backdrop-blur border-b border-white/5 print:hidden">
               <h3 className="font-black text-xl gold-text flex items-center gap-2"><Eye size={24} /> ملف الطالب الشامل</h3>
               <div className="flex gap-2">
+                <button onClick={() => handleResetInteraction(viewStudent.id, viewStudent.name)} className="btn-outline border-orange-500/50 text-orange-400 py-2 px-4 flex items-center gap-2"><RotateCcw size={18} /> تصفير التفاعل</button>
                 <button onClick={() => window.print()} className="btn-gold py-2 px-4 flex items-center gap-2"><Printer size={18} /> طباعة التقرير</button>
                 <button onClick={() => setViewStudent(null)} className="btn-outline py-2 px-4">إغلاق</button>
               </div>

@@ -17,7 +17,11 @@ export default function CalendarPage() {
     title: '',
     description: '',
     date: '',
-    type: 'manual' as CalendarEvent['type']
+    type: 'manual' as CalendarEvent['type'],
+    isRecurring: false,
+    recurringDays: [] as number[],
+    startTime: '',
+    endTime: ''
   });
 
   const loadAllEvents = async () => {
@@ -27,8 +31,8 @@ export default function CalendarPage() {
       // 1. Get Exams
       const exams = await getExams(user.id);
       const examEvents = exams
-        .filter(e => e.startTime) // Only scheduled exams
-        .map(e => ({
+        .filter((e: any) => e.startTime) // Only scheduled exams
+        .map((e: any) => ({
           id: `exam-${e.id}`,
           title: `امتحان: ${e.title}`,
           description: e.desc,
@@ -42,8 +46,8 @@ export default function CalendarPage() {
       // 2. Get Assignments
       const assignments = await getAssignments(user.id);
       const assignEvents = assignments
-        .filter(a => a.dueDate)
-        .map(a => ({
+        .filter((a: any) => a.dueDate)
+        .map((a: any) => ({
           id: `assign-${a.id}`,
           title: `تسليم واجب: ${a.title}`,
           description: a.description,
@@ -79,13 +83,35 @@ export default function CalendarPage() {
       return;
     }
     setSaving(true);
+    const eventData: CalendarEvent = {
+        id: crypto.randomUUID(),
+        title: newEvent.title,
+        description: newEvent.description || '',
+        date: newEvent.isRecurring && !newEvent.date ? new Date().toISOString() : newEvent.date,
+        type: newEvent.type,
+        isRecurring: newEvent.isRecurring,
+        recurringDays: newEvent.recurringDays,
+        startTime: newEvent.startTime,
+        endTime: newEvent.endTime,
+        teacherId: user!.id,
+        createdAt: Date.now()
+    };
+
+    // Optimistic Update
+    const previousEvents = [...events];
+    const updatedEvents = [...previousEvents, eventData].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    setEvents(updatedEvents);
+
     try {
-      await saveCalendarEvent({ ...(newEvent as Omit<CalendarEvent, 'id'>), teacherId: user!.id });
-      await loadAllEvents();
+      await saveCalendarEvent(eventData);
       setShowAddForm(false);
-      setNewEvent({ title: '', description: '', date: '', type: 'manual' });
-      showToast('تم إضافة الحدث بنجاح');
+      setNewEvent({ 
+        title: '', description: '', date: '', type: 'manual', 
+        isRecurring: false, recurringDays: [], startTime: '', endTime: '' 
+      });
+      showToast('✅ تم إضافة الحدث بنجاح');
     } catch (e) {
+      setEvents(previousEvents);
       showToast('حدث خطأ أثناء الحفظ');
     } finally {
       setSaving(false);
@@ -97,6 +123,7 @@ export default function CalendarPage() {
       case 'exam': return 'bg-red-500/20 text-red-500 border-red-500/30';
       case 'assignment': return 'bg-orange-500/20 text-orange-500 border-orange-500/30';
       case 'live_session': return 'bg-blue-500/20 text-blue-500 border-blue-500/30';
+      case 'fixed_class': return 'bg-purple-500/20 text-purple-500 border-purple-500/30';
       case 'holiday': return 'bg-green-500/20 text-green-500 border-green-500/30';
       default: return 'bg-gray-500/20 text-gray-400 border-gray-500/30';
     }
@@ -107,6 +134,7 @@ export default function CalendarPage() {
       case 'exam': return <BookOpen size={16} />;
       case 'assignment': return <ClipboardList size={16} />;
       case 'live_session': return <Clock size={16} />;
+      case 'fixed_class': return <CalendarIcon size={16} className="text-purple-500" />;
       default: return <CalendarIcon size={16} />;
     }
   };
@@ -149,9 +177,65 @@ export default function CalendarPage() {
               >
                 <option value="manual">حدث عام</option>
                 <option value="live_session">حصة مباشرة</option>
+                <option value="fixed_class">حصة ثابتة</option>
                 <option value="holiday">إجازة</option>
               </select>
             </div>
+            <div className="md:col-span-2 bg-white/5 p-4 rounded-xl border border-white/10 space-y-4">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input 
+                  type="checkbox" 
+                  checked={newEvent.isRecurring} 
+                  onChange={e => setNewEvent({...newEvent, isRecurring: e.target.checked, type: e.target.checked ? 'fixed_class' : 'manual'})}
+                  className="w-4 h-4 rounded border-gray-600 text-gold focus:ring-gold"
+                />
+                <span className="font-bold text-sm">حصة ثابتة (تتكرر أسبوعياً)</span>
+              </label>
+
+              {newEvent.isRecurring && (
+                <div className="animate-fade-in space-y-4 pt-2 border-t border-white/5">
+                  <div className="space-y-2">
+                    <label className="text-xs opacity-70">اختر أيام الأسبوع:</label>
+                    <div className="flex flex-wrap gap-2">
+                      {['ح', 'ن', 'ث', 'ر', 'خ', 'ج', 'س'].map((day, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => {
+                            const days = newEvent.recurringDays.includes(idx)
+                              ? newEvent.recurringDays.filter(d => d !== idx)
+                              : [...newEvent.recurringDays, idx];
+                            setNewEvent({...newEvent, recurringDays: days});
+                          }}
+                          className={`w-8 h-8 rounded-lg text-xs font-bold transition-all ${
+                            newEvent.recurringDays.includes(idx) ? 'bg-gold text-dark' : 'bg-white/10 text-gray-400 hover:text-white'
+                          }`}
+                        >
+                          {day}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-xs opacity-70 block mb-1">وقت البدء</label>
+                      <input 
+                        type="time" className="input-base w-full"
+                        value={newEvent.startTime} onChange={e => setNewEvent({...newEvent, startTime: e.target.value})}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs opacity-70 block mb-1">وقت الانتهاء</label>
+                      <input 
+                        type="time" className="input-base w-full"
+                        value={newEvent.endTime} onChange={e => setNewEvent({...newEvent, endTime: e.target.value})}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
             <div className="md:col-span-2">
                <label className="block text-sm mb-1 opacity-70">التفاصيل / الملاحظات</label>
                <textarea 

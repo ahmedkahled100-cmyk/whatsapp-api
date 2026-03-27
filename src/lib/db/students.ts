@@ -127,3 +127,11 @@ export const subscribeToRegistrationRequests = (teacherId: string, callback: (re
     callback(snap.docs.map(d => ({ ...d.data(), id: d.id } as RegistrationRequest)));
   });
 };
+
+export const getEnrollmentsByPhone = async (phone: string): Promise<Student[]> => {
+  return []; // Firebase not supported for multi-enrollment
+};
+
+export const getEnrollmentsByParentPhone = async (parentPhone: string): Promise<Student[]> => {
+  return []; // Firebase not supported for multi-enrollment
+};

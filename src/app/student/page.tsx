@@ -5,27 +5,64 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import Image from 'next/image';
 import { useStudentStore, useFileProcessingStore } from '@/lib/store';
-import { getStudentByCode, getStudentByParentPhone, getPublishedExams, getAttemptsByStudent, getSettings, getMaterials, getAssignments, getStudentSubmissions, uploadFileToStorage, submitAssignment, subscribeToNotifications, dispatchNotification } from '@/lib/db';
+import { 
+  getStudentByCode, 
+  getStudentByParentPhone, 
+  getPublishedExams, 
+  getAttemptsByStudent, 
+  getSettings, 
+  getMaterials, 
+  getAssignments, 
+  getStudentSubmissions, 
+  uploadFileToStorage, 
+  submitAssignment, 
+  subscribeToNotifications, 
+  dispatchNotification, 
+  getEnrollmentsByPhone, 
+  getEnrollmentsByParentPhone, 
+  getGamesForStudent, 
+  getCalendarEvents, 
+  getExams, 
+  sendMessage, 
+  subscribeToMessages, 
+  markMessagesAsRead, 
+  subscribeToConversations, 
+  getTeacherById, 
+  getSuperAdmin, 
+  setUserOnlineStatus, 
+  subscribeToUserOnlineStatus, 
+  markNotificationRead 
+} from '@/lib/db';
 import { FileProcessor } from '@/lib/file-processor';
 import { showToast } from '@/lib/toast';
 import type { Settings } from '@/types';
-import type { Exam, Attempt, CourseMaterial, Assignment, AssignmentSubmission, Notification, Message, Conversation } from '@/types';
-import { GraduationCap, LogOut, BookOpen, BarChart2, ClipboardList, Download, Award, Video, FileText, Link as LinkIcon, BookMarked, Globe, Lock, Upload, MessageCircle, MessageSquare, Loader2, Bell, Send, Check, CheckCheck, X, Plus, ShieldCheck, AlertCircle, Paperclip, Image as ImageIcon, Trash2, User } from 'lucide-react';
+import type { Exam, Attempt, CourseMaterial, Assignment, AssignmentSubmission, Notification, Message, Conversation, CalendarEvent, Student } from '@/types';
+import { GraduationCap, LogOut, BookOpen, BarChart2, ClipboardList, Download, Award, Video, FileText, Link as LinkIcon, BookMarked, Globe, Lock, Upload, MessageCircle, MessageSquare, Loader2, Bell, Send, Check, CheckCheck, X, Plus, ShieldCheck, AlertCircle, Paperclip, Image as ImageIcon, Trash2, User, Gamepad2, Layers, Trophy, Languages, Brain, Zap, ChevronRight, Calendar, Clock } from 'lucide-react';
 import { PDFCompressionModal, usePDFCompression } from '@/components/PDFCompressionModal';
-import { sendMessage, subscribeToMessages, markMessagesAsRead, subscribeToConversations, getTeacherById, getSuperAdmin, setUserOnlineStatus, subscribeToUserOnlineStatus } from '@/lib/db';
 import Link from 'next/link';
 import { formatDateAr, gradeColor, scoreLabel, getViewerUrl, getDownloadUrl } from '@/lib/utils';
 import { useFilePreview, FilePreviewModal } from '@/components/FilePreviewModal';
 import { GlobalFileUpload } from '@/components/GlobalFileUpload';
 import { MobileStudentPortalWrapper } from '@/components/MobileStudentPortalWrapper';
+import { TeacherDiscovery } from '@/components/TeacherDiscovery';
+import { GamePortal } from '@/components/games/GamePortal';
+import type { EducationalGame } from '@/types';
 
 export default function StudentPortal() {
-  const { student, setStudent, logout, conversations, setConversations } = useStudentStore();
-  const { queue } = useFileProcessingStore();
+  const student = useStudentStore(state => state.student);
+  const setStudent = useStudentStore(state => state.setStudent);
+  const logout = useStudentStore(state => state.logout);
+  const conversations = useStudentStore(state => state.conversations);
+  const setConversations = useStudentStore(state => state.setConversations);
+  const allEnrollments = useStudentStore(state => state.allEnrollments);
+  const setAllEnrollments = useStudentStore(state => state.setAllEnrollments);
+  const queue = useFileProcessingStore(state => state.queue);
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [exams, setExams] = useState<Exam[]>([]);
+  const [allTeacherEvents, setAllTeacherEvents] = useState<CalendarEvent[]>([]);
+  const [loadingSchedule, setLoadingSchedule] = useState(false);
   const [attempts, setAttempts] = useState<Attempt[]>([]);
   const [materials, setMaterials] = useState<CourseMaterial[]>([]);
   
@@ -38,7 +75,9 @@ export default function StudentPortal() {
   const [submittingAssignId, setSubmittingAssignId] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
 
-  const [activeTab, setActiveTab] = useState<'home' | 'exams' | 'courses' | 'assignments' | 'results' | 'messages' | 'profile'>('home');
+  const [activeTab, setActiveTab] = useState<'home' | 'exams' | 'courses' | 'assignments' | 'results' | 'messages' | 'settings' | 'profile' | 'discover' | 'link' | 'games' | 'schedule'>('home');
+  const [games, setGames] = useState<EducationalGame[]>([]);
+  const [selectedGame, setSelectedGame] = useState<EducationalGame | null>(null);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [teacherInfo, setTeacherInfo] = useState<any>(null);
   const [showNotifs, setShowNotifs] = useState(false);
@@ -71,6 +110,7 @@ export default function StudentPortal() {
   const [isCompressing, setIsCompressing] = useState(false);
   const [compressionProgress, setCompressionProgress] = useState(0);
   const [compressionMessage, setCompressionMessage] = useState('');
+  const [showAcademySwitcher, setShowAcademySwitcher] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   const handleChatAttachment = async (e: React.ChangeEvent<HTMLInputElement>, _type: 'image' | 'file') => {
@@ -147,9 +187,9 @@ export default function StudentPortal() {
   useEffect(() => {
     if (student) {
       if (student.teacherId) {
-        getSettings(student.teacherId).then(s => setSiteSettings(s));
-        import('@/lib/db').then(({ getTeacherById }) => {
-          getTeacherById(student.teacherId).then(t => {
+        getSettings(student.teacherId).then((s: any) => setSiteSettings(s));
+        import('@/lib/db').then(({ getTeacherById }: any) => {
+          getTeacherById(student.teacherId).then((t: any) => {
             setTeacherPermissions(t?.permissions || null);
             setTeacherInfo(t);
           });
@@ -160,8 +200,8 @@ export default function StudentPortal() {
       let unsubConvs = () => {};
       
       if (student.teacherId && student.teacherId !== 'unknown_teacher') {
-        unsubNotifs = subscribeToNotifications(student.teacherId, (allNotifs) => {
-          const myNotifs = allNotifs.filter(n => {
+        unsubNotifs = subscribeToNotifications(student.teacherId, (allNotifs: any[]) => {
+          const myNotifs = allNotifs.filter((n: any) => {
             const isForMe = !n.targetUsers || n.targetUsers.length === 0 || n.targetUsers.includes(student.id) || (n as any).targetRoles?.includes('student');
             const isForAdmin = (n as any).targetRoles?.includes('admin');
             const isJoinMsg = n.msg.includes('طلب انضمام') || n.msg.includes('تسجيل معلم');
@@ -174,6 +214,12 @@ export default function StudentPortal() {
       return () => { unsubNotifs(); unsubConvs(); };
     }
   }, [student]);
+
+  useEffect(() => {
+    if (siteSettings?.primaryColor) {
+      document.documentElement.style.setProperty('--gold', siteSettings.primaryColor);
+    }
+  }, [siteSettings?.primaryColor]);
 
   // Handle our own presence
   useEffect(() => {
@@ -197,16 +243,13 @@ export default function StudentPortal() {
     if (!selectedConv || !student) return;
     
     setLoadingChat(true);
-    const unsub = subscribeToMessages(selectedConv.id, msgs => {
+    const unsub = subscribeToMessages(selectedConv.id, (msgs: Message[]) => {
       setChatMessages(msgs);
       setLoadingChat(false);
-      markMessagesAsRead(selectedConv.id, student.id);
-    }, (error) => {
-      setLoadingChat(false);
-      showToast('مشكلة في تحميل الرسائل');
+      markMessagesAsRead(selectedConv.id, student!.id);
     });
 
-    const otherParticipantId = selectedConv.participants.find(p => p !== student.id);
+    const otherParticipantId = selectedConv.participants.find((p: string) => p !== student!.id);
     let unsubPresence = () => {};
     if (otherParticipantId) {
       // Assuming the other user is a teacher for students
@@ -217,7 +260,7 @@ export default function StudentPortal() {
     }
 
     return () => {
-      unsubMsgs();
+      unsub();
       unsubPresence();
     };
   }, [selectedConv, student]);
@@ -252,22 +295,24 @@ export default function StudentPortal() {
         return;
       }
 
-      const [allExams, myAtts, allMaterials, allAssignments, mySubs] = await Promise.all([
-        getPublishedExams(tId).catch(e => { console.error('Failed to load exams:', e); return [] as Exam[]; }),
-        getAttemptsByStudent(sId).catch(e => { console.error('Failed to load attempts:', e); return [] as Attempt[]; }),
-        getMaterials(tId).catch(e => { console.error('Failed to load materials:', e); return [] as CourseMaterial[]; }),
-        getAssignments(tId).catch(e => { console.error('Failed to load assignments:', e); return [] as Assignment[]; }),
-        getStudentSubmissions(sId).catch(e => { console.error('Failed to load submissions:', e); return [] as AssignmentSubmission[]; }),
+      const [allExams, myAtts, allMaterials, allAssignments, mySubs, allGames] = await Promise.all([
+        getPublishedExams(tId).catch((e: any) => { console.error('Failed to load exams:', e); return [] as Exam[]; }),
+        getAttemptsByStudent(sId).catch((e: any) => { console.error('Failed to load attempts:', e); return [] as Attempt[]; }),
+        getMaterials(tId).catch((e: any) => { console.error('Failed to load materials:', e); return [] as CourseMaterial[]; }),
+        getAssignments(tId).catch((e: any) => { console.error('Failed to load assignments:', e); return [] as Assignment[]; }),
+        getStudentSubmissions(sId).catch((e: any) => { console.error('Failed to load submissions:', e); return [] as AssignmentSubmission[]; }),
+        getGamesForStudent(tId, student.groupIds?.[0]).catch((e: any) => { console.error('Failed to load games:', e); return [] as EducationalGame[]; }),
       ]);
 
       // Filter exams for this student's group
-      const filteredExams = allExams.filter(exam => {
+      const filteredExams = allExams.filter((exam: Exam) => {
         if (!exam.targetGroup) return true;
         return student.groupIds?.includes(exam.targetGroup);
       });
 
       setExams(filteredExams);
-      setAttempts(myAtts.filter(a => a.completed));
+      setAttempts(myAtts.filter((a: Attempt) => a.completed));
+      setGames(allGames);
       
       // Fetch teacher name if missing
       if (!student.teacherName && tId !== 'unknown_teacher') {
@@ -280,10 +325,10 @@ export default function StudentPortal() {
       const isExpired = student.subExpiry ? new Date(student.subExpiry).getTime() < Date.now() : false;
       const hasActiveSub = isSubscribed && !isExpired;
 
-      const filteredMaterials = allMaterials.filter(m => {
+      const filteredMaterials = allMaterials.filter((m: CourseMaterial) => {
         // Filter by group visibility
         const groupMatch = !m.targetGroups || m.targetGroups.length === 0 || 
-                         m.targetGroups.some(gId => student.groupIds?.includes(gId));
+                         m.targetGroups.some((gId: string) => student.groupIds?.includes(gId));
         if (!groupMatch) return false;
 
         // Filter by subscription & exceptions
@@ -299,7 +344,7 @@ export default function StudentPortal() {
       setMaterials(filteredMaterials);
 
       // Filter assignments by group
-      const filteredAssigns = allAssignments.filter(a => {
+      const filteredAssigns = allAssignments.filter((a: Assignment) => {
         if (!a.targetGroup) return true;
         return student.groupIds?.includes(a.targetGroup);
       });
@@ -310,28 +355,108 @@ export default function StudentPortal() {
     }
   };
 
+  const loadGlobalSchedule = async () => {
+    if (!student || student.id === 'unknown_student') return;
+    setLoadingSchedule(true);
+    try {
+      const allEvents: CalendarEvent[] = [];
+      
+      // Load events for each enrollment
+      for (const enrollment of allEnrollments) {
+        if (!enrollment.teacherId) continue;
+        
+        // Fetch manual events
+        const manual = await getCalendarEvents(enrollment.teacherId);
+        
+        // Fetch exams and assignments to include them in schedule
+        const teacherExams = await getExams(enrollment.teacherId);
+        const teacherAssigns = await getAssignments(enrollment.teacherId);
+        
+        const examEvents = teacherExams
+          .filter((e: Exam) => e.startTime)
+          .map((e: Exam) => ({
+            id: `exam-${e.id}`,
+            title: `امتحان: ${e.title}`,
+            date: e.startTime!,
+            type: 'exam' as const,
+            teacherId: e.teacherId,
+            teacherName: (e as any).teacherName || (enrollment as any).teacherName || 'المعلم',
+            createdAt: e.createdAt || new Date().toISOString()
+          }));
+          
+        const assignEvents = teacherAssigns
+          .filter((a: Assignment) => a.dueDate)
+          .map((a: Assignment) => ({
+            id: `assign-${a.id}`,
+            title: `واجب: ${a.title}`,
+            date: a.dueDate,
+            type: 'assignment' as const,
+            teacherId: enrollment.teacherId,
+            teacherName: (enrollment as any).teacherName || 'المعلم',
+            createdAt: a.createdAt || new Date().toISOString()
+          }));
+
+        // Tag manual events with teacher name
+        const taggedManual = manual.map((m: CalendarEvent) => ({
+          ...m,
+          teacherName: (enrollment as any).teacherName || 'المعلم'
+        }));
+
+        allEvents.push(...examEvents, ...assignEvents, ...taggedManual);
+      }
+      
+      // Sort by date/time
+      setAllTeacherEvents(allEvents.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()));
+    } catch (err) {
+      console.error('Failed to load global schedule:', err);
+    } finally {
+      setLoadingSchedule(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'schedule') {
+      loadGlobalSchedule();
+    }
+  }, [activeTab, allEnrollments]);
+
   const handleLogin = async () => {
     if (!code.trim()) { setError('أدخل كودك أولاً'); return; }
     setLoading(true);
     setError('');
     try {
       const s = await getStudentByCode(code.trim());
-      if (!s) { setError('❌ الكود غير صحيح'); }
-      else { 
-        let tName = s.teacherName;
-        if (!tName && s.teacherId) {
-          const teacherData = await getTeacherById(s.teacherId);
-          if (teacherData) {
-            tName = teacherData.name;
-            setStudent({ ...s, teacherName: tName });
-          } else {
-            setStudent(s);
+      if (!s) { 
+        setError('❌ الكود غير صحيح'); 
+      } else { 
+        // Success! Now fetch ALL enrollments for this student's phone
+        const all = await getEnrollmentsByPhone(s.phone || '');
+        
+        // Find teacher names for all enrollments if missing
+        const enriched = await Promise.all(all.map(async (en: Student) => {
+          if (!en.teacherName && en.teacherId) {
+            const t = await getTeacherById(en.teacherId);
+            return { 
+              ...en, 
+              teacherName: t?.name || 'معلم غير معروف',
+              teacherImage: t?.imageUrl,
+              teacherSubject: t?.subject || 'مادة دراسية'
+            };
           }
-        } else {
-          setStudent(s); 
-        }
+          return en;
+        }));
+
+        setAllEnrollments(enriched);
+        
+        // Find the specific enrollment that matches the code entered
+        const active = enriched.find((e: Student) => e.code === code.trim().toUpperCase()) || enriched[0];
+        setStudent(active);
+        showToast(`✅ أهلاً بك في أكاديمية ${active.teacherName}`);
       }
-    } catch { setError('تعذّر الاتصال'); }
+    } catch (err: any) { 
+      console.error(err);
+      setError('تعذّر الاتصال'); 
+    }
     finally { setLoading(false); }
   };
 
@@ -340,13 +465,28 @@ export default function StudentPortal() {
     setFindingCode(true);
     setRecoveredCode('');
     try {
-      const s = await getStudentByParentPhone(parentPhone.trim());
-      if (s) {
-        setRecoveredCode(s.code);
+      const all = await getEnrollmentsByParentPhone(parentPhone.trim());
+      if (all.length > 0) {
+        // Enriched all for the switcher to work later if they enter one code
+        const enriched = await Promise.all(all.map(async (en: Student) => {
+          if (!en.teacherName && en.teacherId) {
+            const t = await getTeacherById(en.teacherId);
+            return { 
+              ...en, 
+              teacherName: t?.name || 'معلم غير معروف',
+              teacherImage: t?.imageUrl,
+              teacherSubject: t?.subject || 'مادة دراسية'
+            };
+          }
+          return en;
+        }));
+        setAllEnrollments(enriched);
+        setRecoveredCode(all[0].code); // Show first one for now as a hint
+        showToast('✅ تم العثور على اشتراكاتك، أدخل أي كود للدخول');
       } else {
         showToast('لم يتم العثور على طالب بهذا الرقم');
       }
-    } catch (e) {
+    } catch (e: any) {
       showToast('حدث خطأ أثناء البحث');
     } finally {
       setFindingCode(false);
@@ -406,6 +546,62 @@ export default function StudentPortal() {
   };
 
   if (!mounted) return null;
+
+  // Academy Selection Overlay
+  if (!student && allEnrollments.length > 0) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4" style={{ background: 'var(--dark)' }}>
+        <div className="w-full max-w-lg space-y-6 animate-scale-in text-right" dir="rtl">
+          <div className="text-center space-y-2">
+            <div className="text-5xl">🏰</div>
+            <h1 className="text-2xl font-black gold-text">اختر الأكاديمية</h1>
+            <p className="text-sm text-text-muted">أهلاً بك مجدداً، يرجى اختيار المعلم الذي تود متابعته الآن</p>
+          </div>
+          
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {allEnrollments.map((en) => (
+              <button
+                key={en.id}
+                onClick={() => setStudent(en)}
+                className="card-base p-6 text-right hover:border-gold/50 transition-all group relative overflow-hidden active:scale-95"
+              >
+                <div className="absolute top-0 right-0 w-1 h-full bg-gold opacity-0 group-hover:opacity-100 transition-opacity" />
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-2xl bg-gold/10 flex items-center justify-center text-gold text-xl font-bold border border-gold/20 overflow-hidden shrink-0">
+                    {en.teacherImage ? (
+                      <img src={en.teacherImage} alt={en.teacherName} className="w-full h-full object-cover" />
+                    ) : (
+                      en.teacherName?.[0] || '👨‍🏫'
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-bold text-white group-hover:gold-text transition-colors truncate">أكاديمية {en.teacherName || 'متميزة'}</div>
+                    <div className="text-[10px] text-text-muted mt-0.5 flex items-center gap-2 truncate">
+                      <span className="shrink-0">{en.teacherSubject || 'مادة دراسية'}</span>
+                      <span className="w-1 h-1 rounded-full bg-white/10 shrink-0" />
+                      <span className="truncate">كود الطالب: {en.code}</span>
+                    </div>
+                  </div>
+                  <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-gold/20 transition-all text-text-muted group-hover:text-gold shrink-0">
+                    ←
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+
+          <div className="text-center pt-4">
+            <button 
+              onClick={() => { logout(); setAllEnrollments([]); }}
+              className="text-xs text-red-400 hover:text-red-300 transition-colors flex items-center gap-1 mx-auto"
+            >
+              🚪 تسجيل الخروج وتبديل الحساب
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Login screen
   if (!student) {
@@ -530,6 +726,8 @@ export default function StudentPortal() {
         onTabChange={(tab) => setActiveTab(tab as any)}
         onNotifClick={() => setShowNotifs(!showNotifs)}
         onLogout={logout}
+        hasMultipleAcademies={allEnrollments.length > 1}
+        onAcademySwitch={() => setStudent(null)}
       >
         <div className="space-y-4">
           {/* Expiry Warning */}
@@ -545,6 +743,14 @@ export default function StudentPortal() {
                 </div>
               </div>
             </div>
+          )}
+
+          {/* Discover Teachers Tab */}
+          {activeTab === 'discover' && (
+            <TeacherDiscovery 
+              currentTeacherId={student.teacherId}
+              onBack={() => setActiveTab('home')}
+            />
           )}
 
           {/* Exams Tab */}
@@ -577,6 +783,8 @@ export default function StudentPortal() {
                 const available = !start || (now >= start && now <= end);
                 const upcoming = start && now < start;
 
+                const isPendingEssay = lastAtt?.essayAnswers?.some(ea => ea.pending) ?? false;
+
                 return (
                   <div id={`exam-${exam.id}`} key={exam.id} className="card-base p-4 transition-all hover:border-yellow-500/20">
                     <div className="flex items-start gap-3">
@@ -591,9 +799,15 @@ export default function StudentPortal() {
                         {lastScoreData !== null && (
                           <div className="mt-2 text-sm">
                             آخر نتيجة:
-                            <span className="font-bold mr-1" style={{ color: gradeColor(lastScorePercent!, exam.passScore) }}>
-                              {lastScoreData.points} / {lastScoreData.total} ({lastScorePercent}%) — {scoreLabel(lastScorePercent!)}
-                            </span>
+                            {isPendingEssay ? (
+                              <span className="font-bold mr-1 text-purple-400">
+                                ⏳ بانتظار تصحيح الأسئلة المقالية
+                              </span>
+                            ) : (
+                              <span className="font-bold mr-1" style={{ color: gradeColor(lastScorePercent!, exam.passScore) }}>
+                                {lastScoreData.points} / {lastScoreData.total} ({lastScorePercent}%) — {scoreLabel(lastScorePercent!)}
+                              </span>
+                            )}
                           </div>
                         )}
                         <div className="mt-2 text-xs">
@@ -778,11 +992,24 @@ export default function StudentPortal() {
                   <div className="p-3 border-b border-white/5 bg-white/5 flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <button onClick={() => setSelectedConv(null)} className="text-gray-400 p-1"><X size={18}/></button>
-                      <div className="text-xs font-bold">{selectedConv.participantNames.find(n => n !== student.name)}</div>
-                      <div className={`text-[9px] ${otherUserOnline ? 'text-green-500' : 'text-gray-500'}`}>
-                        {otherUserOnline ? 'نشط الآن' : 'غير متصل'}
+                      <div className="flex flex-col">
+                        <div className="text-xs font-bold">{selectedConv.participantNames.find(n => n !== student.name)}</div>
+                        <div className={`text-[9px] ${otherUserOnline ? 'text-green-500' : 'text-gray-500'}`}>
+                          {otherUserOnline ? 'نشط الآن' : 'غير متصل'}
+                        </div>
                       </div>
                     </div>
+                    {siteSettings?.whatsappEnabled && siteSettings?.whatsappNumber && (
+                      <a 
+                        href={`https://wa.me/${siteSettings.whatsappNumber.startsWith('2') ? siteSettings.whatsappNumber : '2' + siteSettings.whatsappNumber}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex items-center gap-1.5 bg-[#25D366]/10 text-[#25D366] px-3 py-1.5 rounded-xl border border-[#25D366]/20 hover:bg-[#25D366]/20 transition-all text-[10px] font-bold"
+                      >
+                        <MessageCircle size={14} />
+                        تواصل عبر واتساب
+                      </a>
+                    )}
                   </div>
                   <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-black/20">
                     {chatMessages.map((msg) => (
@@ -863,7 +1090,7 @@ export default function StudentPortal() {
                           msg: `رسالة جديدة من الطالب ${student.name}`,
                           targetRoles: ['admin'],
                           channels: { inApp: true, whatsapp: false },
-                          actionPath: '/teacher/messages'
+                          actionPath: `/teacher/messages?studentId=${student.id}`
                         });
                       } catch (err: any) {
                         showToast('فشل الإرسال: ' + (err?.message || 'خطأ غير معروف'));
@@ -924,6 +1151,58 @@ export default function StudentPortal() {
                   </div>
                 );
               })}
+            </div>
+          )}
+
+          {/* Games Tab */}
+          {activeTab === 'games' && (
+            <div className="space-y-4 animate-slide-up pb-20">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xl font-black text-white flex items-center gap-2">
+                  <Gamepad2 size={24} className="text-gold" /> الألعاب التعليمية
+                </h3>
+                <span className="text-[10px] bg-gold/10 text-gold px-2 py-0.5 rounded-md font-bold uppercase tracking-widest">مهمات ذكية</span>
+              </div>
+
+              {games.length === 0 ? (
+                <div className="card-base p-16 text-center space-y-4 border-dashed border-white/10">
+                  <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mx-auto text-white/20">
+                    <Gamepad2 size={32} />
+                  </div>
+                  <p className="text-xs text-text-muted">لا توجد ألعاب تعليمية مفعلة لك حالياً.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-3">
+                  {games.map(game => (
+                    <button 
+                      key={game.id}
+                      onClick={() => setSelectedGame(game)}
+                      className="card-base p-4 text-right flex items-center gap-4 group active:scale-95 transition-all bg-gradient-to-l from-white/5 to-transparent border-white/10 hover:border-gold/30 relative z-10 cursor-pointer"
+                    >
+                      <div className="w-14 h-14 rounded-2xl bg-gold/10 flex items-center justify-center text-gold group-hover:bg-gold group-hover:text-dark transition-all">
+                         {game.type === 'flashcards' ? <Layers size={28} /> 
+                          : game.type === 'match' ? <Trophy size={28} />
+                          : game.type === 'sentence' ? <Languages size={28} />
+                          : game.type === 'sort' ? <Brain size={28} />
+                          : game.type === 'tf_run' ? <Zap size={28} />
+                          : <GraduationCap size={28} />}
+                      </div>
+                      <div className="flex-1">
+                         <h4 className="font-bold text-white group-hover:gold-text transition-all">{game.title}</h4>
+                         <p className="text-[10px] text-text-muted mt-1 uppercase tracking-tighter">
+                            {game.type === 'flashcards' ? 'بطاقات تعليمية' 
+                             : game.type === 'match' ? 'مطابقة المصطلحات'
+                             : game.type === 'sentence' ? 'ترتيب الجمل'
+                             : game.type === 'sort' ? 'تصنيف المواد'
+                             : game.type === 'tf_run' ? 'سرعة الرد'
+                             : 'تحدي الأسئلة'}
+                         </p>
+                      </div>
+                      <ChevronRight size={20} className="text-white/20 group-hover:text-gold" />
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -1040,6 +1319,79 @@ export default function StudentPortal() {
               </button>
             </div>
           )}
+
+          {/* Global Schedule Tab */}
+          {activeTab === 'schedule' && (
+            <div className="space-y-4 animate-slide-up pb-24">
+              <div className="flex items-center justify-between bg-gold/5 p-4 rounded-2xl border border-gold/10">
+                <div className="flex items-center gap-3">
+                  <Calendar className="text-gold" />
+                  <h3 className="font-bold text-white">جدولك الدراسي الموحد</h3>
+                </div>
+                <button onClick={loadGlobalSchedule} className="text-xs gold-text">🔄 تحديث</button>
+              </div>
+
+              {loadingSchedule ? (
+                <div className="flex flex-col items-center justify-center p-20 gap-3">
+                  <Loader2 className="animate-spin text-gold" size={32} />
+                  <span className="text-xs text-text-muted">جاري تجميع جدولك...</span>
+                </div>
+              ) : allTeacherEvents.length === 0 ? (
+                <div className="card-base p-16 text-center space-y-4">
+                  <Calendar className="mx-auto text-white/5" size={48} />
+                  <p className="text-xs text-text-muted">لا توجد فعاليات مجدولة حالياً.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {allTeacherEvents.map((evt: any) => {
+                    const dateObj = new Date(evt.date);
+                    const isPast = dateObj.getTime() < Date.now();
+                    const dayName = dateObj.toLocaleDateString('ar-EG', { weekday: 'long' });
+                    const timeStr = dateObj.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+
+                    return (
+                      <div key={evt.id} className={`card-base p-4 border border-white/5 flex gap-4 ${isPast ? 'opacity-50' : ''}`}>
+                         <div className="w-16 flex flex-col items-center justify-center border-l border-white/5 pl-4 shrink-0">
+                           <span className="text-[10px] font-bold text-gold uppercase">{dayName}</span>
+                           <span className="text-xl font-black">{dateObj.getDate()}</span>
+                           <span className="text-[10px] text-gray-500">{dateObj.toLocaleDateString('ar-EG', { month: 'short' })}</span>
+                         </div>
+                         <div className="flex-1 min-w-0">
+                            <div className="flex justify-between items-start mb-1">
+                               <h4 className="font-bold text-sm truncate">{evt.title}</h4>
+                               <span className={`text-[9px] px-1.5 py-0.5 rounded border flex-shrink-0 ml-2 ${
+                                 evt.type === 'exam' ? 'bg-red-500/10 text-red-500 border-red-500/20' :
+                                 evt.type === 'assignment' ? 'bg-orange-500/10 text-orange-500 border-orange-500/20' :
+                                 evt.type === 'fixed_class' ? 'bg-purple-500/10 text-purple-500 border-purple-500/20' :
+                                 'bg-blue-500/10 text-blue-500 border-blue-500/20'
+                               }`}>
+                                 {evt.type === 'exam' ? 'امتحان' : 
+                                  evt.type === 'assignment' ? 'واجب' : 
+                                  evt.type === 'fixed_class' ? 'حصة ثابتة' : 'فعالية'}
+                               </span>
+                            </div>
+                            <div className="flex items-center gap-2 text-[10px] text-gray-400">
+                               <Clock size={10} className="text-gold" /> {timeStr}
+                               <span className="w-1 h-1 rounded-full bg-white/20" />
+                               <span className="gold-text font-bold">🎓 {evt.teacherName}</span>
+                            </div>
+                            {evt.isRecurring && evt.recurringDays && (
+                              <div className="mt-2 flex gap-1">
+                                {['ح', 'ن', 'ث', 'ر', 'خ', 'ج', 'س'].map((day, dIdx) => (
+                                  <span key={dIdx} className={`w-4 h-4 rounded-md flex items-center justify-center text-[8px] font-bold ${evt.recurringDays.includes(dIdx) ? 'bg-purple-500 text-white' : 'bg-white/5 text-gray-600'}`}>
+                                    {day}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                         </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </MobileStudentPortalWrapper>
 
@@ -1082,14 +1434,27 @@ export default function StudentPortal() {
                 </div>
               ) : notifications.map(n => (
                 <div key={n.id} 
-                  onClick={() => {
+                  onClick={async () => {
+                    if (!n.read) {
+                      try {
+                        await markNotificationRead(n.id);
+                      } catch (e: any) {
+                        console.error('Failed to mark read:', e);
+                      }
+                    }
                     if (n.actionPath) {
-                      setActiveTab(n.actionPath as any);
+                      // Map full paths to student tabs if necessary
+                      let targetTab = n.actionPath;
+                      if (targetTab.startsWith('/')) {
+                        const parts = targetTab.split('/');
+                        targetTab = parts[parts.length - 1]; // e.g. /teacher/exams -> exams
+                      }
+                      setActiveTab(targetTab as any);
                       setShowNotifs(false);
                     }
                   }}
                   className={`p-4 rounded-xl border relative overflow-hidden transition-all ${
-                    n.actionPath ? 'cursor-pointer hover:border-gold/50' : ''
+                    n.actionPath || !n.read ? 'cursor-pointer hover:border-gold/50' : ''
                   } ${
                     n.read
                       ? 'border-white/5 bg-white/5 opacity-70'
@@ -1113,6 +1478,16 @@ export default function StudentPortal() {
       )}
 
       {/* ═══ LUXURIOUS CERTIFICATE MODAL ═══ */}
+      {/* ═══ EDUCATIONAL GAME PORTAL ═══ */}
+      {selectedGame && student && (
+        <GamePortal 
+          game={selectedGame}
+          studentId={student.id}
+          studentName={student.name}
+          onClose={() => setSelectedGame(null)}
+        />
+      )}
+
       {certData && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-xl">
            <div className="w-full max-w-lg bg-white rounded-3xl overflow-hidden shadow-[0_0_100px_rgba(245,197,24,0.2)] animate-scale-in">

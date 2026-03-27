@@ -1,9 +1,8 @@
-
 'use client';
 
 import { useState, useEffect } from 'react';
 import { useTeacherStore } from '@/lib/store';
-import { getNotificationLogs, saveNotificationLog, updateNotificationLog, dispatchNotification, subscribeToNotificationLogs } from '@/lib/db';
+import { getNotificationLogs, saveNotificationLog, updateNotificationLog, dispatchNotification, subscribeToNotificationLogs, markNotificationRead } from '@/lib/db';
 import type { NotificationLog } from '@/types';
 import { showToast } from '@/lib/toast';
 import { Send, AlertCircle, CheckCircle2, Search, RefreshCw, MessageSquare, Clock, Filter, Users, ShieldAlert, RotateCcw, Bell } from 'lucide-react';
@@ -16,6 +15,7 @@ export default function NotificationsAdmin() {
   const [logs, setLogs] = useState<NotificationLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'inbox' | 'compose' | 'logs'>('inbox');
+  const [inboxTab, setInboxTab] = useState<'teacher' | 'admin'>('teacher');
 
 
   // Compose State
@@ -29,7 +29,7 @@ export default function NotificationsAdmin() {
   useEffect(() => {
     if (!user) return;
     setLoading(true);
-    const unsub = subscribeToNotificationLogs(user.id, (data) => {
+    const unsub = subscribeToNotificationLogs(user.id, (data: any) => {
       setLogs(data);
       setLoading(false);
     });
@@ -124,6 +124,13 @@ export default function NotificationsAdmin() {
       showToast('حدث خطأ أثناء إعادة المحاولة');
     }
   };
+
+  const displayedNotifications = notifications.filter(n => {
+    const isAdminNotif = n.targetRoles?.includes('admin') || 
+                       n.msg.toLowerCase().includes('طلب انضمام') || 
+                       n.msg.toLowerCase().includes('تسجيل معلم');
+    return inboxTab === 'admin' ? isAdminNotif : !isAdminNotif;
+  });
 
   return (
     <div className="space-y-6" dir="rtl">
@@ -260,23 +267,47 @@ export default function NotificationsAdmin() {
         </div>
       ) : activeTab === 'inbox' ? (
         <div className="card-base p-6 animate-fade-in">
-          <h2 className="text-lg font-bold mb-6">الإشعارات الواردة</h2>
+          <div className="flex items-center justify-between mb-6 border-b border-white/5 pb-4">
+            <h2 className="text-lg font-bold">الإشعارات الواردة</h2>
+            <div className="flex bg-white/5 rounded-lg p-1">
+              <button 
+                onClick={() => setInboxTab('teacher')}
+                className={`px-3 py-1.5 rounded-md text-[10px] font-bold transition-all ${inboxTab === 'teacher' ? 'bg-gold text-dark' : 'text-gray-400'}`}
+              >
+                إشعارات المعلم
+              </button>
+              <button 
+                onClick={() => setInboxTab('admin')}
+                className={`px-3 py-1.5 rounded-md text-[10px] font-bold transition-all ${inboxTab === 'admin' ? 'bg-gold text-dark' : 'text-gray-400'}`}
+              >
+                إشعارات الإدارة
+              </button>
+            </div>
+          </div>
+
           <div className="space-y-4">
-            {notifications.length === 0 ? (
+            {displayedNotifications.length === 0 ? (
               <div className="text-center p-12 text-gray-500 flex flex-col items-center justify-center h-full gap-3">
                 <Bell size={48} className="text-white/5" />
-                <p className="font-bold">لا توجد إشعارات واردة حالياً</p>
+                <p className="font-bold">لا توجد إشعارات {inboxTab === 'admin' ? 'إدارية' : 'تعليمية'} حالياً</p>
               </div>
-            ) : notifications.map(n => (
+            ) : displayedNotifications.map(n => (
               <div 
                 key={n.id} 
-                onClick={() => {
+                onClick={async () => {
+                  if (!n.read) {
+                    try {
+                      await markNotificationRead(n.id);
+                    } catch (e) {
+                      console.error('Failed to mark read:', e);
+                    }
+                  }
                   if (n.actionPath) {
                     router.push(n.actionPath);
                   }
                 }}
                 className={`p-4 rounded-xl border relative overflow-hidden transition-all ${
-                  n.actionPath ? 'cursor-pointer hover:border-gold/50' : ''
+                  n.actionPath || !n.read ? 'cursor-pointer hover:border-gold/50' : ''
                 } ${
                   n.read
                     ? 'border-white/5 bg-white/5 opacity-70'

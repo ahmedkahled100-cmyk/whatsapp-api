@@ -3,7 +3,8 @@ import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useTeacherStore } from '@/lib/store';
-import { LayoutDashboard, Users, Settings, LogOut, Menu, X, ShieldCheck, GraduationCap, MessageSquare, CreditCard, Smartphone } from 'lucide-react';
+import { subscribeToNotifications } from '@/lib/db';
+import { LayoutDashboard, Users, Settings, LogOut, Menu, X, ShieldCheck, GraduationCap, MessageSquare, CreditCard, Smartphone, Bell } from 'lucide-react';
 
 const NAV_ITEMS = [
   { href: '/admin', icon: LayoutDashboard, label: 'لوحة التحكم الشاملة' },
@@ -18,7 +19,7 @@ const NAV_ITEMS = [
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { user, logout } = useTeacherStore();
+  const { user, logout, notifications, setNotifications } = useTeacherStore();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mounted, setMounted] = useState(false);
 
@@ -33,6 +34,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       return;
     }
   }, [user, router]);
+  
+  useEffect(() => {
+    if (!user?.id) return;
+    return subscribeToNotifications(user.id, setNotifications);
+  }, [user?.id, setNotifications]);
 
   useEffect(() => {
     const handleResize = () => setSidebarOpen(window.innerWidth >= 1024);
@@ -109,6 +115,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <Menu size={20} />
           </button>
           <h2 className="font-cairo font-black text-lg text-white">إدارة المنصة الشاملة</h2>
+          <div className="mr-auto flex items-center gap-2">
+            <Link href="/teacher/notifications" className="w-10 h-10 rounded-xl flex items-center justify-center relative transition-all hover:bg-white/5 bg-white/5 border border-white/10">
+              <Bell size={20} className="text-gray-400" />
+              {notifications.filter(n => !n.read && n.targetRoles?.includes('admin')).length > 0 && (
+                <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full shadow-[0_0_8px_rgba(239,68,68,0.5)]" />
+              )}
+            </Link>
+          </div>
         </header>
 
         <div className="flex-1 p-4 lg:p-8">

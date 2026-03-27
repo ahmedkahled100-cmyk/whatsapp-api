@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { GoogleGenAI } from '@google/genai';
 
-const ai = new GoogleGenAI({});
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
 
 export async function POST(req: Request) {
   try {
@@ -76,6 +76,32 @@ ${options?.subject ? `المادة: ${options.subject}` : ''}
         systemPrompt = `أنت معلم متخصص. اشرح الموضوع التالي بشكل مبسط وواضح باللغة العربية: "${userPrompt}"
 ${processedFileData ? 'استخدم المستند المرفق كمرجع.' : ''}
 أجب بـ JSON: {"title": "عنوان الشرح", "explanation": "شرح تفصيلي", "examples": ["مثال 1", "مثال 2"], "summary": "ملخص"}`;
+        break;
+
+      case 'mindmap':
+        systemPrompt = `أنت خبير في رسم الخرائط الذهنية التعليمية. قم بتحليل المحتوى المرفق أو الموضوع المعطى وإنشاء خريطة ذهنية احترافية وشاملة باللغة العربية.
+الموضوع: "${userPrompt || 'المحتوى المرفق'}"
+
+يجب أن تكون الخريطة هرمية ومنظمة بشكل منطقي لتسهيل الفهم والحفظ.
+أجب بـ JSON فقط بالهيكل التالي:
+{
+  "title": "العنوان الرئيسي للخريطة",
+  "nodes": [
+    {
+      "text": "الفكرة الرئيسية 1",
+      "children": [
+        { "text": "فكرة فرعية 1.1" },
+        { "text": "فكرة فرعية 1.2" }
+      ]
+    },
+    {
+      "text": "الفكرة الرئيسية 2",
+      "children": [
+        { "text": "فكرة فرعية 2.1" }
+      ]
+    }
+  ]
+}`;
         break;
 
       default:

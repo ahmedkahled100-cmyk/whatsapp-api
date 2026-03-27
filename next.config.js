@@ -14,6 +14,11 @@ const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  experimental: {
+    serverActions: {
+      bodySizeLimit: '300mb',
+    },
+  },
 };
 
 module.exports = nextConfig;
