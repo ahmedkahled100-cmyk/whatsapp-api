@@ -401,13 +401,16 @@ export default function SubscriptionsPage() {
                     );
                   })()}
 
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 flex-wrap">
+                    <button onClick={() => openEdit(student)} className="flex-1 min-w-[30%] bg-purple-500/20 hover:bg-purple-500/30 text-purple-400 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1 border border-purple-500/20 transition-colors">
+                      <RefreshCw size={12} /> تجديد
+                    </button>
                     {(isExpired || isExpiring) && student.parentPhone && (
-                      <button onClick={() => sendWhatsappReminder(student)} className="flex-1 bg-green-500/20 hover:bg-green-500/30 text-green-400 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1 border border-green-500/20 transition-colors">
+                      <button onClick={() => sendWhatsappReminder(student)} className="flex-1 min-w-[30%] bg-green-500/20 hover:bg-green-500/30 text-green-400 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1 border border-green-500/20 transition-colors">
                         📲 تذكير
                       </button>
                     )}
-                    <button onClick={() => setReceiptStudent(student)} className="flex-1 bg-white/5 hover:bg-white/10 text-gray-300 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1 transition-colors">
+                    <button onClick={() => setReceiptStudent(student)} className="flex-1 min-w-[30%] bg-white/5 hover:bg-white/10 text-gray-300 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1 transition-colors">
                       <Printer size={12} /> إيصال
                     </button>
                   </div>
