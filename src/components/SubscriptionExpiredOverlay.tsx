@@ -76,6 +76,8 @@ interface StudentOverlayProps {
   student: Student;
   teacherInfo: TeacherUser | null;
   settings: Settings | null;
+  hasMultipleAcademies?: boolean;
+  onSwitchAcademy?: () => void;
   onLogout: () => void;
   onRenewalSuccess: () => void;
 }
@@ -375,6 +377,17 @@ export function SubscriptionExpiredOverlay(props: SubscriptionExpiredOverlayProp
                 </>
               )}
             </button>
+
+            {/* Switch Academy Button */}
+            {isStudent && (props as StudentOverlayProps).hasMultipleAcademies && (
+              <button
+                onClick={(props as StudentOverlayProps).onSwitchAcademy}
+                className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl font-bold text-sm bg-white/5 border border-white/10 text-white hover:bg-white/10 transition-colors"
+              >
+                <RefreshCw size={16} />
+                العودة لاختيار الأكاديمية (معلم آخر)
+              </button>
+            )}
 
             {/* Logout */}
             <button

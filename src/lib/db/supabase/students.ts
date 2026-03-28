@@ -233,8 +233,21 @@ export const getRegistrationRequests = async (teacherId: string): Promise<Regist
 
 export const saveRegistrationRequest = async (req: Omit<RegistrationRequest, 'id'> & { id?: string }): Promise<string> => {
   const payload = toDB({ ...req });
+  
+  // Workaround: Database table 'registration_requests' is missing 'notes' column.
+  // We serialize notes into 'payment_ref' if they exist to prevent 400 Bad Request.
+  if (req.notes && req.notes.trim()) {
+    const notesStr = `(ملاحظة: ${req.notes.trim()})`;
+    payload.payment_ref = payload.payment_ref 
+      ? `${payload.payment_ref} ${notesStr}` 
+      : notesStr;
+  }
+
+  // Remove fields that don't exist in the DB schema to prevent crashes
+  const fieldsToRemove = ['notes', 'teacher_code', 'teacher_name'];
+  fieldsToRemove.forEach(f => delete payload[f]);
+
   Object.keys(payload).forEach(k => payload[k] === undefined && delete payload[k]);
-  delete payload.teacher_code;
 
   if (req.id) {
     const { error } = await supabase.from(REG_REQUESTS).update(payload).eq('id', req.id);

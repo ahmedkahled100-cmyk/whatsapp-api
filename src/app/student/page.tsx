@@ -430,8 +430,12 @@ export default function StudentPortal() {
       if (!s) { 
         setError('❌ الكود غير صحيح'); 
       } else { 
-        // Success! Now fetch ALL enrollments for this student's phone
-        const all = await getEnrollmentsByPhone(s.phone || '');
+        // Fetch ALL enrollments for this student's phone, falling back to just the current one if no phone
+        const all = (s.phone && s.phone.trim()) 
+          ? await getEnrollmentsByPhone(s.phone.trim()) 
+          : [s];
+
+        if (all.length === 0) all.push(s); // Defensive fallback
         
         // Find teacher names for all enrollments if missing
         const enriched = await Promise.all(all.map(async (en: Student) => {
@@ -449,10 +453,15 @@ export default function StudentPortal() {
 
         setAllEnrollments(enriched);
         
-        // Find the specific enrollment that matches the code entered
-        const active = enriched.find((e: Student) => e.code === code.trim().toUpperCase()) || enriched[0];
-        setStudent(active);
-        showToast(`✅ أهلاً بك في أكاديمية ${active.teacherName}`);
+        if (enriched.length > 1) {
+          // Keep student state null so the Academy Switcher is presented
+          setStudent(null);
+          showToast(`تم العثور على اشتراكات متعددة، يرجى اختيار المعلم`);
+        } else {
+          const active = enriched.find((e: Student) => e.code === code.trim().toUpperCase()) || enriched[0];
+          setStudent(active);
+          showToast(`✅ أهلاً بك في أكاديمية ${active.teacherName}`);
+        }
       }
     } catch (err: any) { 
       console.error(err);
@@ -730,6 +739,8 @@ export default function StudentPortal() {
         student={student}
         teacherInfo={teacherInfo}
         settings={siteSettings}
+        hasMultipleAcademies={allEnrollments.length > 1}
+        onSwitchAcademy={() => setStudent(null)}
         onLogout={logout}
         onRenewalSuccess={() => {
           // Refresh student data after teacher approves (polling not needed — overlay shows success message)
