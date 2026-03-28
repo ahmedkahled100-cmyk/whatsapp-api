@@ -6,7 +6,7 @@ import { useTeacherStore } from '@/lib/store';
 import { saveStudent, deleteRegistrationRequest, getSettings, dispatchNotification } from '@/lib/db';
 import { CreditCard, Search, Calendar, ShieldCheck, Clock, UserX, CheckCircle, XCircle, Copy, AlertCircle, FileText, Image as ImageIcon, X, Download, TrendingUp, Bell, DollarSign, Users, RefreshCw, Edit2, ArrowRight, Printer, RotateCcw, Phone } from 'lucide-react';
 import { showToast } from '@/lib/toast';
-import { formatDateAr, generateCode } from '@/lib/utils';
+import { formatDateAr, generateCode, cleanWhatsAppPhone } from '@/lib/utils';
 import { Student } from '@/types';
 import { useFilePreview } from '@/components/FilePreviewModal';
 
@@ -118,7 +118,8 @@ export default function SubscriptionsPage() {
   const sendWhatsappReminder = (student: Student) => {
     const days = daysUntil(student.subExpiry);
     const msg = `💬 تذكير بنهاية الاشتراك\n\nعزيزي ولي أمر الطالب *${student.name}*،\n\nنود تذكيركم بأن اشتراك الطالب في المنصة (${translateSubType(student.subType)}) ${days !== null && days <= 0 ? 'قد انتهى بالفعل!' : `سينتهي خلال *${days} أيام فقط*`}\n\nتاريخ الانتهاء: ${student.subExpiry ? new Date(student.subExpiry).toLocaleDateString('ar-EG') : '—'}\nقيمة الاشتراك: *${student.subPrice || 0} ج.م*\n\nيرجى التجديد لضمان استمرار وصول الطالب للمحتوى التعليمي.\n\nشكراً لثقتكم بنا 🎓`;
-    window.open(`https://wa.me/${student.parentPhone}?text=${encodeURIComponent(msg)}`, '_blank');
+    const phone = cleanWhatsAppPhone(student.parentPhone || student.phone);
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank');
   };
 
   const approveRequest = async (req: any) => {
@@ -232,7 +233,7 @@ export default function SubscriptionsPage() {
       `✅ تمت مراجعة طلبك وسيتم التواصل معك قريباً.`,
     ].filter(Boolean).join('\n');
 
-    const phone = (req.phone || req.parentPhone || '').replace(/[\s\-\(\)]/g, '').replace(/^0/, '20');
+    const phone = cleanWhatsAppPhone(req.phone || req.parentPhone);
     window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank');
   };
 

@@ -14,6 +14,7 @@ import {
   Trash2, ExternalLink, Clock, User
 } from 'lucide-react';
 import { useTeacherStore } from '@/lib/store';
+import { cleanWhatsAppPhone } from '@/lib/utils';
 
 export default function AdminSettingsPage() {
   const { user: currentUser } = useTeacherStore();
@@ -116,7 +117,8 @@ export default function AdminSettingsPage() {
 ✅ تم تفعيل حسابك بنجاح. يمكنك الآن الدخول للمنصة والبدء.
 نتمنى لك تجربة تعليمية ممتعة!`;
 
-    const url = `https://wa.me/${receiptForm.whatsapp.startsWith('2') ? receiptForm.whatsapp : '2' + receiptForm.whatsapp}?text=${encodeURIComponent(msg)}`;
+    const phone = cleanWhatsAppPhone(receiptForm.whatsapp);
+    const url = `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
     window.open(url, '_blank');
   };
 
@@ -144,11 +146,11 @@ export default function AdminSettingsPage() {
              <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs text-gray-400 mb-1">سعر الاشتراك الشهري (ج.م)</label>
-                  <input type="number" className="input-base w-full" value={settings?.monthlyPrice || 0} onChange={e => setSettings(s => s ? {...s, monthlyPrice: parseFloat(e.target.value) || 0} : null)}/>
+                  <input type="number" className="input-base w-full" value={settings?.monthlyPrice ?? ''} onChange={e => setSettings(s => s ? {...s, monthlyPrice: e.target.value === '' ? 0 : parseFloat(e.target.value)} : null)}/>
                 </div>
                 <div>
                   <label className="block text-xs text-gray-400 mb-1">سعر الاشتراك السنوي (ج.م)</label>
-                  <input type="number" className="input-base w-full" value={settings?.yearlyPrice || 0} onChange={e => setSettings(s => s ? {...s, yearlyPrice: parseFloat(e.target.value) || 0} : null)}/>
+                  <input type="number" className="input-base w-full" value={settings?.yearlyPrice ?? ''} onChange={e => setSettings(s => s ? {...s, yearlyPrice: e.target.value === '' ? 0 : parseFloat(e.target.value)} : null)}/>
                 </div>
              </div>
              <div>

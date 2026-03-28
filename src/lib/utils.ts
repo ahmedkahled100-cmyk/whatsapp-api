@@ -117,3 +117,33 @@ export function getApiBase() {
   // Default to Vercel production
   return 'https://an-academy.vercel.app';
 }
+
+/** 
+ * Clean phone numbers for WhatsApp API (wa.me/PHONE)
+ * Standardizes local Egypt format 01xxxxxxxxx to international 201xxxxxxxxx
+ */
+export function cleanWhatsAppPhone(phone: string | undefined | null): string {
+  if (!phone) return '';
+  // Ensure we only have digits
+  const digits = String(phone).replace(/\D/g, '');
+  if (!digits) return '';
+
+  // Local Egypt format: 01012345678 (11 digits) -> 201012345678
+  if (digits.startsWith('01') && digits.length === 11) {
+    return '2' + digits; 
+  }
+  // Missing leading zero: 1012345678 (10 digits) -> 201012345678
+  if (digits.startsWith('1') && digits.length === 10) {
+    return '20' + digits;
+  }
+  // Already has country code 20
+  if (digits.startsWith('20') && digits.length >= 12) {
+    return digits;
+  }
+  // Any other 11-digit number starting with 0: assume Egypt and replace 0 with 2
+  if (digits.startsWith('0') && digits.length === 11) {
+    return '2' + digits;
+  }
+
+  return digits;
+}

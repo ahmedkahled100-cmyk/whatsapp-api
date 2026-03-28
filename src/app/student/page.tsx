@@ -577,10 +577,19 @@ export default function StudentPortal() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="font-bold text-white group-hover:gold-text transition-colors truncate">أكاديمية {en.teacherName || 'متميزة'}</div>
-                    <div className="text-[10px] text-text-muted mt-0.5 flex items-center gap-2 truncate">
+                    <div className="text-[10px] text-text-muted mt-0.5 flex flex-wrap items-center gap-2 truncate">
                       <span className="shrink-0">{en.teacherSubject || 'مادة دراسية'}</span>
                       <span className="w-1 h-1 rounded-full bg-white/10 shrink-0" />
-                      <span className="truncate">كود الطالب: {en.code}</span>
+                      <span className="truncate">كود: {en.code}</span>
+                      
+                      {/* Subscription Status Badge */}
+                      {(() => {
+                        if (en.subType === 'none') return <span className="text-[9px] px-1.5 py-0.5 rounded-md bg-gray-500/10 text-gray-500 border border-white/5">غير مشترك</span>;
+                        const isExpired = en.subExpiry && en.subExpiry < Date.now();
+                        return isExpired 
+                          ? <span className="text-[9px] px-1.5 py-0.5 rounded-md bg-red-500/10 text-red-400 border border-red-500/20 font-black">⚠️ اشتراك منتهي</span>
+                          : <span className="text-[9px] px-1.5 py-0.5 rounded-md bg-green-500/10 text-green-400 border border-green-500/20">✅ مشترك نشط</span>;
+                      })()}
                     </div>
                   </div>
                   <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-gold/20 transition-all text-text-muted group-hover:text-gold shrink-0">

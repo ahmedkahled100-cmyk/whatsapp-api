@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { Lock, Phone, RefreshCw, LogOut, Calendar, CreditCard, User, BookOpen } from 'lucide-react';
 import type { Student, TeacherUser, Settings } from '@/types';
 import { RenewalRequestModal } from './RenewalRequestModal';
+import { cleanWhatsAppPhone } from '@/lib/utils';
 
 // ============================================================
 // Helper: Student WhatsApp message builder
@@ -109,24 +110,30 @@ export function SubscriptionExpiredOverlay(props: SubscriptionExpiredOverlayProp
     let msg = '';
 
     if (isStudent) {
-      const { student, teacherInfo } = props as StudentOverlayProps;
-      phone = teacherInfo?.phone || teacherInfo?.username || '';
+      const { student, teacherInfo, settings } = props as StudentOverlayProps;
+      // Prioritize settings.whatsappNumber (teacher's support number), then teacher.phone
+      phone = settings?.whatsappNumber || teacherInfo?.phone || '';
       msg = buildStudentWhatsAppMessage(student, teacherInfo);
     } else {
       const { teacher, adminInfo } = props as TeacherOverlayProps;
-      phone = adminInfo?.phone || adminInfo?.username || '';
+      // Teachers contact the platform super_admin
+      phone = adminInfo?.phone || ''; 
       msg = buildTeacherWhatsAppMessage(teacher, adminInfo);
     }
 
     const encoded = encodeURIComponent(msg);
-    if (phone) {
-      // Clean phone number (remove spaces, dashes etc)
-      const cleanPhone = phone.replace(/[\s\-\(\)]/g, '').replace(/^0/, '20');
+    const cleanPhone = cleanWhatsAppPhone(phone);
+    if (cleanPhone) {
       window.open(`https://wa.me/${cleanPhone}?text=${encoded}`, '_blank');
     } else {
+      // Fallback: search for contact or generic message
       window.open(`https://wa.me/?text=${encoded}`, '_blank');
     }
   };
+
+  const isContactLoading = isStudent 
+    ? !(props as StudentOverlayProps).teacherInfo && !(props as StudentOverlayProps).settings?.whatsappNumber
+    : !(props as TeacherOverlayProps).adminInfo;
 
   // ---- Renewal submit handler ----
   const handleRenewalSubmit = async (data: {
@@ -352,10 +359,21 @@ export function SubscriptionExpiredOverlay(props: SubscriptionExpiredOverlayProp
             {/* WhatsApp Contact Button */}
             <button
               onClick={handleContactWhatsApp}
-              className="w-full flex items-center justify-center gap-3 py-3.5 rounded-2xl font-bold text-sm transition-all active:scale-[0.98] bg-green-600/20 border border-green-500/30 text-green-400 hover:bg-green-600/30"
+              disabled={isContactLoading}
+              className={`w-full flex items-center justify-center gap-3 py-3.5 rounded-2xl font-bold text-sm transition-all active:scale-[0.98] border ${
+                isContactLoading 
+                  ? 'bg-gray-500/10 border-white/5 text-gray-500 cursor-not-allowed' 
+                  : 'bg-green-600/20 border-green-500/30 text-green-400 hover:bg-green-600/30'
+              }`}
             >
-              <Phone size={18} />
-              {isStudent ? '📲 تواصل مع المعلم عبر واتساب' : '📲 تواصل مع الإدارة عبر واتساب'}
+              {isContactLoading ? (
+                <>جاري تحميل بيانات التواصل...</>
+              ) : (
+                <>
+                  <Phone size={18} />
+                  {isStudent ? '📲 تواصل مع المعلم عبر واتساب' : '📲 تواصل مع الإدارة عبر واتساب'}
+                </>
+              )}
             </button>
 
             {/* Logout */}

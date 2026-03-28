@@ -28,6 +28,7 @@ const DEFAULT_SETTINGS: Settings = {
 export default function SettingsPage() {
   const { user, settings, setSettings } = useTeacherStore();
   const [form, setForm] = useState<Settings>(settings || { ...DEFAULT_SETTINGS, teacherId: user?.id || '' });
+  const [initialized, setInitialized] = useState(false);
   const [showPass, setShowPass] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -49,12 +50,14 @@ export default function SettingsPage() {
   const [adminWhatsApp, setAdminWhatsApp] = useState('');
 
   useEffect(() => {
+    if (initialized) return;
     if (settings) {
       setForm(prev => ({ ...prev, ...settings, teacherId: settings.teacherId || user?.id || '' }));
+      setInitialized(true);
     } else if (user?.id) {
       setForm(prev => ({ ...prev, teacherId: user.id }));
     }
-  }, [settings, user]);
+  }, [settings, user, initialized]);
 
   useEffect(() => {
     getSuperAdmin().then(admin => {
@@ -427,35 +430,35 @@ export default function SettingsPage() {
           <div>
             <label className="block text-sm mb-1.5" style={{ color: 'var(--text-muted)' }}>سعر الاشتراك الشهري</label>
             <div className="relative">
-              <input type="number" value={form.monthlyPrice || ''} onChange={e => update('monthlyPrice', Number(e.target.value))} className="input-base pr-10" placeholder="0" />
+              <input type="number" value={form.monthlyPrice ?? ''} onChange={e => update('monthlyPrice', e.target.value === '' ? 0 : parseFloat(e.target.value))} className="input-base pr-10" placeholder="0" />
               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-500">ج.م</span>
             </div>
           </div>
           <div>
             <label className="block text-sm mb-1.5" style={{ color: 'var(--text-muted)' }}>سعر الاشتراك نصف السنوي</label>
             <div className="relative">
-              <input type="number" value={form.halfYearlyPrice || ''} onChange={e => update('halfYearlyPrice', Number(e.target.value))} className="input-base pr-10" placeholder="0" />
+              <input type="number" value={form.halfYearlyPrice ?? ''} onChange={e => update('halfYearlyPrice', e.target.value === '' ? 0 : parseFloat(e.target.value))} className="input-base pr-10" placeholder="0" />
               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-500">ج.م</span>
             </div>
           </div>
           <div>
             <label className="block text-sm mb-1.5" style={{ color: 'var(--text-muted)' }}>سعر الاشتراك السنوي</label>
             <div className="relative">
-              <input type="number" value={form.yearlyPrice || ''} onChange={e => update('yearlyPrice', Number(e.target.value))} className="input-base pr-10" placeholder="0" />
+              <input type="number" value={form.yearlyPrice ?? ''} onChange={e => update('yearlyPrice', e.target.value === '' ? 0 : parseFloat(e.target.value))} className="input-base pr-10" placeholder="0" />
               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-500">ج.م</span>
             </div>
           </div>
           <div>
             <label className="block text-sm mb-1.5" style={{ color: 'var(--text-muted)' }}>سعر الاشتراك كورس كامل</label>
             <div className="relative">
-              <input type="number" value={form.coursePrice || ''} onChange={e => update('coursePrice', Number(e.target.value))} className="input-base pr-10" placeholder="0" />
+              <input type="number" value={form.coursePrice ?? ''} onChange={e => update('coursePrice', e.target.value === '' ? 0 : parseFloat(e.target.value))} className="input-base pr-10" placeholder="0" />
               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-500">ج.م</span>
             </div>
           </div>
           <div>
             <label className="block text-sm mb-1.5" style={{ color: 'var(--text-muted)' }}>سعر الحصة / الجلسة</label>
             <div className="relative">
-              <input type="number" value={form.sessionPrice || ''} onChange={e => update('sessionPrice', Number(e.target.value))} className="input-base pr-10" placeholder="0" />
+              <input type="number" value={form.sessionPrice ?? ''} onChange={e => update('sessionPrice', e.target.value === '' ? 0 : parseFloat(e.target.value))} className="input-base pr-10" placeholder="0" />
               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-500">ج.م</span>
             </div>
           </div>
