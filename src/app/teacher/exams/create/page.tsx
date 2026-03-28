@@ -4,7 +4,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTeacherStore } from '@/lib/store';
-import { saveExam, uploadFileToStorage } from '@/lib/db';
+import { saveExam, uploadFileToStorage, dispatchNotification } from '@/lib/db';
 import { showToast } from '@/lib/toast';
 import { generateId } from '@/lib/utils';
 import type { Question, Exam } from '@/types';
@@ -127,6 +127,19 @@ export default function CreateExamPage() {
 
       const cleanExam = JSON.parse(JSON.stringify(exam));
       await saveExam(cleanExam);
+
+      // Notification logic
+      if (published) {
+        await dispatchNotification({
+          teacherId: user?.id || '',
+          msg: `تم نشر اختبار جديد: ${title}`,
+          targetRoles: ['student'],
+          targetGroups: targetGroup ? [targetGroup] : undefined,
+          actionPath: '/student',
+          channels: { inApp: true, whatsapp: false }
+        });
+      }
+
       router.push('/teacher/exams');
     } catch (e) {
       showToast('فشل الحفظ - تحقق من الاتصال');

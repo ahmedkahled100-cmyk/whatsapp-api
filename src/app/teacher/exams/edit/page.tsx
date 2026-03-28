@@ -2,7 +2,7 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useTeacherStore } from '@/lib/store';
-import { saveExam, getExam, uploadFileToStorage } from '@/lib/db';
+import { saveExam, getExam, uploadFileToStorage, dispatchNotification } from '@/lib/db';
 import { showToast } from '@/lib/toast';
 import { generateId } from '@/lib/utils';
 import type { Question, Exam } from '@/types';
@@ -163,6 +163,19 @@ function EditExamContent() {
 
       const cleanExam = JSON.parse(JSON.stringify(examData));
       await saveExam(cleanExam);
+
+      // Notification logic
+      if (published) {
+        await dispatchNotification({
+          teacherId: user?.id || '',
+          msg: `تحديث في اختبار: ${title}`,
+          targetRoles: ['student'],
+          targetGroups: targetGroup ? [targetGroup] : undefined,
+          actionPath: '/student',
+          channels: { inApp: true, whatsapp: false }
+        });
+      }
+
       router.push(`/teacher/exams/view?id=${id}`);
     } catch (e) {
       showToast('فشل الحفظ - تحقق من الاتصال');

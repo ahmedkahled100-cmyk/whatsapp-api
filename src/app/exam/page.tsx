@@ -2,7 +2,7 @@
 import { useEffect, useState, useCallback, useRef, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useStudentStore } from '@/lib/store';
-import { getExam, getStudentByCode, saveAttempt, getAttemptsByStudent, uploadFileToStorage } from '@/lib/db';
+import { getExam, getStudentByCode, saveAttempt, getAttemptsByStudent, uploadFileToStorage, dispatchNotification } from '@/lib/db';
 import { shuffleArray, generateId, formatTime, gradeColor, scoreLabel, getViewerUrl } from '@/lib/utils';
 import { showToast } from '@/lib/toast';
 import imageCompression from 'browser-image-compression';
@@ -160,6 +160,8 @@ const ExamContent = () => {
       }
     });
 
+    const hasPendingEssays = finalEssayAnswers.length > 0;
+
     const attempt: Omit<Attempt, 'id'> = {
       teacherId: exam.teacherId,
       examId: exam.id,
@@ -172,7 +174,7 @@ const ExamContent = () => {
       mcqScore,
       mcqTotal: autoGradedQs.length,
       finalScore: mcqScore,
-      passed: mcqScore >= exam.passScore,
+      passed: hasPendingEssays ? false : (mcqScore >= exam.passScore),
       completed: true,
       submittedAt: new Date().toISOString(),
       startedAt: new Date().toISOString(),
@@ -181,6 +183,16 @@ const ExamContent = () => {
 
     try {
       const id = await saveAttempt(attempt);
+      
+      // Notification logic
+      await dispatchNotification({
+        teacherId: exam.teacherId,
+        msg: `قام الطالب ${student.name} بتسليم اختبار: ${exam.title}`,
+        targetRoles: ['admin'], // Teachers/Admins receive this
+        actionPath: `/teacher/results?id=${exam.id}`,
+        channels: { inApp: true, whatsapp: false }
+      });
+
       setResult({ ...attempt, id });
       setPhase('results');
       try {
@@ -568,7 +580,8 @@ const ExamContent = () => {
   if (phase === 'results' && result && exam) {
     const score = result.finalScore ?? result.mcqScore ?? 0;
     const passed = result.passed;
-    const isEssayPresent = questions.some(q => q.type === 'essay');
+    const essayPending = result.essayAnswers?.some((ea) => ea.pending) ?? false;
+    const isEssayPresent = essayPending || (questions.some(q => q.type === 'essay') && (result.essayAnswers?.length ?? 0) > 0);
 
     return (
       <div className="min-h-screen flex items-center justify-center p-4 bg-dark">

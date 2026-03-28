@@ -1,7 +1,7 @@
 'use client';
 // src/app/admin/teachers/page.tsx
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { getTeachers, saveTeacher, deleteTeacher, updateSuperAdminCredentials, getSuperAdmin, getSettings } from '@/lib/db';
 import { TeacherUser, Settings as PlatformSettings } from '@/types';
 import { showToast } from '@/lib/toast';
@@ -29,6 +29,7 @@ export default function ManageTeachersPage() {
   const [editingTeacher, setEditingTeacher] = useState<TeacherUser | null>(null);
   const [platformSettings, setPlatformSettings] = useState<PlatformSettings | null>(null);
   const [saving, setSaving] = useState(false);
+  const [teacherSearch, setTeacherSearch] = useState('');
 
   const [form, setForm] = useState({
     name: '',
@@ -50,23 +51,37 @@ export default function ManageTeachersPage() {
     confirmPassword: ''
   });
 
-  const loadData = async () => {
-    setLoading(true);
+  const loadData = useCallback(async (showFullLoader = true) => {
+    if (showFullLoader) setLoading(true);
     try {
-      const [teachersList, admin] = await Promise.all([
-        getTeachers(),
-        getSuperAdmin()
-      ]);
+      const [teachersList, admin] = await Promise.all([getTeachers(), getSuperAdmin()]);
       setTeachers(teachersList);
-      
+
       if (admin) {
         const s = await getSettings(admin.id);
         setPlatformSettings(s);
       }
-    } catch(e) { console.error(e); } finally { setLoading(false); }
-  };
+    } catch (e) {
+      console.error(e);
+    } finally {
+      if (showFullLoader) setLoading(false);
+    }
+  }, []);
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => {
+    void loadData(true);
+  }, [loadData]);
+
+  const filteredTeachers = useMemo(() => {
+    const q = teacherSearch.trim().toLowerCase();
+    if (!q) return teachers;
+    return teachers.filter(
+      (t) =>
+        t.name.toLowerCase().includes(q) ||
+        t.username.toLowerCase().includes(q) ||
+        (t.code || '').toLowerCase().includes(q)
+    );
+  }, [teachers, teacherSearch]);
 
   // Auto-fill price based on subType
   useEffect(() => {
@@ -87,23 +102,34 @@ export default function ManageTeachersPage() {
 
     setSaving(true);
     try {
-      const data = editingTeacher 
+      const data = editingTeacher
         ? { ...editingTeacher, ...form, id: editingTeacher.id }
         : { ...form, isActive: true, createdAt: Date.now() };
-      
+
       await saveTeacher(data as any);
       showToast(editingTeacher ? 'تم تحديث الحساب' : 'تمت إضافة الحساب بنجاح');
       setShowAddForm(false);
       setEditingTeacher(null);
-      setForm({ 
-        name: '', username: '', password: '', code: '', role: 'teacher', 
-        permissions: AVAILABLE_PERMISSIONS.map(p => p.id),
-        subType: 'free', subExpiry: null, subLink: '', subPrice: 0, imageUrl: ''
+      setForm({
+        name: '',
+        username: '',
+        password: '',
+        code: '',
+        role: 'teacher',
+        permissions: AVAILABLE_PERMISSIONS.map((p) => p.id),
+        subType: 'free',
+        subExpiry: null,
+        subLink: '',
+        subPrice: 0,
+        imageUrl: '',
       });
-      loadData();
-    } catch(err) {
+
+      void loadData(false);
+    } catch (err) {
       showToast('حدث خطأ');
-    } finally { setSaving(false); }
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleDelete = async (id: string, name: string) => {
@@ -111,7 +137,8 @@ export default function ManageTeachersPage() {
     try {
       await deleteTeacher(id);
       showToast('تم الحذف بنجاح');
-      loadData();
+      setTeachers((prev) => prev.filter((x) => x.id !== id));
+      void loadData(false);
     } catch (e: any) { 
       showToast(e.message || 'فشل الحذف'); 
     }
@@ -270,11 +297,31 @@ export default function ManageTeachersPage() {
       )}
 
       <div className="space-y-4">
-        <h3 className="text-lg font-bold flex items-center gap-2 px-2">
-            <Users size={18} className="text-gray-400" /> قائمة الحسابات النشطة ({teachers.length})
-        </h3>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-2">
+          <h3 className="text-lg font-bold flex items-center gap-2">
+            <Users size={18} className="text-gray-400" /> الحسابات ({teachers.length})
+          </h3>
+          <input
+            type="search"
+            placeholder="بحث بالاسم، المستخدم، أو الكود..."
+            className="input-base max-w-md text-sm"
+            value={teacherSearch}
+            onChange={(e) => setTeacherSearch(e.target.value)}
+          />
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {loading ? <div className="col-span-3 text-center py-20 grayscale opacity-50"><div className="animate-spin text-4xl mb-4">⌛</div>جاري التحميل...</div> : teachers.map(t => (
+          {loading ? (
+            <>
+              {[1, 2, 3, 4, 5, 6].map((i) => (
+                <div key={i} className="card-base p-5 border border-white/5 animate-pulse h-52 bg-white/[0.03]" />
+              ))}
+            </>
+          ) : filteredTeachers.length === 0 ? (
+            <div className="col-span-3 text-center py-16 text-gray-500 text-sm">
+              {teacherSearch.trim() ? 'لا نتائج مطابقة للبحث.' : 'لا توجد حسابات بعد.'}
+            </div>
+          ) : (
+            filteredTeachers.map((t) => (
             <div key={t.id} 
               onClick={() => {
                 setEditingTeacher(t);
@@ -310,11 +357,33 @@ export default function ManageTeachersPage() {
                       {t.role === 'super_admin' ? <span className="flex items-center gap-1"><Shield size={10}/> Admin</span> : <span className="flex items-center gap-1"><User size={10}/> Teacher</span>}
                     </span>
                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all transform translate-y-2 group-hover:translate-y-0">
-                        <button className="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-400 hover:bg-blue-500 hover:text-white flex items-center justify-center transition-all">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingTeacher(t);
+                            setForm({
+                              name: t.name,
+                              username: t.username,
+                              password: '',
+                              code: t.code || '',
+                              role: t.role,
+                              permissions: t.permissions || AVAILABLE_PERMISSIONS.map((p) => p.id),
+                              subType: t.subType || 'free',
+                              subExpiry: t.subExpiry || null,
+                              subLink: t.subLink || '',
+                              subPrice: t.subPrice || 0,
+                              imageUrl: t.imageUrl || '',
+                            });
+                            setShowAddForm(false);
+                            window.scrollTo({ top: 0, behavior: 'smooth' });
+                          }}
+                          className="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-400 hover:bg-blue-500 hover:text-white flex items-center justify-center transition-all"
+                        >
                             <Edit2 size={14}/>
                         </button>
                         {t.role !== 'super_admin' && (
-                          <button onClick={(e) => { e.stopPropagation(); handleDelete(t.id, t.name); }} className="w-8 h-8 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white flex items-center justify-center transition-all">
+                          <button type="button" onClick={(e) => { e.stopPropagation(); handleDelete(t.id, t.name); }} className="w-8 h-8 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white flex items-center justify-center transition-all">
                               <Trash2 size={14}/>
                           </button>
                         )}
@@ -364,7 +433,8 @@ export default function ManageTeachersPage() {
                 <span className="text-gray-600">ID: {t.id.slice(0, 8)}</span>
               </div>
             </div>
-          ))}
+          ))
+          )}
         </div>
       </div>
 

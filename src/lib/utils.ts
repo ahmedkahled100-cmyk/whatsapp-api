@@ -2,6 +2,7 @@
 
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { getGoogleDocsViewerUrl } from './pdf-viewer';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -28,6 +29,16 @@ export function formatDateAr(date: string | number | Date, short = false): strin
   return new Date(date).toLocaleDateString('ar-EG', {
     year: 'numeric', month: 'long', day: 'numeric'
   });
+}
+
+/** عرض مختصر لآخر ظهور (نشاط) بالعربية */
+export function formatRelativeLastSeenAr(timestamp: number): string {
+  const diff = Date.now() - timestamp;
+  if (diff < 60_000) return 'منذ لحظات';
+  if (diff < 3600_000) return `منذ ${Math.floor(diff / 60_000)} د`;
+  if (diff < 86400_000) return `منذ ${Math.floor(diff / 3600_000)} س`;
+  if (diff < 604800_000) return `منذ ${Math.floor(diff / 86400_000)} يوم`;
+  return new Date(timestamp).toLocaleDateString('ar-EG', { month: 'short', day: 'numeric' });
 }
 
 // Format time remaining (seconds → MM:SS)
@@ -72,13 +83,7 @@ export function scoreLabel(score: number): string {
 // Helper to get viewable URL for files (especially PDFs)
 export function getViewerUrl(url: string | undefined): string {
   if (!url) return '';
-  
-  // Clean URL to handle potential double slashes or Cloudinary issues
-  const cleanUrl = url.trim();
-
-  // For Google Docs Viewer, we just need the encoded URL
-  // We handle specific deliver flags (like fl_attachment) in the directUrl logic of components
-  return `https://docs.google.com/gview?url=${encodeURIComponent(cleanUrl)}&embedded=true`;
+  return getGoogleDocsViewerUrl(url);
 }
 
 // Helper to get download URL (forces attachment for Cloudinary)

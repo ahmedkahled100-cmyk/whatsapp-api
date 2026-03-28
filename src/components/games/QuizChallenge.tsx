@@ -28,29 +28,50 @@ export function QuizChallenge({ items, onComplete }: QuizChallengeProps) {
 
   const currentItem = items[currentIndex];
 
+  if (!items.length) {
+    return (
+      <div className="flex-1 flex items-center justify-center p-8 text-text-muted text-sm">لا توجد أسئلة في هذا التحدي.</div>
+    );
+  }
+
+  if (!currentItem?.options?.length) {
+    return (
+      <div className="flex-1 flex items-center justify-center p-8 text-text-muted text-sm">صيغة الأسئلة غير صالحة.</div>
+    );
+  }
+
   const handleAnswer = (idx: number) => {
     if (feedback !== 'none') return;
     setSelectedOption(idx);
-    
-    if (idx === currentItem.correct) {
+
+    const correctIdx = Math.min(
+      Math.max(0, Number(currentItem.correct) || 0),
+      currentItem.options.length - 1
+    );
+    const isCorrect = idx === correctIdx;
+    if (isCorrect) {
       setFeedback('correct');
-      setScore(prev => prev + 1);
+      setScore((prev) => prev + 1);
     } else {
       setFeedback('wrong');
     }
 
-    setTimeout(() => {
-      if (currentIndex < items.length - 1) {
-        setCurrentIndex(prev => prev + 1);
+    const earned = isCorrect ? 1 : 0;
+    const qIndex = currentIndex;
+    const baseScore = score;
+
+    window.setTimeout(() => {
+      if (qIndex < items.length - 1) {
+        setCurrentIndex((prev) => prev + 1);
         setSelectedOption(null);
         setFeedback('none');
       } else {
-        onComplete(score + (idx === currentItem.correct ? 1 : 0), items.length);
+        onComplete(baseScore + earned, items.length);
       }
-    }, 1200);
+    }, 1100);
   };
 
-  const ARABIC_LETTERS = ['أ', 'ب', 'ج', 'د'];
+  const ARABIC_LETTERS = ['أ', 'ب', 'ج', 'د', 'هـ', 'و', 'ز', 'ح'];
 
   return (
     <div className="flex-1 flex flex-col gap-6 p-6 max-w-2xl mx-auto w-full h-full justify-center">
@@ -84,7 +105,11 @@ export function QuizChallenge({ items, onComplete }: QuizChallengeProps) {
          <div className="grid grid-cols-1 gap-3">
             {currentItem.options.map((opt, i) => {
                const isSelected = selectedOption === i;
-               const isCorrect = currentItem.correct === i;
+               const correctIdx = Math.min(
+                 Math.max(0, Number(currentItem.correct) || 0),
+                 currentItem.options.length - 1
+               );
+               const isCorrect = correctIdx === i;
                const showAsCorrect = feedback !== 'none' && isCorrect;
                const showAsWrong = feedback === 'wrong' && isSelected;
 
@@ -106,7 +131,7 @@ export function QuizChallenge({ items, onComplete }: QuizChallengeProps) {
                      isSelected ? 'bg-gold text-dark' :
                      'bg-white/5 text-text-muted group-hover:text-white'
                    }`}>
-                     {ARABIC_LETTERS[i]}
+                     {ARABIC_LETTERS[i] ?? String(i + 1)}
                    </div>
                    <span className={`text-sm sm:text-base font-bold flex-1 ${showAsCorrect ? 'text-green-400' : showAsWrong ? 'text-red-400' : 'text-white'}`}>
                      {opt}

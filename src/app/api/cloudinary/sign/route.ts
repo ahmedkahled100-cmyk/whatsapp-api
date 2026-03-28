@@ -19,6 +19,8 @@ export async function POST(req: NextRequest) {
   const timestamp = Math.floor(Date.now() / 1000);
   const paramsToSign: Record<string, string | number> = {
     timestamp,
+    type: 'upload',
+    access_mode: 'public',
   };
   if (folder) paramsToSign.folder = folder;
   if (public_id) paramsToSign.public_id = public_id;

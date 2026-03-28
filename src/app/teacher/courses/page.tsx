@@ -3,7 +3,7 @@
 
 import { useState, useEffect } from 'react';
 import { useTeacherStore } from '@/lib/store';
-import { saveMaterial, deleteMaterial, uploadFileToStorage } from '@/lib/db';
+import { saveMaterial, deleteMaterial, uploadFileToStorage, dispatchNotification } from '@/lib/db';
 import { showToast } from '@/lib/toast';
 import imageCompression from 'browser-image-compression';
 import { PDFDocument } from 'pdf-lib';
@@ -206,6 +206,19 @@ export default function CoursesPage() {
 
     try {
       await saveMaterial(materialData);
+
+      // Notification logic
+      if (!editingId) { // Only notify for NEW materials
+        await dispatchNotification({
+          teacherId: materialData.teacherId,
+          msg: `تم إضافة درس جديد: ${materialData.title} (${materialData.subject})`,
+          targetRoles: ['student'],
+          targetGroups: materialData.targetGroups && materialData.targetGroups.length > 0 ? materialData.targetGroups : undefined,
+          actionPath: '/student',
+          channels: { inApp: true, whatsapp: false }
+        });
+      }
+
       setShowAddForm(false);
       setForm({ ...EMPTY_FORM });
       setEditingId(null);

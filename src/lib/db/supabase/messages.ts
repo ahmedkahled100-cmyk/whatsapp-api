@@ -1,5 +1,6 @@
 // src/lib/db/supabase/messages.ts
 import { supabase } from '@/lib/supabase';
+import { debounceTrailing } from '@/lib/realtime-debounce';
 import { MESSAGES, CONVERSATIONS } from '../constants';
 import { fromDB, toDB, manyFromDB } from './dbUtils';
 import type { Message, Conversation } from '@/types';
@@ -41,41 +42,57 @@ export const sendMessage = async (msg: Omit<Message, 'id' | 'timestamp' | 'isRea
 };
 
 export const subscribeToConversations = (userId: string, callback: (convs: Conversation[]) => void) => {
+  let cancelled = false;
   const fetch = async () => {
     const { data } = await supabase
       .from(CONVERSATIONS)
       .select('*')
       .contains('participants', [userId])
       .order('updated_at', { ascending: false });
-    callback(manyFromDB<Conversation>(data || []));
+    if (!cancelled) callback(manyFromDB<Conversation>(data || []));
   };
+
+  const debouncedFetch = debounceTrailing(() => {
+    void fetch();
+  }, 200);
 
   const channel = supabase
     .channel(`convs:${userId}`)
-    .on('postgres_changes', { event: '*', schema: 'public', table: CONVERSATIONS }, fetch)
+    .on('postgres_changes', { event: '*', schema: 'public', table: CONVERSATIONS }, debouncedFetch)
     .subscribe();
 
-  fetch();
-  return () => supabase.removeChannel(channel);
+  void fetch();
+  return () => {
+    cancelled = true;
+    supabase.removeChannel(channel);
+  };
 };
 
 export const subscribeToMessages = (conversationId: string, callback: (msgs: Message[]) => void) => {
+  let cancelled = false;
   const fetch = async () => {
     const { data } = await supabase
       .from(MESSAGES)
       .select('*')
       .eq('conversation_id', conversationId)
       .order('timestamp', { ascending: true });
-    callback(manyFromDB<Message>(data || []));
+    if (!cancelled) callback(manyFromDB<Message>(data || []));
   };
+
+  const debouncedFetch = debounceTrailing(() => {
+    void fetch();
+  }, 80);
 
   const channel = supabase
     .channel(`msgs:${conversationId}`)
-    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: MESSAGES, filter: `conversation_id=eq.${conversationId}` }, fetch)
+    .on('postgres_changes', { event: '*', schema: 'public', table: MESSAGES, filter: `conversation_id=eq.${conversationId}` }, debouncedFetch)
     .subscribe();
 
-  fetch();
-  return () => supabase.removeChannel(channel);
+  void fetch();
+  return () => {
+    cancelled = true;
+    supabase.removeChannel(channel);
+  };
 };
 
 export const markMessagesAsRead = async (conversationId: string, userId: string) => {

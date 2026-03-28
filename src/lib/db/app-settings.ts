@@ -96,8 +96,12 @@ export const getAppHomeSettings = async (): Promise<AppHomeSettings> => {
       return { ...defaultSettings, ...fromDB<AppHomeSettings>(data) } as AppHomeSettings;
     }
     return defaultSettings;
-  } catch (e) {
-    console.error('getAppHomeSettings error:', e);
+  } catch (e: any) {
+    if (e.code === 'PGRST205') {
+       console.warn('⚠️ Table app_home not found. Using default settings.');
+    } else {
+       console.error('getAppHomeSettings error:', e);
+    }
     return defaultSettings;
   }
 };

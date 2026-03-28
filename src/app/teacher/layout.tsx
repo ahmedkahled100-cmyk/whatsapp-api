@@ -7,6 +7,7 @@ import Image from 'next/image';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useTeacherStore } from '@/lib/store';
+import { filterNotificationsForTeacherInbox } from '@/lib/notification-audience';
 import { subscribeToExams, subscribeToStudents, subscribeToAttempts, subscribeToGroups, subscribeToNotifications, subscribeToRegistrationRequests, subscribeToMaterials, subscribeToAssignments, subscribeToTeacherProfile, subscribeToConversations, getExams, getAllAttempts, getStudents, getGroups, getMaterials, getAssignments, getRegistrationRequests } from '@/lib/db';
 import {
   LayoutDashboard, PlusCircle, FileText, Users, BookOpen,
@@ -14,6 +15,8 @@ import {
   CreditCard, BookMarked, Settings, LogOut, Bell, Menu, X,
   GraduationCap, Database, ChevronLeft, Zap, ShieldCheck, ExternalLink, MessageSquare, Gamepad2
 } from 'lucide-react';
+import { SubscriptionExpiredOverlay } from '@/components/SubscriptionExpiredOverlay';
+import { getSuperAdmin } from '@/lib/db';
 
 const NAV_ITEMS = [
   { href: '/teacher/dashboard', icon: LayoutDashboard, label: 'الرئيسية', section: 'main', permission: 'dashboard' },
@@ -68,6 +71,7 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mounted, setMounted] = useState(false);
   const [syncStatus, setSyncStatus] = useState<'syncing' | 'synced' | 'offline'>('syncing');
+  const [adminInfo, setAdminInfo] = useState<any>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -75,12 +79,16 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
 
     // Real-time subscriptions — initial fetch + realtime updates
     setSyncStatus('syncing');
+    const applyTeacherNotifications = user.role === 'super_admin'
+      ? setNotifications
+      : (data: Parameters<typeof setNotifications>[0]) => setNotifications(filterNotificationsForTeacherInbox(data));
+
     const unsubs = [
       subscribeToExams(user.id, data => { setExams(data); setSyncStatus('synced'); }),
       subscribeToStudents(user.id, setStudents),
       subscribeToAttempts(user.id, setAttempts),
       subscribeToGroups(user.id, setGroups),
-      subscribeToNotifications(user.id, setNotifications),
+      subscribeToNotifications(user.id, applyTeacherNotifications),
       subscribeToRegistrationRequests(user.id, setRegistrationRequests),
       subscribeToMaterials(user.id, setMaterials),
       subscribeToAssignments(user.id, setAssignments),
@@ -94,7 +102,14 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
     getGroups(user.id).then(setGroups);
 
     return () => unsubs.forEach(u => u());
-  }, [user?.id]);
+  }, [user?.id, user?.role]);
+
+  // Fetch admin info for teacher to use in renewal contact
+  useEffect(() => {
+    if (user?.role === 'teacher') {
+      getSuperAdmin().then(admin => setAdminInfo(admin)).catch(() => {});
+    }
+  }, [user?.role]);
 
   useEffect(() => {
     if (settings?.primaryColor) {
@@ -125,6 +140,26 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
   const unreadCount = notifications.filter(n => !n.read).length;
 
   if (!mounted || !user) return null;
+
+  // ---- Teacher subscription expiry check ----
+  // Only block non-super_admin teachers with expired paid subscriptions
+  const isTeacherSubExpired =
+    user.role === 'teacher' &&
+    user.subType !== 'free' &&
+    user.subExpiry != null &&
+    user.subExpiry < Date.now();
+
+  if (isTeacherSubExpired) {
+    return (
+      <SubscriptionExpiredOverlay
+        target="teacher"
+        teacher={user}
+        adminInfo={adminInfo}
+        onLogout={() => { logout(); router.replace('/auth'); }}
+        onRenewalSuccess={() => {}}
+      />
+    );
+  }
 
   const filteredNavItems = NAV_ITEMS.filter(item => {
     if (user.role === 'super_admin') return true;

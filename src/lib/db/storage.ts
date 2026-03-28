@@ -12,9 +12,14 @@ export const uploadFileToStorage = async (
 
   const isPDF = fileType === 'application/pdf' || originalName.toLowerCase().endsWith('.pdf');
 
+  const LIMIT_10MB = 10 * 1024 * 1024; // Cloudinary free tier raw limit
+  if (isPDF && file.size > LIMIT_10MB) {
+    throw new Error(`حجم ملف PDF (${(file.size / 1024 / 1024).toFixed(1)}MB) يتجاوز الحد المسموح به (10MB) لباقة Cloudinary المجانية. يرجى ضغط الملف أولاً.`);
+  }
+
   const LIMIT_100MB = 100 * 1024 * 1024;
   if (file.size > LIMIT_100MB) {
-    throw new Error('حجم الملف يتجاوز الحد المسموح به (100 ميجابايت).');
+    throw new Error('حجم الملف يتجاوز الحد القصى للمنصة (100 ميجابايت).');
   }
 
   const nameBase = originalName.replace(/\.[^/.]+$/, '').replace(/[^a-z0-9]/gi, '_').toLowerCase();
@@ -40,10 +45,15 @@ export const uploadFileToStorage = async (
 
     const { signature, timestamp, apiKey, cloudName } = await signRes.json();
 
+    const LIMIT_10MB = 10 * 1024 * 1024; // Cloudinary free tier raw limit
+    const isBigFile = file.size > LIMIT_10MB;
+
     // Step 2: Upload directly to Cloudinary with signature
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
-      const resourceType = isPDF ? 'raw' : 'auto';
+      // Using 'auto' allows Cloudinary to decide; for PDFs it often uses 'image' or 'raw'.
+      // However, 'image' is better for browser previewing of PDFs in some accounts.
+      const resourceType = 'auto'; 
       const url = `https://api.cloudinary.com/v1_1/${cloudName}/${resourceType}/upload`;
 
       xhr.open('POST', url, true);
@@ -61,7 +71,11 @@ export const uploadFileToStorage = async (
         } else {
           try {
             const err = JSON.parse(xhr.responseText);
-            reject(new Error(err.error?.message || `فشل الرفع إلى Cloudinary (${xhr.status})`));
+            let errMsg = err.error?.message || `فشل الرفع (${xhr.status})`;
+            if (isBigFile && (errMsg.includes('file size') || errMsg.includes('large'))) {
+              errMsg = '❌ حجم الملف أكبر من 10MB (حد باقة Cloudinary المجانية). يرجى ضغط الملف أولاً.';
+            }
+            reject(new Error(errMsg));
           } catch {
             reject(new Error(`خطأ في الرفع: ${xhr.status}`));
           }
@@ -76,6 +90,8 @@ export const uploadFileToStorage = async (
       formData.append('signature', signature);
       formData.append('folder', folder);
       formData.append('public_id', public_id);
+      formData.append('type', 'upload');
+      formData.append('access_mode', 'public');
 
       xhr.send(formData);
     });

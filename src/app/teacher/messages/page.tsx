@@ -17,6 +17,7 @@ import { useFilePreview } from '@/components/FilePreviewModal';
 import { usePDFCompression } from '@/components/PDFCompressionModal';
 import { FileProcessor } from '@/lib/file-processor';
 import { useSearchParams } from 'next/navigation';
+import { formatRelativeLastSeenAr } from '@/lib/utils';
 
 export default function TeacherMessagesPage() {
   const searchParams = useSearchParams();
@@ -124,7 +125,10 @@ export default function TeacherMessagesPage() {
   }, [selectedConv?.id, user?.id]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const id = requestAnimationFrame(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    });
+    return () => cancelAnimationFrame(id);
   }, [messages]);
 
   const handleSendMessage = async (e: React.FormEvent) => {
@@ -349,9 +353,13 @@ export default function TeacherMessagesPage() {
                 <div>
                   <h3 className="font-bold text-sm text-white">{getOtherParticipant(selectedConv).name}</h3>
                   <div className="flex items-center gap-1.5 mt-0.5">
-                     <span className={`w-1.5 h-1.5 rounded-full ${otherUserOnline ? 'bg-green-500' : 'bg-gray-500'}`} />
-                     <span className="text-[10px] text-gray-500">
-                       {otherUserOnline ? 'نشط الآن' : (otherUserLastActive ? `آخر ظهور: ${new Date(otherUserLastActive).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}` : 'غير متصل')}
+                     <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${otherUserOnline ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]' : 'bg-gray-500'}`} />
+                     <span className="text-[10px] text-gray-400 tabular-nums">
+                       {otherUserOnline
+                         ? 'متصل الآن'
+                         : otherUserLastActive
+                           ? `آخر نشاط: ${formatRelativeLastSeenAr(otherUserLastActive)}`
+                           : 'خارج الخط'}
                      </span>
                   </div>
                 </div>

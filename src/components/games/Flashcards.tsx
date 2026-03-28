@@ -3,7 +3,7 @@
 // البطاقات التعليمية التفاعلية
 
 import { useState } from 'react';
-import { FlashcardItem } from '@/types';
+import type { FlashcardItem } from '@/types';
 import { 
   ChevronLeft, ChevronRight, Rotate3d, 
   CheckCircle2, HelpCircle 
@@ -15,19 +15,26 @@ interface FlashcardsProps {
 }
 
 export function Flashcards({ items, onComplete }: FlashcardsProps) {
+  const cards = items.filter((c) => c?.front?.trim() && c?.back?.trim());
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
   const [masteredCount, setMasteredCount] = useState(0);
   const [viewedIndices, setViewedIndices] = useState<Set<number>>(new Set());
 
-  const currentItem = items[currentIndex];
+  const currentItem = cards[currentIndex];
+
+  if (cards.length === 0) {
+    return (
+      <div className="flex-1 flex items-center justify-center p-8 text-text-muted text-sm">لا توجد بطاقات في هذه اللعبة.</div>
+    );
+  }
 
   const handleNext = () => {
-    if (currentIndex < items.length - 1) {
-      setCurrentIndex(prev => prev + 1);
+    if (currentIndex < cards.length - 1) {
+      setCurrentIndex((prev) => prev + 1);
       setIsFlipped(false);
     } else {
-      onComplete(masteredCount, items.length);
+      onComplete(masteredCount, cards.length);
     }
   };
 
@@ -45,13 +52,13 @@ export function Flashcards({ items, onComplete }: FlashcardsProps) {
       <div className="w-full max-w-md bg-white/5 h-2 rounded-full overflow-hidden">
         <div 
           className="bg-gold h-full transition-all duration-500"
-          style={{ width: `${((currentIndex + 1) / items.length) * 100}%` }}
+          style={{ width: `${((currentIndex + 1) / cards.length) * 100}%` }}
         />
       </div>
 
       <div className="text-center">
         <span className="text-gold font-bold text-sm tracking-widest uppercase">
-          البطاقة {currentIndex + 1} من {items.length}
+          البطاقة {currentIndex + 1} من {cards.length}
         </span>
       </div>
 

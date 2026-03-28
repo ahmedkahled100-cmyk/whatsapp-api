@@ -33,7 +33,15 @@ export function SentenceBuilder({ items, onComplete }: SentenceBuilderProps) {
       setBuiltWords([]);
       setFeedback('none');
     }
-  }, [currentIndex]);
+  }, [currentIndex, currentItem]);
+
+  if (!items.length) {
+    return (
+      <div className="flex-1 flex items-center justify-center p-8 text-text-muted text-sm">لا توجد جمل في هذه اللعبة.</div>
+    );
+  }
+
+  if (!currentItem) return null;
 
   const addWord = (word: string, index: number) => {
     if (feedback !== 'none') return;
@@ -48,22 +56,23 @@ export function SentenceBuilder({ items, onComplete }: SentenceBuilderProps) {
   };
 
   const checkSentence = () => {
-    const isCorrect = builtWords.join(' ') === currentItem.correct;
+    if (!currentItem) return;
+    const isCorrect = builtWords.join(' ') === currentItem.correct.trim();
     if (isCorrect) {
       setFeedback('correct');
-      setScore(prev => prev + 1);
-      setTimeout(handleNext, 1500);
+      const nextScore = score + 1;
+      const idx = currentIndex;
+      setScore(nextScore);
+      window.setTimeout(() => {
+        if (idx < items.length - 1) {
+          setCurrentIndex(idx + 1);
+        } else {
+          onComplete(nextScore, items.length);
+        }
+      }, 1200);
     } else {
       setFeedback('wrong');
-      setTimeout(() => setFeedback('none'), 1000);
-    }
-  };
-
-  const handleNext = () => {
-    if (currentIndex < items.length - 1) {
-      setCurrentIndex(prev => prev + 1);
-    } else {
-      onComplete(score + 1, items.length);
+      window.setTimeout(() => setFeedback('none'), 1000);
     }
   };
 

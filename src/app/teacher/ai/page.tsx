@@ -528,7 +528,7 @@ export default function AIPage() {
                 <div className="card-base p-12 text-center flex flex-col items-center justify-center min-h-[350px]">
                   <Bot size={48} className="mx-auto mb-4 opacity-20" />
                   <p className="text-gray-400">الأسئلة المُولّدة ستظهر هنا</p>
-                  <p className="text-xs opacity-40 mt-2">اختر موضوعاً أو أرفق ملفاً ثم انقر "توليد"</p>
+                  <p className="text-xs opacity-40 mt-2">اختر موضوعاً أو أرفق ملفاً ثم انقر «توليد»</p>
                 </div>
               )}
               {generatedQuestions.length > 0 && !loading && (
@@ -628,7 +628,7 @@ export default function AIPage() {
               {!loading && !summaryResult && (
                 <div className="card-base p-12 text-center flex flex-col items-center gap-3 min-h-[350px] justify-center">
                   <BookOpen size={48} className="opacity-20" />
-                  <p className="text-gray-400">أرفق ملفاً ثم اضغط "تلخيص"</p>
+                  <p className="text-gray-400">أرفق ملفاً ثم اضغط «تلخيص»</p>
                 </div>
               )}
             </>

@@ -172,6 +172,7 @@ export interface Notification {
   createdAt: number;
   targetUsers?: string[]; 
   targetRoles?: ('admin' | 'student')[];
+  targetGroups?: string[];
   actionPath?: string;
 }
 
@@ -224,12 +225,14 @@ export interface RegistrationRequest {
   subType: 'monthly' | 'yearly' | 'halfYearly' | 'course' | 'session';
   paymentRef?: string;
   receiptUrl?: string;
-  type?: 'student' | 'teacher';
+  type?: 'student' | 'teacher' | 'renewal' | 'teacher_renewal';
   status: 'pending' | 'approved' | 'rejected';
   createdAt: number;
   subject?: string; // For teacher registration
   subPrice?: number; // Subscription price matched during registration
   imageUrl?: string; // Student profile image if uploaded during registration
+  studentId?: string; // For renewal requests: links to existing student
+  notes?: string; // Additional notes from student/teacher
 }
 
 export interface CourseMaterial {

@@ -187,7 +187,7 @@ export const addToQBank = async (item: Omit<QuestionBankItem, 'id'>): Promise<st
   const q = item as any;
   
   const cleaned: any = {
-    teacher_id: q.teacherId || q.teacher_id,
+    teacher_id: String(q.teacherId || q.teacher_id || ''),
     content: q.text || q.content || '',
     type: q.type || 'mcq',
     options: q.options || [],
@@ -195,15 +195,15 @@ export const addToQBank = async (item: Omit<QuestionBankItem, 'id'>): Promise<st
     grade: q.difficulty || q.grade || (q.points ? String(q.points) : 'medium'), 
     subject: q.subject || null,
     unit: q.unit || null,
-    image_url: q.imageUrl || q.image_url || null,
-    pdf_url: q.pdfUrl || q.pdf_url || null,
-    title: q.title || q.text?.substring(0, 50) || null,
+    image_url: q.imageUrl || q.image_url || q.image_uri || null,
+    pdf_url: q.pdfUrl || q.pdf_url || q.pdf_uri || null,
+    title: q.title || (q.text || q.content || '').substring(0, 70) || null,
     usage_count: 0,
     created_at: new Date().toISOString(),
   };
 
-  // Remove undefined values, keep nulls if they are database columns
-  Object.keys(cleaned).forEach(k => cleaned[k] === undefined && delete cleaned[k]);
+  // Remove undefined values, keep nulls
+  Object.keys(cleaned).forEach(k => { if (cleaned[k] === undefined) delete (cleaned as any)[k]; });
 
   const { data, error } = await supabase
     .from(QBANK)

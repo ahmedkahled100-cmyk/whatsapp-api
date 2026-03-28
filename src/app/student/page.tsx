@@ -2,7 +2,8 @@
 // src/app/student/page.tsx
 // بوابة الطالب - تسجيل الدخول بالكود
 
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import dynamic from 'next/dynamic';
 import Image from 'next/image';
 import { useStudentStore, useFileProcessingStore } from '@/lib/store';
 import { 
@@ -40,13 +41,19 @@ import type { Exam, Attempt, CourseMaterial, Assignment, AssignmentSubmission, N
 import { GraduationCap, LogOut, BookOpen, BarChart2, ClipboardList, Download, Award, Video, FileText, Link as LinkIcon, BookMarked, Globe, Lock, Upload, MessageCircle, MessageSquare, Loader2, Bell, Send, Check, CheckCheck, X, Plus, ShieldCheck, AlertCircle, Paperclip, Image as ImageIcon, Trash2, User, Gamepad2, Layers, Trophy, Languages, Brain, Zap, ChevronRight, Calendar, Clock } from 'lucide-react';
 import { PDFCompressionModal, usePDFCompression } from '@/components/PDFCompressionModal';
 import Link from 'next/link';
-import { formatDateAr, gradeColor, scoreLabel, getViewerUrl, getDownloadUrl } from '@/lib/utils';
+import { filterNotificationsForStudent } from '@/lib/notification-audience';
+import { formatDateAr, gradeColor, scoreLabel, getDownloadUrl, formatRelativeLastSeenAr } from '@/lib/utils';
 import { useFilePreview, FilePreviewModal } from '@/components/FilePreviewModal';
 import { GlobalFileUpload } from '@/components/GlobalFileUpload';
 import { MobileStudentPortalWrapper } from '@/components/MobileStudentPortalWrapper';
 import { TeacherDiscovery } from '@/components/TeacherDiscovery';
-import { GamePortal } from '@/components/games/GamePortal';
+import { SubscriptionExpiredOverlay } from '@/components/SubscriptionExpiredOverlay';
 import type { EducationalGame } from '@/types';
+
+const GamePortal = dynamic(() => import('@/components/games/GamePortal').then((m) => m.GamePortal), {
+  ssr: false,
+  loading: () => null,
+});
 
 export default function StudentPortal() {
   const student = useStudentStore(state => state.student);
@@ -185,37 +192,6 @@ export default function StudentPortal() {
   useEffect(() => { setMounted(true); }, []);
 
   useEffect(() => {
-    if (student) {
-      if (student.teacherId) {
-        getSettings(student.teacherId).then((s: any) => setSiteSettings(s));
-        import('@/lib/db').then(({ getTeacherById }: any) => {
-          getTeacherById(student.teacherId).then((t: any) => {
-            setTeacherPermissions(t?.permissions || null);
-            setTeacherInfo(t);
-          });
-        });
-      }
-      loadStudentData();
-      let unsubNotifs = () => {};
-      let unsubConvs = () => {};
-      
-      if (student.teacherId && student.teacherId !== 'unknown_teacher') {
-        unsubNotifs = subscribeToNotifications(student.teacherId, (allNotifs: any[]) => {
-          const myNotifs = allNotifs.filter((n: any) => {
-            const isForMe = !n.targetUsers || n.targetUsers.length === 0 || n.targetUsers.includes(student.id) || (n as any).targetRoles?.includes('student');
-            const isForAdmin = (n as any).targetRoles?.includes('admin');
-            const isJoinMsg = n.msg.includes('طلب انضمام') || n.msg.includes('تسجيل معلم');
-            return isForMe && !isForAdmin && !isJoinMsg;
-          });
-          setNotifications(myNotifs);
-        });
-        unsubConvs = subscribeToConversations(student.id, setConversations);
-      }
-      return () => { unsubNotifs(); unsubConvs(); };
-    }
-  }, [student]);
-
-  useEffect(() => {
     if (siteSettings?.primaryColor) {
       document.documentElement.style.setProperty('--gold', siteSettings.primaryColor);
     }
@@ -238,53 +214,7 @@ export default function StudentPortal() {
     }
   }, [student]);
 
-  // Handle Chat and Other User Presence
-  useEffect(() => {
-    if (!selectedConv || !student) return;
-    
-    setLoadingChat(true);
-    const unsub = subscribeToMessages(selectedConv.id, (msgs: Message[]) => {
-      setChatMessages(msgs);
-      setLoadingChat(false);
-      markMessagesAsRead(selectedConv.id, student!.id);
-    });
-
-    const otherParticipantId = selectedConv.participants.find((p: string) => p !== student!.id);
-    let unsubPresence = () => {};
-    if (otherParticipantId) {
-      // Assuming the other user is a teacher for students
-      unsubPresence = subscribeToUserOnlineStatus(otherParticipantId, 'teachers', (isOnline, lastActive) => {
-        setOtherUserOnline(isOnline);
-        setOtherUserLastActive(lastActive);
-      });
-    }
-
-    return () => {
-      unsub();
-      unsubPresence();
-    };
-  }, [selectedConv, student]);
-
-  // Listen for background upload completion
-  useEffect(() => {
-    const handleUploaded = (e: any) => {
-      const { url, path, fileName } = e.detail;
-      if (path.startsWith('assignments/')) {
-        setUploadedFileUrl(url);
-        if (e.detail.stats) {
-          const { originalSize, compressedSize } = e.detail.stats;
-          const reduction = ((originalSize - compressedSize) / originalSize * 100).toFixed(1);
-          showToast(`✅ تم الضغط والرفع: ${fileName} (قل بنسبة ${reduction}%)`);
-        } else {
-          showToast(`تم اكتمال رفع ملف الواجب: ${fileName}`);
-        }
-      }
-    };
-    window.addEventListener('fileUploaded', handleUploaded);
-    return () => window.removeEventListener('fileUploaded', handleUploaded);
-  }, []);
-
-  const loadStudentData = async () => {
+  const loadStudentData = useCallback(async () => {
     if (!student || !student.id || student.id === 'unknown_student') return;
     try {
       const tId = student.teacherId || 'unknown_teacher';
@@ -353,9 +283,80 @@ export default function StudentPortal() {
     } catch (e) {
       console.error('loadStudentData error:', e);
     }
-  };
+  }, [student, setStudent]);
 
-  const loadGlobalSchedule = async () => {
+  useEffect(() => {
+    if (!student) return;
+    if (student.teacherId) {
+      getSettings(student.teacherId).then((s: any) => setSiteSettings(s));
+      import('@/lib/db').then(({ getTeacherById }: any) => {
+        getTeacherById(student.teacherId).then((t: any) => {
+          setTeacherPermissions(t?.permissions || null);
+          setTeacherInfo(t);
+        });
+      });
+    }
+    void loadStudentData();
+    let unsubNotifs = () => {};
+    let unsubConvs = () => {};
+    if (student.teacherId && student.teacherId !== 'unknown_teacher') {
+      unsubNotifs = subscribeToNotifications(student.teacherId, (allNotifs) => {
+        setNotifications(filterNotificationsForStudent(allNotifs, student));
+      });
+      unsubConvs = subscribeToConversations(student.id, setConversations);
+    }
+    return () => {
+      unsubNotifs();
+      unsubConvs();
+    };
+  }, [student, loadStudentData, setConversations]);
+
+  // Handle Chat and Other User Presence
+  useEffect(() => {
+    if (!selectedConv || !student) return;
+
+    setLoadingChat(true);
+    const unsub = subscribeToMessages(selectedConv.id, (msgs: Message[]) => {
+      setChatMessages(msgs);
+      setLoadingChat(false);
+      markMessagesAsRead(selectedConv.id, student!.id);
+    });
+
+    const otherParticipantId = selectedConv.participants.find((p: string) => p !== student!.id);
+    let unsubPresence = () => {};
+    if (otherParticipantId) {
+      unsubPresence = subscribeToUserOnlineStatus(otherParticipantId, 'teachers', (isOnline, lastActive) => {
+        setOtherUserOnline(isOnline);
+        setOtherUserLastActive(lastActive);
+      });
+    }
+
+    return () => {
+      unsub();
+      unsubPresence();
+    };
+  }, [selectedConv, student]);
+
+  // Listen for background upload completion
+  useEffect(() => {
+    const handleUploaded = (e: any) => {
+      const { url, path, fileName } = e.detail;
+      if (path.startsWith('assignments/')) {
+        setUploadedFileUrl(url);
+        if (e.detail.stats) {
+          const { originalSize, compressedSize } = e.detail.stats;
+          const reduction = ((originalSize - compressedSize) / originalSize * 100).toFixed(1);
+          showToast(`✅ تم الضغط والرفع: ${fileName} (قل بنسبة ${reduction}%)`);
+        } else {
+          showToast(`تم اكتمال رفع ملف الواجب: ${fileName}`);
+        }
+      }
+    };
+    window.addEventListener('fileUploaded', handleUploaded);
+    return () => window.removeEventListener('fileUploaded', handleUploaded);
+  }, []);
+
+  const loadGlobalSchedule = useCallback(async () => {
     if (!student || student.id === 'unknown_student') return;
     setLoadingSchedule(true);
     try {
@@ -412,13 +413,13 @@ export default function StudentPortal() {
     } finally {
       setLoadingSchedule(false);
     }
-  };
+  }, [student, allEnrollments]);
 
   useEffect(() => {
     if (activeTab === 'schedule') {
-      loadGlobalSchedule();
+      void loadGlobalSchedule();
     }
-  }, [activeTab, allEnrollments]);
+  }, [activeTab, loadGlobalSchedule]);
 
   const handleLogin = async () => {
     if (!code.trim()) { setError('أدخل كودك أولاً'); return; }
@@ -703,6 +704,28 @@ export default function StudentPortal() {
           </div>
         </div>
       </div>
+    );
+  }
+
+  // ---- Subscription expiry check ----
+  const isSubExpired =
+    student.subType !== 'none' &&
+    student.subExpiry != null &&
+    student.subExpiry < Date.now();
+
+  // If subscription is expired → show full-screen overlay
+  if (isSubExpired) {
+    return (
+      <SubscriptionExpiredOverlay
+        target="student"
+        student={student}
+        teacherInfo={teacherInfo}
+        settings={siteSettings}
+        onLogout={logout}
+        onRenewalSuccess={() => {
+          // Refresh student data after teacher approves (polling not needed — overlay shows success message)
+        }}
+      />
     );
   }
 
@@ -994,8 +1017,13 @@ export default function StudentPortal() {
                       <button onClick={() => setSelectedConv(null)} className="text-gray-400 p-1"><X size={18}/></button>
                       <div className="flex flex-col">
                         <div className="text-xs font-bold">{selectedConv.participantNames.find(n => n !== student.name)}</div>
-                        <div className={`text-[9px] ${otherUserOnline ? 'text-green-500' : 'text-gray-500'}`}>
-                          {otherUserOnline ? 'نشط الآن' : 'غير متصل'}
+                        <div className={`text-[9px] flex items-center gap-1 ${otherUserOnline ? 'text-emerald-400' : 'text-gray-400'}`}>
+                          <span className={`w-1 h-1 rounded-full shrink-0 ${otherUserOnline ? 'bg-emerald-400' : 'bg-gray-500'}`} />
+                          {otherUserOnline
+                            ? 'متصل الآن'
+                            : otherUserLastActive
+                              ? `آخر نشاط: ${formatRelativeLastSeenAr(otherUserLastActive)}`
+                              : 'خارج الخط'}
                         </div>
                       </div>
                     </div>
@@ -1088,7 +1116,6 @@ export default function StudentPortal() {
                         await dispatchNotification({
                           teacherId: student.teacherId || recId,
                           msg: `رسالة جديدة من الطالب ${student.name}`,
-                          targetRoles: ['admin'],
                           channels: { inApp: true, whatsapp: false },
                           actionPath: `/teacher/messages?studentId=${student.id}`
                         });
@@ -1125,25 +1152,37 @@ export default function StudentPortal() {
                   <p style={{ color: 'var(--text-muted)' }}>لا توجد نتائج بعد</p>
                 </div>
               ) : [...completedAttempts].reverse().map(att => {
+                const essayPending = att.essayAnswers?.some((ea) => ea.pending) ?? false;
                 const scorePercent = att.finalScore ?? att.mcqScore ?? 0;
                 const exam = exams.find(e => e.id === att.examId);
-                const passScore = exam?.passScore || 50;
 
                 return (
                   <div key={att.id} className="card-base p-4 flex items-center justify-between gap-4">
                     <div className="flex-1">
                       <div className="font-bold text-sm">{att.examTitle}</div>
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className={`badge ${att.passed ? 'badge-green' : 'badge-red'}`}>
-                          {att.passed ? '✅ ناجح' : '❌ راسب'}
-                        </span>
+                      <div className="flex items-center gap-2 mt-1 flex-wrap">
+                        {essayPending ? (
+                          <span className="badge badge-purple text-[10px] sm:text-xs animate-pulse">
+                            ⏳ قيد التصحيح
+                          </span>
+                        ) : (
+                          <span className={`badge ${att.passed ? 'badge-green' : 'badge-red'}`}>
+                            {att.passed ? '✅ ناجح' : '❌ راسب'}
+                          </span>
+                        )}
                         <span className="text-xs text-gray-500">
                           {att.submittedAt ? formatDateAr(att.submittedAt) : ''}
                         </span>
                       </div>
-                      <div className="text-lg font-black gold-text mt-1">{scorePercent}%</div>
+                      <div className={`text-lg font-black mt-1 ${essayPending ? 'text-purple-300' : 'gold-text'}`}>
+                        {essayPending ? (
+                          <span className="text-sm font-bold">درجة مؤقتة: {scorePercent}% — بانتظار تصحيح المقالي</span>
+                        ) : (
+                          `${scorePercent}%`
+                        )}
+                      </div>
                     </div>
-                    {att.passed && (
+                    {att.passed && !essayPending && (
                        <button onClick={() => setCertData({ attempt: att, exam: exams.find(e=>e.id===att.examId)! })} className="btn-gold text-[10px] px-3 py-2 flex items-center gap-2">
                          <Award size={14} /> الشهادة
                        </button>

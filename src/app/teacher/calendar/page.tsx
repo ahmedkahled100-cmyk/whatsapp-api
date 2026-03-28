@@ -94,7 +94,7 @@ export default function CalendarPage() {
         startTime: newEvent.startTime,
         endTime: newEvent.endTime,
         teacherId: user!.id,
-        createdAt: Date.now()
+        createdAt: new Date().toISOString()
     };
 
     // Optimistic Update

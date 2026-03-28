@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useTeacherStore } from '@/lib/store';
+import { filterNotificationsForAdminInbox } from '@/lib/notification-audience';
 import { subscribeToNotifications } from '@/lib/db';
 import { LayoutDashboard, Users, Settings, LogOut, Menu, X, ShieldCheck, GraduationCap, MessageSquare, CreditCard, Smartphone, Bell } from 'lucide-react';
 
@@ -37,7 +38,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   
   useEffect(() => {
     if (!user?.id) return;
-    return subscribeToNotifications(user.id, setNotifications);
+    return subscribeToNotifications(user.id, (data) => {
+      setNotifications(filterNotificationsForAdminInbox(data));
+    });
   }, [user?.id, setNotifications]);
 
   useEffect(() => {
@@ -118,8 +121,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <div className="mr-auto flex items-center gap-2">
             <Link href="/teacher/notifications" className="w-10 h-10 rounded-xl flex items-center justify-center relative transition-all hover:bg-white/5 bg-white/5 border border-white/10">
               <Bell size={20} className="text-gray-400" />
-              {notifications.filter(n => !n.read && n.targetRoles?.includes('admin')).length > 0 && (
-                <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full shadow-[0_0_8px_rgba(239,68,68,0.5)]" />
+              {notifications.some(n => !n.read) && (
+                <span className="absolute top-2 right-2 min-w-[8px] h-2 px-0.5 bg-red-500 rounded-full shadow-[0_0_8px_rgba(239,68,68,0.5)]" />
               )}
             </Link>
           </div>

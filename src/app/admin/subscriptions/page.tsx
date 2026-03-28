@@ -2,10 +2,11 @@
 // src/app/admin/subscriptions/page.tsx
 
 import { useState, useEffect, useMemo } from 'react';
-import { getTeachers, getAllStudents, saveTeacher, saveStudent } from '@/lib/db';
-import type { TeacherUser, Student } from '@/types';
-import { CreditCard, Users, Search, Bell, TrendingUp, DollarSign, Edit2, Save, X, RefreshCw, CheckCircle, AlertCircle, ArrowRight, Calendar } from 'lucide-react';
+import { getTeachers, getAllStudents, saveTeacher, saveStudent, getRegistrationRequests, deleteRegistrationRequest, dispatchNotification } from '@/lib/db';
+import type { TeacherUser, Student, RegistrationRequest } from '@/types';
+import { CreditCard, Users, Search, Bell, TrendingUp, DollarSign, Edit2, Save, X, RefreshCw, CheckCircle, AlertCircle, ArrowRight, Calendar, RotateCcw, Phone, Image as ImageIcon } from 'lucide-react';
 import { showToast } from '@/lib/toast';
+import { useFilePreview } from '@/components/FilePreviewModal';
 
 const daysUntil = (ts: number | null | undefined) => {
   if (!ts) return null;
@@ -20,12 +21,15 @@ const subLabel = (type: string) => {
 export default function AdminSubscriptionsPage() {
   const [teachers, setTeachers] = useState<TeacherUser[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
+  const [teacherRenewalRequests, setTeacherRenewalRequests] = useState<RegistrationRequest[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'teachers' | 'students'>('teachers');
+  const [activeTab, setActiveTab] = useState<'teachers' | 'students' | 'renewals'>('teachers');
   const [search, setSearch] = useState('');
   const [editingTeacher, setEditingTeacher] = useState<TeacherUser | null>(null);
   const [editForm, setEditForm] = useState({ subType: 'free', subExpiry: '', subPrice: '', subLink: '' });
   const [saving, setSaving] = useState(false);
+
+  const { openPreview, PreviewModal } = useFilePreview();
 
   const loadData = async () => {
     setLoading(true);
@@ -33,6 +37,19 @@ export default function AdminSubscriptionsPage() {
       const [tList, sList] = await Promise.all([getTeachers(), getAllStudents()]);
       setTeachers(tList);
       setStudents(sList);
+
+      // Load all teacher renewal requests across all teachers
+      const allTeacherRenewals: RegistrationRequest[] = [];
+      for (const teacher of tList) {
+        if (teacher.role === 'teacher') {
+          try {
+            const reqs = await getRegistrationRequests(teacher.id);
+            const renewals = reqs.filter(r => r.type === 'teacher_renewal');
+            allTeacherRenewals.push(...renewals);
+          } catch {}
+        }
+      }
+      setTeacherRenewalRequests(allTeacherRenewals);
     } catch (e) {
       console.error(e);
       showToast('خطأ في تحميل البيانات');
@@ -120,9 +137,94 @@ export default function AdminSubscriptionsPage() {
 
   const sendWhatsappToTeacher = (t: TeacherUser) => {
     const days = daysUntil(t.subExpiry);
-    const msg = `💬 *تذكير بنهاية اشتراك منصة AN Academy*\n\nالأستاذ/ة ${t.name}،\n\n${days !== null && days <= 0 ? 'انتهى اشتراكك بالفعل!' : `اشتراكك (${subLabel(t.subType || 'free')}) سينتهي خلال *${days} أيام*`}\n\nيرجى التجديد للمحافظة على نشاط منصتك.${t.subLink ? `\n\nرابط التجديد: ${t.subLink}` : ''}`;
-    if (!t.username) { showToast('لا يوجد رقم هاتف للمعلم'); return; }
-    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+    const subTypeMap: Record<string, string> = { free: 'مجاني', monthly: 'شهري', yearly: 'سنوي' };
+    const msg = [
+      `💬 *تذكير بنهاية اشتراك منصة AN Academy*`,
+      ``,
+      `👨‍🏫 *بيانات المعلم:*`,
+      `• الاسم: ${t.name}`,
+      `• اسم المستخدم: @${t.username}`,
+      `• الهاتف: ${t.phone || 'غير محدد'}`,
+      `• المادة: ${t.subject || 'غير محدد'}`,
+      ``,
+      `📋 *بيانات الاشتراك:*`,
+      `• نوع الاشتراك: ${subTypeMap[t.subType || 'free'] || t.subType}`,
+      `• تاريخ الانتهاء: ${t.subExpiry ? new Date(t.subExpiry).toLocaleDateString('ar-EG') : 'غير محدد'}`,
+      `• قيمة الاشتراك: ${t.subPrice || 0} ج.م`,
+      ``,
+      days !== null && days <= 0
+        ? `⚠️ اشتراكك قد انتهى بالفعل!`
+        : `⚠️ اشتراكك (${subLabel(t.subType || 'free')}) سينتهي خلال *${days} أيام*`,
+      ``,
+      `يرجى التجديد للمحافظة على نشاط منصتك.${t.subLink ? `\n\nرابط التجديد: ${t.subLink}` : ''}`,
+    ].filter(Boolean).join('\n');
+
+    if (!t.phone && !t.username) { showToast('لا يوجد رقم هاتف للمعلم'); return; }
+    const phone = (t.phone || '').replace(/[\s\-\(\)]/g, '').replace(/^0/, '20');
+    if (phone) {
+      window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank');
+    } else {
+      window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+    }
+  };
+
+  const approveTeacherRenewal = async (req: RegistrationRequest) => {
+    if (!confirm(`موافقة على تجديد اشتراك المعلم ${req.name}؟`)) return;
+    const teacher = teachers.find(t => t.id === req.studentId || t.id === req.teacherId);
+    if (!teacher) { showToast('❌ لم يتم العثور على المعلم'); return; }
+
+    const daysMap: Record<string, number> = { monthly: 30, yearly: 365 };
+    const base = teacher.subExpiry && teacher.subExpiry > Date.now() ? teacher.subExpiry : Date.now();
+    const days = daysMap[req.subType] || 30;
+    const subExpiry = base + days * 86400000;
+
+    try {
+      await saveTeacher({ ...teacher, subType: req.subType as any, subExpiry });
+      await deleteRegistrationRequest(req.id);
+
+      // Notify teacher via in-app notification
+      await dispatchNotification({
+        teacherId: teacher.id,
+        msg: `✅ تم تجديد اشتراك منصتك (${req.subType === 'yearly' ? 'سنوي' : 'شهري'}) حتى ${new Date(subExpiry).toLocaleDateString('ar-EG')}. أهلاً بعودتك!`,
+        type: 'success',
+        channels: { inApp: true, whatsapp: false },
+      });
+
+      setTeacherRenewalRequests(prev => prev.filter(r => r.id !== req.id));
+      setTeachers(prev => prev.map(t => t.id === teacher.id ? { ...t, subType: req.subType as any, subExpiry } : t));
+      showToast(`✅ تم تجديد اشتراك المعلم ${req.name} بنجاح!`);
+    } catch (e) {
+      console.error(e);
+      showToast('❌ حدث خطأ أثناء التجديد');
+    }
+  };
+
+  const sendWhatsAppToTeacherOnRenewal = (req: RegistrationRequest) => {
+    const subTypeMap: Record<string, string> = { monthly: 'شهري', yearly: 'سنوي' };
+    const msg = [
+      `📢 *رد على طلب تجديد اشتراك المنصة*`,
+      ``,
+      `عزيزي الأستاذ *${req.name}*،`,
+      ``,
+      `👨‍🏫 *بياناتك:*`,
+      `• الاسم: ${req.name}`,
+      `• الهاتف: ${req.phone || 'غير محدد'}`,
+      `• المادة: ${req.subject || req.grade || 'غير محدد'}`,
+      ``,
+      `📋 *تفاصيل طلب التجديد:*`,
+      `• نوع الاشتراك المطلوب: ${subTypeMap[req.subType] || req.subType}`,
+      `• مرجع الدفع: ${req.paymentRef || 'لم يُحدد'}`,
+      req.notes ? `• الملاحظات: ${req.notes}` : '',
+      ``,
+      `✅ تمت مراجعة طلبك وسيتم التواصل معك قريباً.`,
+    ].filter(Boolean).join('\n');
+
+    const phone = (req.phone || '').replace(/[\s\-\(\)]/g, '').replace(/^0/, '20');
+    if (phone) {
+      window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank');
+    } else {
+      window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+    }
   };
 
   return (
@@ -173,12 +275,14 @@ export default function AdminSubscriptionsPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center gap-2 bg-white/5 p-1 rounded-xl w-fit">
-        {(['teachers', 'students'] as const).map(tab => (
+      <div className="flex items-center gap-2 bg-white/5 p-1 rounded-xl w-fit flex-wrap">
+        {(['teachers', 'students', 'renewals'] as const).map(tab => (
           <button key={tab} onClick={() => setActiveTab(tab)}
-            className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === tab ? 'bg-purple-500 text-white' : 'text-gray-400 hover:text-white'}`}
+            className={`px-4 py-2 rounded-lg text-sm font-bold transition-all relative ${activeTab === tab ? (tab === 'renewals' ? 'bg-purple-500 text-white' : 'bg-purple-500 text-white') : 'text-gray-400 hover:text-white'}`}
           >
-            {tab === 'teachers' ? `المعلمون (${teachers.length})` : `طلاب المنصة (${students.length})`}
+            {tab === 'teachers' ? `المعلمون (${teachers.length})` : tab === 'students' ? `طلاب المنصة (${students.length})` : (
+              <>طلبات التجديد {teacherRenewalRequests.length > 0 && <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-red-500 rounded-full text-[9px] flex items-center justify-center text-white">{teacherRenewalRequests.length}</span>}</>
+            )}
           </button>
         ))}
       </div>
@@ -255,7 +359,7 @@ export default function AdminSubscriptionsPage() {
           })}
           {filteredTeachers.length === 0 && <div className="col-span-3 py-12 text-center text-gray-500">لا يوجد معلمون مطابقون</div>}
         </div>
-      ) : (
+      ) : activeTab === 'students' ? (
         /* Students Table */
         <div className="card-base overflow-hidden">
           <div className="overflow-x-auto">
@@ -305,6 +409,108 @@ export default function AdminSubscriptionsPage() {
             </table>
           </div>
         </div>
+      ) : (
+        /* Teacher Renewal Requests */
+        <div className="space-y-4">
+          <div className="card-base p-4 border-purple-500/20 bg-purple-500/5 flex gap-3">
+            <RotateCcw className="text-purple-400 shrink-0" size={20} />
+            <p className="text-sm text-gray-300">عند الموافقة، سيتم تجديد اشتراك المعلم تلقائياً وستعود إمكانية دخوله للوحة التحكم.</p>
+          </div>
+          <div className="grid gap-4 grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
+            {teacherRenewalRequests.length === 0 ? (
+              <div className="col-span-3 card-base p-12 text-center">
+                <RotateCcw size={48} className="mx-auto mb-4 text-purple-400 opacity-30" />
+                <p className="text-gray-500">لا توجد طلبات تجديد اشتراك معلقة من المعلمين.</p>
+              </div>
+            ) : teacherRenewalRequests.map(req => {
+              const teacher = teachers.find(t => t.id === req.studentId || t.id === req.teacherId);
+              const subTypeMap: Record<string, string> = { monthly: 'شهري', yearly: 'سنوي' };
+              return (
+                <div key={req.id} className="card-base p-5 border border-purple-500/20 hover:border-purple-400/40 transition-colors bg-purple-500/5">
+                  <div className="flex justify-between items-start mb-3 pb-3 border-b border-white/5">
+                    <div className="flex items-center gap-3">
+                      {teacher?.imageUrl ? (
+                        <img src={teacher.imageUrl} className="w-10 h-10 rounded-xl object-cover" alt="" />
+                      ) : (
+                        <div className="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center text-purple-300 font-black">{req.name[0]}</div>
+                      )}
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <RotateCcw size={12} className="text-purple-400" />
+                          <h3 className="font-bold text-white text-sm">{req.name}</h3>
+                        </div>
+                        <p className="text-xs text-gray-500">{new Date(req.createdAt).toLocaleDateString('ar-EG')}</p>
+                      </div>
+                    </div>
+                    <span className="px-2.5 py-1 rounded-lg bg-purple-500/20 text-purple-300 text-xs font-bold">
+                      {subTypeMap[req.subType] || req.subType}
+                    </span>
+                  </div>
+
+                  <div className="space-y-1.5 mb-4 text-sm">
+                    <div className="flex justify-between"><span className="text-gray-500">الهاتف:</span><span dir="ltr">{req.phone}</span></div>
+                    <div className="flex justify-between"><span className="text-gray-500">المادة:</span><span>{req.subject || req.grade || '—'}</span></div>
+                    {teacher && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">اشتراك حالي:</span>
+                        <span className={`text-xs font-bold ${
+                          teacher.subExpiry && teacher.subExpiry < Date.now() ? 'text-red-400' : 'text-green-400'
+                        }`}>
+                          {subLabel(teacher.subType || 'free')}
+                          {teacher.subExpiry ? ` — (${teacher.subExpiry < Date.now() ? 'منتهي' : 'نشط'})` : ''}
+                        </span>
+                      </div>
+                    )}
+                    {req.paymentRef && (
+                      <div className="p-3 bg-purple-500/10 rounded-lg border border-purple-500/20 mt-2">
+                        <span className="block text-xs text-gray-400 mb-1">مرجع الدفع:</span>
+                        <span className="text-sm text-purple-300 font-bold">{req.paymentRef}</span>
+                      </div>
+                    )}
+                    {req.notes && (
+                      <div className="p-3 bg-white/5 rounded-lg border border-white/10 mt-1">
+                        <span className="block text-xs text-gray-400 mb-1">ملاحظات المعلم:</span>
+                        <span className="text-sm text-gray-300">{req.notes}</span>
+                      </div>
+                    )}
+                    {req.receiptUrl && (
+                      <button onClick={() => openPreview(req.receiptUrl!, `إيصال - ${req.name}`)} className="w-full btn-outline border-purple-500/20 text-purple-400 text-xs py-2 flex items-center justify-center gap-2 mt-2">
+                        <ImageIcon size={14} /> عرض صورة الإيصال
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => approveTeacherRenewal(req)}
+                      className="flex-1 bg-green-500/20 text-green-400 hover:bg-green-500/30 py-2.5 rounded-lg font-bold text-sm flex justify-center items-center gap-2 border border-green-500/20 transition-colors"
+                    >
+                      <CheckCircle size={15} /> موافقة وتجديد
+                    </button>
+                    <button
+                      onClick={() => sendWhatsAppToTeacherOnRenewal(req)}
+                      className="px-3 py-2.5 bg-green-600/20 border border-green-500/20 text-green-400 hover:bg-green-600/30 rounded-lg transition-colors"
+                      title="تواصل عبر واتساب"
+                    >
+                      <Phone size={16} />
+                    </button>
+                    <button
+                      onClick={async () => {
+                        if (!confirm('رفض طلب التجديد؟')) return;
+                        await deleteRegistrationRequest(req.id);
+                        setTeacherRenewalRequests(prev => prev.filter(r => r.id !== req.id));
+                        showToast('تم رفض الطلب');
+                      }}
+                      className="p-2.5 bg-red-500/10 text-red-400 hover:bg-red-500/20 rounded-lg border border-red-500/10"
+                    >
+                      ❌
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       )}
 
       {/* Edit Teacher Modal */}
@@ -344,6 +550,8 @@ export default function AdminSubscriptionsPage() {
           </div>
         </div>
       )}
+
+      {PreviewModal}
     </div>
   );
 }

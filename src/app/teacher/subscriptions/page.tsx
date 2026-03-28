@@ -3,8 +3,8 @@
 
 import { useState, useMemo } from 'react';
 import { useTeacherStore } from '@/lib/store';
-import { saveStudent, deleteRegistrationRequest, getSettings } from '@/lib/db';
-import { CreditCard, Search, Calendar, ShieldCheck, Clock, UserX, CheckCircle, XCircle, Copy, AlertCircle, FileText, Image as ImageIcon, X, Download, TrendingUp, Bell, DollarSign, Users, RefreshCw, Edit2, ArrowRight, Printer } from 'lucide-react';
+import { saveStudent, deleteRegistrationRequest, getSettings, dispatchNotification } from '@/lib/db';
+import { CreditCard, Search, Calendar, ShieldCheck, Clock, UserX, CheckCircle, XCircle, Copy, AlertCircle, FileText, Image as ImageIcon, X, Download, TrendingUp, Bell, DollarSign, Users, RefreshCw, Edit2, ArrowRight, Printer, RotateCcw, Phone } from 'lucide-react';
 import { showToast } from '@/lib/toast';
 import { formatDateAr, generateCode } from '@/lib/utils';
 import { Student } from '@/types';
@@ -28,7 +28,8 @@ type SubType = 'monthly' | 'halfYearly' | 'yearly' | 'course' | 'session' | 'non
 
 export default function SubscriptionsPage() {
   const { students, groups, registrationRequests } = useTeacherStore();
-  const [activeTab, setActiveTab] = useState<'current' | 'pending' | 'expiring'>('current');
+  const user = useTeacherStore(state => state.user);
+  const [activeTab, setActiveTab] = useState<'current' | 'pending' | 'expiring' | 'renewals'>('current');
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<'all' | SubType>('all');
   const [copiedLink, setCopiedLink] = useState(false);
@@ -149,6 +150,92 @@ export default function SubscriptionsPage() {
     setTimeout(() => setCopiedLink(false), 2000);
   };
 
+  // Renewal requests (type === 'renewal') — separated from regular registration requests
+  const renewalRequests = useMemo(() => {
+    return registrationRequests.filter(r => r.type === 'renewal');
+  }, [registrationRequests]);
+
+  // Regular new registration requests (not renewals)
+  const newRegistrationRequests = useMemo(() => {
+    return registrationRequests.filter(r => !r.type || r.type === 'student');
+  }, [registrationRequests]);
+
+  const approveRenewal = async (req: any) => {
+    if (!confirm(`هل أنت متأكد من الموافقة على تجديد اشتراك الطالب ${req.name}؟`)) return;
+    try {
+      // Find the student by studentId or phone
+      const existingStudent = students.find(s => s.id === req.studentId || s.phone === req.phone);
+      if (!existingStudent) {
+        showToast('❌ لم يتم العثور على الطالب');
+        return;
+      }
+
+      const daysMap: Record<string, number> = {
+        monthly: 30, halfYearly: 180, yearly: 365, course: 730, session: 1,
+      };
+      const now = new Date();
+      const base = existingStudent.subExpiry && existingStudent.subExpiry > Date.now()
+        ? existingStudent.subExpiry
+        : Date.now();
+      const days = daysMap[req.subType] || 30;
+      const subExpiry = base + days * 86400000;
+
+      await saveStudent({
+        ...existingStudent,
+        subType: req.subType,
+        subExpiry,
+      });
+
+      await deleteRegistrationRequest(req.id);
+
+      // Notify student via in-app notification
+      const subTypeMap: Record<string, string> = {
+        monthly: 'شهري', halfYearly: 'نصف سنوي',
+        yearly: 'سنوي', course: 'كورس كامل', session: 'بالحصة',
+      };
+      await dispatchNotification({
+        teacherId: user?.id || '',
+        msg: `✅ تم تجديد اشتراكك (${subTypeMap[req.subType] || req.subType}) حتى ${new Date(subExpiry).toLocaleDateString('ar-EG')}. أهلاً بعودتك!`,
+        type: 'success',
+        targetUsers: [existingStudent.id],
+        channels: { inApp: true, whatsapp: false },
+      });
+
+      showToast(`✅ تم تجديد اشتراك الطالب ${req.name} بنجاح!`);
+    } catch (e) {
+      console.error(e);
+      showToast('❌ حدث خطأ أثناء الموافقة');
+    }
+  };
+
+  const sendWhatsAppToStudentOnRenewal = (req: any) => {
+    const subTypeMap: Record<string, string> = {
+      monthly: 'شهري', halfYearly: 'نصف سنوي',
+      yearly: 'سنوي', course: 'كورس كامل', session: 'بالحصة',
+    };
+    const msg = [
+      `📢 *رد على طلب تجديد الاشتراك*`,
+      ``,
+      `عزيزي الطالب *${req.name}*،`,
+      ``,
+      `👤 *بيانات الطالب:*`,
+      `• الاسم: ${req.name}`,
+      `• الهاتف: ${req.phone || 'غير محدد'}`,
+      `• هاتف ولي الأمر: ${req.parentPhone || 'غير محدد'}`,
+      `• الصف: ${req.grade || 'غير محدد'}`,
+      ``,
+      `📋 *تفاصيل الطلب:*`,
+      `• نوع الاشتراك المطلوب: ${subTypeMap[req.subType] || req.subType}`,
+      `• مرجع الدفع: ${req.paymentRef || 'لم يُحدد'}`,
+      req.notes ? `• الملاحظات: ${req.notes}` : '',
+      ``,
+      `✅ تمت مراجعة طلبك وسيتم التواصل معك قريباً.`,
+    ].filter(Boolean).join('\n');
+
+    const phone = (req.phone || req.parentPhone || '').replace(/[\s\-\(\)]/g, '').replace(/^0/, '20');
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank');
+  };
+
   return (
     <div className="space-y-6" dir="rtl">
       {/* Header */}
@@ -205,15 +292,20 @@ export default function SubscriptionsPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center gap-2 bg-white/5 p-1 rounded-xl w-fit">
-        {(['current', 'expiring', 'pending'] as const).map(tab => (
+      <div className="flex items-center gap-2 bg-white/5 p-1 rounded-xl w-fit flex-wrap">
+        {(['current', 'expiring', 'pending', 'renewals'] as const).map(tab => (
           <button key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`px-4 py-2 rounded-lg text-sm font-bold transition-all relative ${activeTab === tab ? (tab === 'expiring' ? 'bg-orange-500 text-white' : tab === 'pending' ? 'bg-blue-500 text-white' : 'bg-gold text-black') : 'text-gray-400 hover:text-white'}`}
+            className={`px-4 py-2 rounded-lg text-sm font-bold transition-all relative ${
+              activeTab === tab
+                ? (tab === 'expiring' ? 'bg-orange-500 text-white' : tab === 'pending' ? 'bg-blue-500 text-white' : tab === 'renewals' ? 'bg-purple-500 text-white' : 'bg-gold text-black')
+                : 'text-gray-400 hover:text-white'
+            }`}
           >
             {tab === 'current' && `المشتركون (${students.length})`}
             {tab === 'expiring' && <>قريباً {expiringStudents.length > 0 && <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-red-500 rounded-full text-[9px] flex items-center justify-center text-white">{expiringStudents.length}</span>}</>}
-            {tab === 'pending' && <>طلبات التسجيل {registrationRequests.length > 0 && <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-red-500 rounded-full text-[9px] flex items-center justify-center text-white">{registrationRequests.length}</span>}</>}
+            {tab === 'pending' && <>طلبات التسجيل {newRegistrationRequests.length > 0 && <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-red-500 rounded-full text-[9px] flex items-center justify-center text-white">{newRegistrationRequests.length}</span>}</>}
+            {tab === 'renewals' && <>طلبات التجديد {renewalRequests.length > 0 && <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-purple-500 rounded-full text-[9px] flex items-center justify-center text-white">{renewalRequests.length}</span>}</>}
           </button>
         ))}
       </div>
@@ -363,9 +455,9 @@ export default function SubscriptionsPage() {
             <p className="text-sm text-gray-300">بمجرد القبول، سيتم إنشاء كود طالب آلياً وتحديد فترة الاشتراك حسب النوع المختار.</p>
           </div>
           <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
-            {registrationRequests.length === 0 ? (
+            {newRegistrationRequests.length === 0 ? (
               <div className="col-span-2 card-base p-12 text-center text-gray-500">لا توجد أي طلبات اشتراك معلقة.</div>
-            ) : registrationRequests.map(req => (
+            ) : newRegistrationRequests.map(req => (
               <div key={req.id} className="card-base p-5 border border-white/10 hover:border-gold/30 transition-colors">
                 <div className="flex justify-between items-start mb-3 pb-3 border-b border-white/5">
                   <div className="flex gap-3 items-center">
@@ -399,6 +491,100 @@ export default function SubscriptionsPage() {
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* === RENEWALS TAB === */}
+      {activeTab === 'renewals' && (
+        <div className="space-y-4">
+          <div className="card-base p-4 border-purple-500/20 bg-purple-500/5 flex gap-3">
+            <RotateCcw className="text-purple-400 shrink-0" size={20} />
+            <p className="text-sm text-gray-300">عند الموافقة، سيتم تجديد اشتراك الطالب تلقائياً وستعود إمكانية دخوله للمنصة.</p>
+          </div>
+          <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
+            {renewalRequests.length === 0 ? (
+              <div className="col-span-2 card-base p-12 text-center">
+                <RotateCcw size={48} className="mx-auto mb-4 text-purple-400 opacity-30" />
+                <p className="text-gray-500">لا توجد طلبات تجديد اشتراك معلقة.</p>
+              </div>
+            ) : renewalRequests.map(req => {
+              const existingStudent = students.find(s => s.id === req.studentId || s.phone === req.phone);
+              return (
+                <div key={req.id} className="card-base p-5 border border-purple-500/20 hover:border-purple-400/40 transition-colors bg-purple-500/5">
+                  {/* Header */}
+                  <div className="flex justify-between items-start mb-3 pb-3 border-b border-white/5">
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <RotateCcw size={14} className="text-purple-400" />
+                        <h3 className="font-bold text-white text-sm">{req.name}</h3>
+                      </div>
+                      <p className="text-xs text-gray-400">{formatDateAr(new Date(req.createdAt).toISOString())}</p>
+                    </div>
+                    <span className="px-2.5 py-1 rounded-lg bg-purple-500/20 text-purple-300 text-xs font-bold border border-purple-500/20">
+                      {translateSubType(req.subType)}
+                    </span>
+                  </div>
+
+                  {/* Details */}
+                  <div className="space-y-1.5 mb-4 text-sm">
+                    <div className="flex justify-between"><span className="text-gray-500">الهاتف:</span><span dir="ltr">{req.phone}</span></div>
+                    <div className="flex justify-between"><span className="text-gray-500">ولي الأمر:</span><span dir="ltr">{req.parentPhone}</span></div>
+                    {existingStudent && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">اشتراك حالي:</span>
+                        <span className={`text-xs font-bold ${
+                          existingStudent.subExpiry && existingStudent.subExpiry < Date.now() ? 'text-red-400' : 'text-green-400'
+                        }`}>
+                          {translateSubType(existingStudent.subType)}
+                          {existingStudent.subExpiry ? ` — (${existingStudent.subExpiry < Date.now() ? 'منتهي' : 'نشط'})` : ''}
+                        </span>
+                      </div>
+                    )}
+                    {req.paymentRef && (
+                      <div className="p-3 bg-purple-500/10 rounded-lg border border-purple-500/20 mt-2">
+                        <span className="block text-xs text-gray-400 mb-1">مرجع الدفع:</span>
+                        <span className="text-sm text-purple-300 font-bold">{req.paymentRef}</span>
+                      </div>
+                    )}
+                    {req.notes && (
+                      <div className="p-3 bg-white/5 rounded-lg border border-white/10 mt-1">
+                        <span className="block text-xs text-gray-400 mb-1">ملاحظات الطالب:</span>
+                        <span className="text-sm text-gray-300">{req.notes}</span>
+                      </div>
+                    )}
+                    {req.receiptUrl && (
+                      <button onClick={() => openPreview(req.receiptUrl!, `إيصال تجديد - ${req.name}`)} className="w-full btn-outline border-purple-500/20 text-purple-400 text-xs py-2 flex items-center justify-center gap-2 mt-2">
+                        <ImageIcon size={14} /> عرض صورة الإيصال
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => approveRenewal(req)}
+                      className="flex-1 bg-green-500/20 text-green-400 hover:bg-green-500/30 py-2.5 rounded-lg font-bold text-sm flex justify-center items-center gap-2 border border-green-500/20 transition-colors"
+                    >
+                      <CheckCircle size={15} /> موافقة وتجديد
+                    </button>
+                    <button
+                      onClick={() => sendWhatsAppToStudentOnRenewal(req)}
+                      className="px-3 py-2.5 bg-green-600/20 border border-green-500/20 text-green-400 hover:bg-green-600/30 rounded-lg transition-colors"
+                      title="تواصل عبر واتساب"
+                    >
+                      <Phone size={16} />
+                    </button>
+                    <button
+                      onClick={async () => { if (!confirm('رفض طلب التجديد؟')) return; await deleteRegistrationRequest(req.id); showToast('تم رفض الطلب'); }}
+                      className="p-2.5 bg-red-500/10 text-red-400 hover:bg-red-500/20 rounded-lg border border-red-500/10 transition-colors"
+                    >
+                      <XCircle size={18} />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

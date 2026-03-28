@@ -3,10 +3,7 @@
 // لعبة تصنيف المواد في المجموعات الصحيحة
 
 import { useState, useEffect } from 'react';
-import { 
-  FolderDown, CheckCircle, XCircle, 
-  ArrowRight, Layers, Sparkles 
-} from 'lucide-react';
+import { FolderDown, CheckCircle, XCircle, ArrowRight, Layers } from 'lucide-react';
 
 interface SortItem {
   item: string;
@@ -32,24 +29,29 @@ export function CategorySort({ items, onComplete }: CategorySortProps) {
     setCategories(uniqueCats);
   }, [items]);
 
+  if (!items.length || !currentItem) {
+    return (
+      <div className="flex-1 flex items-center justify-center p-8 text-text-muted text-sm">لا يوجد محتوى للتصنيف.</div>
+    );
+  }
+
   const handleSort = (selectedCat: string) => {
     if (feedback !== 'none') return;
+    if (!currentItem) return;
 
-    if (selectedCat === currentItem.category) {
-      setFeedback('correct');
-      setScore(prev => prev + 1);
-    } else {
-      setFeedback('wrong');
-    }
+    const isRight = selectedCat === currentItem.category;
+    setFeedback(isRight ? 'correct' : 'wrong');
+    const nextScore = isRight ? score + 1 : score;
+    if (isRight) setScore(nextScore);
 
-    setTimeout(() => {
+    window.setTimeout(() => {
       if (currentIndex < items.length - 1) {
-        setCurrentIndex(prev => prev + 1);
+        setCurrentIndex((prev) => prev + 1);
         setFeedback('none');
       } else {
-        onComplete(score + (selectedCat === currentItem.category ? 1 : 0), items.length);
+        onComplete(nextScore, items.length);
       }
-    }, 1000);
+    }, 900);
   };
 
   return (

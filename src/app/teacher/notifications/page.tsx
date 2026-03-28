@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useTeacherStore } from '@/lib/store';
+import { isAdminDirectedNotification } from '@/lib/notification-audience';
 import { getNotificationLogs, saveNotificationLog, updateNotificationLog, dispatchNotification, subscribeToNotificationLogs, markNotificationRead } from '@/lib/db';
 import type { NotificationLog } from '@/types';
 import { showToast } from '@/lib/toast';
@@ -126,11 +127,19 @@ export default function NotificationsAdmin() {
   };
 
   const displayedNotifications = notifications.filter(n => {
-    const isAdminNotif = n.targetRoles?.includes('admin') || 
-                       n.msg.toLowerCase().includes('طلب انضمام') || 
-                       n.msg.toLowerCase().includes('تسجيل معلم');
+    const isAdminNotif = isAdminDirectedNotification(n);
     return inboxTab === 'admin' ? isAdminNotif : !isAdminNotif;
   });
+
+  const unreadTeacher = useMemo(
+    () => notifications.filter(n => !n.read && !isAdminDirectedNotification(n)).length,
+    [notifications]
+  );
+  const unreadAdmin = useMemo(
+    () => notifications.filter(n => !n.read && isAdminDirectedNotification(n)).length,
+    [notifications]
+  );
+  const unreadInboxTotal = unreadTeacher + unreadAdmin;
 
   return (
     <div className="space-y-6" dir="rtl">
@@ -145,9 +154,9 @@ export default function NotificationsAdmin() {
             className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'inbox' ? 'bg-gold text-dark' : 'text-gray-400 hover:text-white'}`}
           >
             الوارد
-            {notifications.filter(n => !n.read).length > 0 && (
-              <span className="ml-2 bg-red-500 text-white rounded-full px-2 py-0.5 text-xs">
-                {notifications.filter(n => !n.read).length}
+            {unreadInboxTotal > 0 && (
+              <span className="ml-2 bg-red-500 text-white rounded-full px-2 py-0.5 text-xs tabular-nums">
+                {unreadInboxTotal}
               </span>
             )}
           </button>
@@ -271,16 +280,24 @@ export default function NotificationsAdmin() {
             <h2 className="text-lg font-bold">الإشعارات الواردة</h2>
             <div className="flex bg-white/5 rounded-lg p-1">
               <button 
+                type="button"
                 onClick={() => setInboxTab('teacher')}
-                className={`px-3 py-1.5 rounded-md text-[10px] font-bold transition-all ${inboxTab === 'teacher' ? 'bg-gold text-dark' : 'text-gray-400'}`}
+                className={`px-3 py-1.5 rounded-md text-[10px] font-bold transition-all inline-flex items-center gap-1 ${inboxTab === 'teacher' ? 'bg-gold text-dark' : 'text-gray-400'}`}
               >
                 إشعارات المعلم
+                {unreadTeacher > 0 && (
+                  <span className={`rounded-full px-1.5 text-[9px] font-black ${inboxTab === 'teacher' ? 'bg-black/20 text-dark' : 'bg-red-500 text-white'}`}>{unreadTeacher}</span>
+                )}
               </button>
               <button 
+                type="button"
                 onClick={() => setInboxTab('admin')}
-                className={`px-3 py-1.5 rounded-md text-[10px] font-bold transition-all ${inboxTab === 'admin' ? 'bg-gold text-dark' : 'text-gray-400'}`}
+                className={`px-3 py-1.5 rounded-md text-[10px] font-bold transition-all inline-flex items-center gap-1 ${inboxTab === 'admin' ? 'bg-gold text-dark' : 'text-gray-400'}`}
               >
                 إشعارات الإدارة
+                {unreadAdmin > 0 && (
+                  <span className={`rounded-full px-1.5 text-[9px] font-black ${inboxTab === 'admin' ? 'bg-black/20 text-dark' : 'bg-red-500 text-white'}`}>{unreadAdmin}</span>
+                )}
               </button>
             </div>
           </div>

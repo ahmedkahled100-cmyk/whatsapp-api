@@ -8,7 +8,7 @@ import { showToast } from '@/lib/toast';
 import { Attempt, EssayAnswer } from '@/types';
 import { useFilePreview, FilePreviewModal } from '@/components/FilePreviewModal';
 import { Eye, FileText, ClipboardList, Check, X } from 'lucide-react';
-import { saveAttempt } from '@/lib/db';
+import { saveAttempt, dispatchNotification } from '@/lib/db';
 
 export default function EssaysPage() {
   const { exams, attempts } = useTeacherStore();
@@ -49,6 +49,15 @@ export default function EssaysPage() {
         updatedAttempt.passed = updatedAttempt.finalScore >= examObj.passScore;
       }
       updatedAttempt.completed = true;
+
+      // Notification logic
+      await dispatchNotification({
+        teacherId: attempt.teacherId,
+        msg: `تم تصحيح اختبارك: ${examObj?.title || 'اختبار'}. نتيجتك النهائية: ${updatedAttempt.finalScore}%`,
+        targetUsers: [attempt.studentId],
+        actionPath: '/student',
+        channels: { inApp: true, whatsapp: false }
+      });
     }
 
     try {
