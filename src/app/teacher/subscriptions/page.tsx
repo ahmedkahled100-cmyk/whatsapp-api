@@ -164,8 +164,15 @@ export default function SubscriptionsPage() {
   const approveRenewal = async (req: any) => {
     if (!confirm(`هل أنت متأكد من الموافقة على تجديد اشتراك الطالب ${req.name}؟`)) return;
     try {
+      // Extract studentId if we safely serialized it into paymentRef (due to DB limitations)
+      let actualStudentId = req.studentId;
+      if (!actualStudentId && req.paymentRef) {
+        const idMatch = req.paymentRef.match(/ID:\s*([^)]*)/);
+        if (idMatch) actualStudentId = idMatch[1].trim();
+      }
+
       // Find the student by studentId or phone
-      const existingStudent = students.find(s => s.id === req.studentId || s.phone === req.phone);
+      const existingStudent = students.find(s => s.id === actualStudentId || s.phone === req.phone);
       if (!existingStudent) {
         showToast('❌ لم يتم العثور على الطالب');
         return;

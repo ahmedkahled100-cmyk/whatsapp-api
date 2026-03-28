@@ -234,17 +234,24 @@ export const getRegistrationRequests = async (teacherId: string): Promise<Regist
 export const saveRegistrationRequest = async (req: Omit<RegistrationRequest, 'id'> & { id?: string }): Promise<string> => {
   const payload = toDB({ ...req });
   
-  // Workaround: Database table 'registration_requests' is missing 'notes' column.
-  // We serialize notes into 'payment_ref' if they exist to prevent 400 Bad Request.
-  if (req.notes && req.notes.trim()) {
-    const notesStr = `(ملاحظة: ${req.notes.trim()})`;
+  // Workaround: Database table 'registration_requests' is missing some columns.
+  // We serialize them into 'payment_ref' if they exist to prevent 400 Bad Request.
+  const extras = [];
+  if (req.notes && req.notes.trim()) extras.push(`ملاحظة: ${req.notes.trim()}`);
+  if (req.studentId) extras.push(`ID: ${req.studentId}`);
+  
+  if (extras.length > 0) {
+    const extraStr = `(${extras.join(' | ')})`;
     payload.payment_ref = payload.payment_ref 
-      ? `${payload.payment_ref} ${notesStr}` 
-      : notesStr;
+      ? `${payload.payment_ref} ${extraStr}` 
+      : extraStr;
   }
 
   // Remove fields that don't exist in the DB schema to prevent crashes
-  const fieldsToRemove = ['notes', 'teacher_code', 'teacher_name'];
+  const fieldsToRemove = [
+    'notes', 'teacher_code', 'teacher_name', 'student_id', 
+    'subject', 'sub_price', 'image_url'
+  ];
   fieldsToRemove.forEach(f => delete payload[f]);
 
   Object.keys(payload).forEach(k => payload[k] === undefined && delete payload[k]);
