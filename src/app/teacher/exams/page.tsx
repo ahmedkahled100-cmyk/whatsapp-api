@@ -71,7 +71,7 @@ export default function ExamsPage() {
             placeholder="ابحث باسم الاختبار أو المادة..."
             value={search}
             onChange={e => setSearch(e.target.value)}
-            className="input-base pr-11 text-sm"
+            className="input-base has-icon-right text-sm w-full"
           />
         </div>
         <div className="flex gap-2">

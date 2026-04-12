@@ -2,9 +2,17 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { getSettings, saveRegistrationRequest, uploadFileToStorage, dispatchNotification, getTeachers } from '@/lib/db';
+import { 
+  getTeachers, 
+  saveRegistrationRequest, 
+  dispatchNotification, 
+  getStudentByPhoneAnywhere,
+  uploadFileToStorage,
+  getSettings
+} from '@/lib/db';
 import { FileProcessor } from '@/lib/file-processor';
 import { useFileProcessingStore } from '@/lib/store';
+import { normalizePhone } from '@/lib/utils';
 import type { Settings, TeacherUser } from '@/types';
 import { showToast } from '@/lib/toast';
 import { GraduationCap, ShieldCheck, Mail, Phone, Calculator, CheckCircle2, User, FileText, Upload, Image as ImageIcon, Loader2 } from 'lucide-react';
@@ -37,13 +45,15 @@ function RegisterForm() {
   const [form, setForm] = useState({
     name: searchParams.get('name') || '',
     phone: searchParams.get('phone') || '',
-    parentPhone: '',
+    parentPhone: searchParams.get('parentPhone') || '',
     grade: '',
     subType: 'monthly' as 'monthly' | 'yearly' | 'halfYearly' | 'course' | 'session',
     subPrice: 0,
     paymentRef: '',
     receiptUrl: '',
-    imageUrl: ''
+    imageUrl: '',
+    existingCode: '',
+    studentId: ''
   });
 
   // PDF Compression state
@@ -101,6 +111,32 @@ function RegisterForm() {
     window.addEventListener('fileUploaded', handleUploaded);
     return () => window.removeEventListener('fileUploaded', handleUploaded);
   }, []);
+  // Auto-fill Profile from Unified Identity
+  useEffect(() => {
+    const phone = normalizePhone(form.phone);
+    if (phone && phone.length >= 10) {
+      const timeout = setTimeout(async () => {
+        try {
+          const existing = await getStudentByPhoneAnywhere(phone);
+          if (existing) {
+            setForm(f => ({
+              ...f,
+              name: f.name || existing.name,
+              parentPhone: f.parentPhone || existing.parentPhone || '',
+              grade: f.grade || existing.grade || '',
+              imageUrl: f.imageUrl || existing.imageUrl || '',
+              existingCode: existing.code || '',
+              studentId: existing.id || '',
+            }));
+            showToast('✨ تم استرجاع بيانات ملفك الشخصي الموحد');
+          }
+        } catch (e) {
+          console.warn('Auto-fill failed:', e);
+        }
+      }, 500);
+      return () => clearTimeout(timeout);
+    }
+  }, [form.phone]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -111,9 +147,28 @@ function RegisterForm() {
 
     setSubmitting(true);
     try {
+      // Unified Code Check: Search for student by phone across ALL academies
+      let existingCode = '';
+      let studentId = '';
+      try {
+        const existing = await getStudentByPhoneAnywhere(form.phone);
+        if (existing) {
+          existingCode = existing.code;
+          studentId = existing.id;
+          // Ensure image is unified if no new one was uploaded
+          if (!form.imageUrl && existing.imageUrl) {
+            form.imageUrl = existing.imageUrl;
+          }
+        }
+      } catch (e) {
+        console.warn('Unified code check failed:', e);
+      }
+
       const requestData: any = {
         ...form,
         teacherId: selectedTeacherId,
+        studentId,
+        existingCode,
         status: 'pending',
         createdAt: Date.now(),
       };
@@ -124,7 +179,7 @@ function RegisterForm() {
         await dispatchNotification({
           teacherId: selectedTeacherId,
           msg: `طلب اشتراك جديد: ${form.name} (${form.subType})`,
-          targetRoles: ['admin'],
+          targetRoles: ['teacher'],
           channels: { inApp: true, whatsapp: false },
           actionPath: '/teacher/students'
         });
@@ -184,11 +239,9 @@ function RegisterForm() {
           {/* Academy Info Card */}
           <div className="card-base p-5 sm:p-6 text-center bg-gradient-to-b from-white/5 to-transparent">
             {settings?.logoUrl ? (
-              <img src={settings.logoUrl} alt="Logo" className="w-16 h-16 sm:w-20 sm:h-20 mx-auto mb-3 object-contain" />
+              <img src={settings.logoUrl} alt="Logo" className="w-16 h-16 sm:w-20 sm:h-20 mx-auto mb-3 object-contain rounded-full" />
             ) : (
-              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-gold/10 flex items-center justify-center mx-auto mb-3">
-                <GraduationCap size={32} className="text-gold" />
-              </div>
+              <img src="/logo.png" alt="Logo" className="w-16 h-16 sm:w-20 sm:h-20 mx-auto mb-3 object-contain rounded-full bg-white/5 p-1" />
             )}
             <h2 className="text-lg sm:text-xl font-black mb-1">{settings?.acadName || 'أكاديمية A-N'}</h2>
             <p className="text-gray-400 text-xs sm:text-sm">أهلاً بك في منصتنا التعليمية، نهدف لتقديم أفضل مستوى تعليمي لك.</p>
@@ -224,7 +277,7 @@ function RegisterForm() {
                 <input 
                   type="text" 
                   placeholder="اسم الطالب (رباعي)" 
-                  className="input-base pr-12 sm:pr-14 w-full text-sm sm:text-base"
+                  className="input-base has-icon-right w-full text-sm sm:text-base"
                   value={form.name}
                   onChange={e => setForm({...form, name: e.target.value})}
                   required
@@ -250,7 +303,7 @@ function RegisterForm() {
                   <input 
                     type="tel" 
                     placeholder="رقم الطالب" 
-                    className="input-base has-icon pr-12 sm:pr-14 w-full text-right text-sm sm:text-base"
+                    className="input-base has-icon-right w-full text-right text-sm sm:text-base"
                     dir="rtl"
                     value={form.phone}
                     onChange={e => setForm({...form, phone: e.target.value})}
@@ -262,7 +315,7 @@ function RegisterForm() {
                   <input 
                     type="tel" 
                     placeholder="رقم ولي الأمر" 
-                    className="input-base has-icon pr-12 sm:pr-14 w-full text-right text-sm sm:text-base"
+                    className="input-base has-icon-right w-full text-right text-sm sm:text-base"
                     dir="rtl"
                     value={form.parentPhone}
                     onChange={e => setForm({...form, parentPhone: e.target.value})}
@@ -275,7 +328,7 @@ function RegisterForm() {
                 <input 
                   type="text" 
                   placeholder="الصف الدراسي (مثال: الصف الأول الثانوي)" 
-                  className="input-base has-icon pr-12 sm:pr-14 w-full text-sm sm:text-base"
+                  className="input-base has-icon-right w-full text-sm sm:text-base"
                   value={form.grade}
                   onChange={e => setForm({...form, grade: e.target.value})}
                   required
@@ -317,7 +370,7 @@ function RegisterForm() {
                 <FileText size={18} className="absolute top-3.5 right-4 text-gray-400" />
                 <textarea 
                   placeholder="رقم التحويل أو كود الإيصال المحول منه (لتأكيد الدفع)..." 
-                  className="input-base has-icon pr-12 sm:pr-14 w-full min-h-[100px] resize-y text-sm sm:text-base"
+                  className="input-base has-icon-right w-full min-h-[100px] resize-y text-sm sm:text-base"
                   value={form.paymentRef}
                   onChange={e => setForm({...form, paymentRef: e.target.value})}
                 />
@@ -328,6 +381,9 @@ function RegisterForm() {
                 <label className="block text-sm mb-2 text-gray-300 font-bold px-1">صورة الطالب الشخصية (اختياري)</label>
                 <GlobalFileUpload 
                     accept="image/*"
+                    needCrop={true}
+                    circularCrop={true}
+                    cropAspect={1}
                     isUploading={submitting || (queue.some(f => f.status !== 'completed' && f.status !== 'failed' && f.path.startsWith('students/')))}
                     uploadProgress={imageUploadProgress}
                     label={studentImageFile ? studentImageFile.name : 'اختر صورة شخصية للطالب'}

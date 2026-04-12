@@ -2,7 +2,8 @@
 // src/app/teacher/ai/page.tsx
 // نظام الذكاء الاصطناعي المتطور
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useTeacherStore } from '@/lib/store';
 import { addToQBank } from '@/lib/db';
 import type { QuestionBankItem, Question } from '@/types';
@@ -29,8 +30,9 @@ const MODES: { id: Mode; label: string; icon: React.ReactNode; desc: string; col
 
 const COMPRESS_THRESHOLD = 10 * 1024 * 1024; // 10MB
 
-export default function AIPage() {
+function AIPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user, setTempExamQuestions } = useTeacherStore();
   const [mode, setMode] = useState<Mode>('questions');
   const [loading, setLoading] = useState(false);
@@ -150,10 +152,65 @@ export default function AIPage() {
   }, [processFile]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) processFile(file);
     e.target.value = '';
   };
+
+  // Handle pre-fill from iLovePDF
+  useEffect(() => {
+    const prefillUrl = searchParams.get('prefillUrl');
+    const prefillName = searchParams.get('prefillName');
+
+    if (prefillUrl) {
+      setFileName(prefillName || 'ملف من PDF');
+      setLoading(true);
+      showToast('📥 جاري تحميل الملف للمساعد الذكي...');
+      
+      // Fetch external file and convert to base64
+      fetch(prefillUrl)
+        .then(res => res.blob())
+        .then(async blob => {
+          setFileSize(blob.size);
+          const reader = new FileReader();
+          const base64Data = await new Promise<string>((res, rej) => {
+            reader.onload = e => res(e.target?.result as string);
+            reader.onerror = rej;
+            reader.readAsDataURL(blob);
+          });
+          const base64 = base64Data.split(',')[1];
+          const newFileData = { inlineData: base64, mimeType: blob.type };
+          setFileData(newFileData);
+          
+          const targetMode = searchParams.get('mode') as Mode || 'summary';
+          setMode(targetMode);
+          
+          showToast('✅ الملف جاهز، جاري التحليل...');
+          
+          // Trigger the AI call directly with the fresh fileData
+          try {
+            if (targetMode === 'summary') {
+              const data = await callAI('summary', '', { style: 'bullet', fileDataOverride: newFileData });
+              setSummaryResult(data.result);
+            } else if (targetMode === 'questions') {
+              setAiProgress(20);
+              const data = await callAI('questions', '', { topic: '', difficulty: 'medium', type: 'mixed', count: 5, fileDataOverride: newFileData });
+              setAiProgress(100);
+              setGeneratedQuestions(data.questions || []);
+            }
+          } catch (e: any) {
+            showToast('❌ فشل التحليل التلقائي: ' + e.message);
+          } finally {
+            setLoading(false);
+          }
+        })
+        .catch(err => {
+          console.error(err);
+          showToast('❌ فشل تحميل الملف');
+          setLoading(false);
+        });
+        
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, [searchParams]);
 
   // ══════════════════════════════════════
   // API calls
@@ -161,15 +218,16 @@ export default function AIPage() {
   const callAI = async (requestMode: Mode, prompt?: string, extraOptions?: any) => {
     setLoading(true);
     try {
+      const fd = extraOptions?.fileDataOverride || fileData;
       const res = await fetch(`${getApiBase()}/api/ai`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode: requestMode, prompt, fileData, options: extraOptions }),
+        body: JSON.stringify({ mode: requestMode, prompt, fileData: fd, options: extraOptions }),
       });
       if (!res.ok) throw new Error(await res.text());
       return await res.json();
     } finally {
-      setLoading(false);
+      if (!extraOptions?.fileDataOverride) setLoading(false);
     }
   };
 
@@ -824,8 +882,8 @@ export default function AIPage() {
 
       {/* Save Modal */}
       {showSaveModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="card-base p-6 w-full max-w-md animate-scale-in border border-gold/30 space-y-4">
+        <div className="modal-overlay" onClick={() => setShowSaveModal(false)}>
+          <div className="modal-content modal-content-sm" onClick={e => e.stopPropagation()}>
             <h3 className="text-xl font-bold font-cairo">تخصيص الحفظ في البنك</h3>
             <div className="space-y-3">
               <div>
@@ -980,5 +1038,13 @@ export default function AIPage() {
 
       {CompressionModal}
     </div>
+  );
+}
+
+export default function AIPage() {
+  return (
+    <Suspense fallback={<div className="p-10 text-center opacity-50 font-cairo">جاري تحميل المساعد الذكي...</div>}>
+      <AIPageContent />
+    </Suspense>
   );
 }

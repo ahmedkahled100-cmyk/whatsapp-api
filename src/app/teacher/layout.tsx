@@ -8,7 +8,9 @@ import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useTeacherStore } from '@/lib/store';
 import { filterNotificationsForTeacherInbox } from '@/lib/notification-audience';
-import { subscribeToExams, subscribeToStudents, subscribeToAttempts, subscribeToGroups, subscribeToNotifications, subscribeToRegistrationRequests, subscribeToMaterials, subscribeToAssignments, subscribeToTeacherProfile, subscribeToConversations, getExams, getAllAttempts, getStudents, getGroups, getMaterials, getAssignments, getRegistrationRequests } from '@/lib/db';
+import {
+  subscribeToExams, subscribeToStudents, subscribeToAttempts, subscribeToGroups, subscribeToNotifications, subscribeToRegistrationRequests, subscribeToMaterials, subscribeToAssignments, subscribeToTeacherProfile, subscribeToSettings, subscribeToConversations, getExams, getAllAttempts, getStudents, getGroups, getMaterials, getAssignments, getRegistrationRequests, getSuperAdmin
+} from '@/lib/db';
 import {
   LayoutDashboard, PlusCircle, FileText, Users, BookOpen,
   BarChart2, ClipboardList, Calendar, Bot, TrendingUp,
@@ -16,7 +18,6 @@ import {
   GraduationCap, Database, ChevronLeft, Zap, ShieldCheck, ExternalLink, MessageSquare, Gamepad2
 } from 'lucide-react';
 import { SubscriptionExpiredOverlay } from '@/components/SubscriptionExpiredOverlay';
-import { getSuperAdmin } from '@/lib/db';
 
 const NAV_ITEMS = [
   { href: '/teacher/dashboard', icon: LayoutDashboard, label: 'الرئيسية', section: 'main', permission: 'dashboard' },
@@ -62,6 +63,7 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
   const setRegistrationRequests = useTeacherStore(state => state.setRegistrationRequests);
   const setMaterials = useTeacherStore(state => state.setMaterials);
   const setAssignments = useTeacherStore(state => state.setAssignments);
+  const setSettings = useTeacherStore(state => state.setSettings);
   const setConversations = useTeacherStore(state => state.setConversations);
   const notifications = useTeacherStore(state => state.notifications);
   const settings = useTeacherStore(state => state.settings);
@@ -69,7 +71,10 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
   const conversations = useTeacherStore(state => state.conversations);
 
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   const [syncStatus, setSyncStatus] = useState<'syncing' | 'synced' | 'offline'>('syncing');
   const [adminInfo, setAdminInfo] = useState<any>(null);
 
@@ -79,9 +84,7 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
 
     // Real-time subscriptions — initial fetch + realtime updates
     setSyncStatus('syncing');
-    const applyTeacherNotifications = user.role === 'super_admin'
-      ? setNotifications
-      : (data: Parameters<typeof setNotifications>[0]) => setNotifications(filterNotificationsForTeacherInbox(data));
+    const applyTeacherNotifications = (data: Parameters<typeof setNotifications>[0]) => setNotifications(filterNotificationsForTeacherInbox(data));
 
     const unsubs = [
       subscribeToExams(user.id, data => { setExams(data); setSyncStatus('synced'); }),
@@ -89,10 +92,14 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
       subscribeToAttempts(user.id, setAttempts),
       subscribeToGroups(user.id, setGroups),
       subscribeToNotifications(user.id, applyTeacherNotifications),
-      subscribeToRegistrationRequests(user.id, setRegistrationRequests),
+      subscribeToRegistrationRequests(user.id, (data) => {
+        // Filter out teacher requests for the teacher portal
+        setRegistrationRequests(data.filter(r => r.type === 'student' || r.type === 'renewal' || !r.type));
+      }),
       subscribeToMaterials(user.id, setMaterials),
       subscribeToAssignments(user.id, setAssignments),
       subscribeToTeacherProfile(user.id, setUser),
+      subscribeToSettings(user.id, setSettings),
       subscribeToConversations(user.id, setConversations),
     ];
 
@@ -121,16 +128,27 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
 
   useEffect(() => {
     const handleResize = () => {
-      if (window.innerWidth >= 1024) {
+      const mobile = window.innerWidth < 1024;
+      setIsMobile(mobile);
+      if (!mobile) {
         setSidebarOpen(true);
       } else {
         setSidebarOpen(false);
+        setIsCollapsed(false);
       }
     };
     handleResize();
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  const toggleSidebar = () => {
+    if (!isMobile) {
+        setIsCollapsed(!isCollapsed);
+    } else {
+        setSidebarOpen(!sidebarOpen);
+    }
+  };
 
   const handleLogout = () => {
     logout();
@@ -174,26 +192,24 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
   }, {} as Record<string, typeof NAV_ITEMS>);
 
   return (
-    <div className="min-h-screen flex" style={{ background: 'var(--dark)' }}>
+    <div className="min-h-screen bg-[#0a0a0f] relative overflow-x-hidden">
       {/* Overlay for mobile */}
       {sidebarOpen && (
-        <div className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden"
+        <div className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-md lg:hidden transition-opacity duration-300"
           onClick={() => setSidebarOpen(false)} />
       )}
 
       {/* Sidebar */}
       <aside
-        className="fixed top-0 right-0 h-full z-50 flex flex-col transition-all duration-300 ease-in-out"
+        className={`fixed top-0 right-0 h-full z-[70] flex flex-col transition-all duration-300 ease-in-out border-l border-white/5 
+          ${isMobile ? (sidebarOpen ? 'w-[280px] translate-x-0' : 'w-0 translate-x-[285px] invisible') : (isCollapsed ? 'w-20 translate-x-0' : 'w-[280px] translate-x-0')}`}
         style={{
-          width: '280px',
           background: 'linear-gradient(180deg, var(--dark2), var(--dark3))',
-          borderLeft: '1px solid rgba(245,197,24,0.12)',
-          boxShadow: '-8px 0 32px rgba(0,0,0,0.4)',
-          transform: sidebarOpen ? 'translateX(0)' : 'translateX(280px)',
+          boxShadow: '-8px 0 32px rgba(0,0,0,0.5)',
         }}
       >
         {/* Logo */}
-        <div className="p-4 flex items-center gap-3" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+        <div className={`p-4 flex items-center ${isCollapsed ? 'justify-center' : 'gap-3'}`} style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
           <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden relative"
             style={{ 
               background: 'linear-gradient(135deg, var(--gold), var(--accent))', 
@@ -212,33 +228,40 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
               <GraduationCap size={20} color="#000" className="relative z-10" />
             )}
           </div>
-          <div>
-            <div className="font-cairo font-black text-sm gold-text">{settings?.acadName || 'A-N Academy'}</div>
-            <div className="text-xs" style={{ color: 'var(--text-muted)' }}>لوحة المعلم</div>
-          </div>
+          {!isCollapsed && (
+            <div className="animate-fade-in">
+                <div className="font-cairo font-black text-sm gold-text whitespace-nowrap">{settings?.acadName || 'A-N Academy'}</div>
+                <div className="text-xs" style={{ color: 'var(--text-muted)' }}>لوحة المعلم</div>
+            </div>
+          )}
           {/* Close button for mobile */}
-          <button 
-            onClick={() => setSidebarOpen(false)}
-            className="lg:hidden mr-auto w-8 h-8 flex items-center justify-center rounded-lg bg-white/5 border border-white/10"
-          >
-            <X size={18} />
-          </button>
+          {!isCollapsed && (
+            <button 
+                onClick={() => setSidebarOpen(false)}
+                className="lg:hidden mr-auto w-8 h-8 flex items-center justify-center rounded-lg bg-white/5 border border-white/10"
+            >
+                <X size={18} />
+            </button>
+          )}
         </div>
 
         {/* Nav */}
         <nav className="flex-1 overflow-y-auto py-2 scrollbar-hide">
           {Object.entries(grouped).map(([section, items]) => (
             <div key={section} className="mb-2">
-              <div className="px-5 py-2 text-[10px] font-bold tracking-[0.2em] uppercase"
-                style={{ color: 'var(--text-muted)', opacity: 0.6 }}>
-                {SECTION_LABELS[section]}
-              </div>
+              {!isCollapsed && (
+                <div className="px-5 py-2 text-[10px] font-bold tracking-[0.2em] uppercase animate-fade-in"
+                    style={{ color: 'var(--text-muted)', opacity: 0.6 }}>
+                    {SECTION_LABELS[section]}
+                </div>
+              )}
               {items.map(item => {
                 const active = pathname === item.href || (item.href !== '/teacher/dashboard' && pathname.startsWith(item.href));
                 return (
                   <Link key={item.href} href={item.href}
+                    title={isCollapsed ? item.label : undefined}
                     onClick={() => window.innerWidth < 1024 && setSidebarOpen(false)}
-                    className="flex items-center gap-3 px-4 py-3 mx-2 rounded-xl transition-all duration-200 text-sm font-medium group"
+                    className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-3 px-4'} py-3 mx-2 rounded-xl transition-all duration-200 text-sm font-medium group relative`}
                     style={{
                       color: active ? 'var(--gold)' : 'var(--text-muted)',
                       background: active ? 'rgba(245,197,24,0.1)' : 'transparent',
@@ -246,13 +269,21 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
                     }}
                   >
                     <item.icon size={18} className={`flex-shrink-0 ${active ? 'scale-110' : 'opacity-70 group-hover:opacity-100'}`} />
-                    <span>{item.label}</span>
-                    {item.href === '/teacher/students' && registrationRequests.length > 0 && (
+                    {!isCollapsed && <span className="animate-fade-in truncate">{item.label}</span>}
+                    
+                    {!isCollapsed && item.href === '/teacher/students' && registrationRequests.length > 0 && (
                       <span className="w-5 h-5 rounded-full bg-red-500 text-[10px] text-white flex items-center justify-center font-bold mr-auto">
                         {registrationRequests.length}
                       </span>
                     )}
-                    {active && item.href !== '/teacher/students' && <div className="mr-auto w-1.5 h-1.5 rounded-full bg-gold shadow-[0_0_8px_var(--gold)]" />}
+                    
+                    {isCollapsed && item.href === '/teacher/students' && registrationRequests.length > 0 && (
+                      <span className="absolute top-1 right-1 w-4 h-4 bg-red-500 rounded-full text-[8px] flex items-center justify-center text-white border border-[#12121f]">
+                        {registrationRequests.length}
+                      </span>
+                    )}
+
+                    {active && !isCollapsed && <div className="mr-auto w-1.5 h-1.5 rounded-full bg-gold shadow-[0_0_8px_var(--gold)]" />}
                   </Link>
                 );
               })}
@@ -260,44 +291,64 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
           ))}
         </nav>
 
-        {/* Footer */}
+        {/* User Profile & Logout */}
         <div className="p-4 space-y-3" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-          <div className="flex items-center gap-3 p-3 rounded-xl bg-white/5 border border-white/10">
-            <div className="w-8 h-8 rounded-lg bg-gold/10 flex items-center justify-center text-gold">
-               <div className={`w-2 h-2 rounded-full ${syncStatus === 'synced' ? 'bg-green-500' : syncStatus === 'offline' ? 'bg-red-500' : 'bg-yellow-500 animate-pulse'}`} />
+          {!isCollapsed && (
+            <div className="flex items-center gap-3 p-2 group animate-fade-in">
+               {user.imageUrl ? (
+                 <img src={user.imageUrl} alt={user.name} className="w-10 h-10 rounded-full border-2 border-gold/30 object-cover shadow-lg" />
+               ) : (
+                 <div className="w-10 h-10 rounded-full bg-gold/10 flex items-center justify-center text-gold font-black border border-gold/20">
+                    {user.name?.[0]}
+                 </div>
+               )}
+               <div className="flex-1 min-w-0">
+                  <div className="text-xs font-bold truncate text-white">{user.name}</div>
+                  <div className="text-[10px] text-gray-500 truncate">@{user.username || 'user'}</div>
+               </div>
             </div>
-            <div className="flex-1 min-w-0">
-               <div className="text-[10px] text-text-muted">حالة المزامنة</div>
-               <div className="text-xs font-bold truncate">{syncStatus === 'synced' ? 'متصل ومحدث' : syncStatus === 'offline' ? 'غير متصل' : 'جاري المزامنة...'}</div>
+          )}
+
+          {!isCollapsed && (
+            <div className="flex items-center gap-3 p-3 rounded-xl bg-white/5 border border-white/10 animate-fade-in">
+                <div className="w-8 h-8 rounded-lg bg-gold/10 flex items-center justify-center text-gold">
+                <div className={`w-2 h-2 rounded-full ${syncStatus === 'synced' ? 'bg-green-500' : syncStatus === 'offline' ? 'bg-red-500' : 'bg-yellow-500 animate-pulse'}`} />
+                </div>
+                <div className="flex-1 min-w-0">
+                <div className="text-[10px] text-text-muted">حالة المزامنة</div>
+                <div className="text-xs font-bold truncate">{syncStatus === 'synced' ? 'متصل ومحدث' : syncStatus === 'offline' ? 'غير متصل' : 'جاري المزامنة...'}</div>
+                </div>
             </div>
-          </div>
+          )}
+          
           {user.role === 'super_admin' && (
-            <Link href="/admin" className="flex items-center gap-3 px-4 py-3 mx-2 rounded-xl transition-all duration-200 text-sm font-bold bg-purple-500/10 text-purple-400 border border-purple-500/20 hover:bg-purple-500/20 mb-2">
-              <ShieldCheck size={18} />
-              <span>لوحة الإدارة الشاملة</span>
+            <Link href="/admin" className={`flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-3 px-4'} py-3 mx-2 rounded-xl transition-all duration-200 text-sm font-bold bg-purple-500/10 text-purple-400 border border-purple-500/20 hover:bg-purple-500/20 mb-2 overflow-hidden`}>
+              <ShieldCheck size={18} className="shrink-0" />
+              {!isCollapsed && <span className="whitespace-nowrap">لوحة الإدارة</span>}
             </Link>
           )}
           <button onClick={handleLogout}
-            className="btn-danger w-full justify-center text-sm py-3">
-            <LogOut size={16} />
-            تسجيل الخروج
+            className={`btn-danger w-full justify-center text-sm py-3 ${isCollapsed ? 'px-0' : ''}`}>
+            <LogOut size={16} className="shrink-0" />
+            {!isCollapsed && <span className="mr-2">خروج</span>}
           </button>
         </div>
       </aside>
 
-      {/* Main Content */}
-      <main className="flex-1 flex flex-col min-w-0 min-h-screen transition-all duration-300"
-        style={{ marginRight: (sidebarOpen && typeof window !== 'undefined' && window.innerWidth >= 1024) ? '280px' : '0' }}>
+      {/* Main Content Area */}
+      <main className={`transition-all duration-300 ease-in-out min-h-screen ${
+        isMobile ? 'w-full mr-0' : (isCollapsed ? 'mr-20 w-[calc(100%-80px)]' : 'mr-[280px] w-[calc(100%-280px)]')
+      }`}>
 
         {/* Top Header */}
-        <header className="sticky top-0 z-40 flex items-center gap-3 px-4 py-3 lg:px-6"
+        <header className="sticky top-0 z-40 flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2.5 sm:py-3 lg:px-6 w-full"
           style={{
             background: 'rgba(10, 10, 15, 0.8)',
             borderBottom: '1px solid rgba(255,255,255,0.06)',
             backdropFilter: 'blur(16px)',
           }}>
           {/* Sidebar toggle */}
-          <button onClick={() => setSidebarOpen(!sidebarOpen)}
+          <button onClick={toggleSidebar}
             className="w-10 h-10 rounded-xl flex items-center justify-center transition-all hover:bg-white/5 active:scale-95"
             style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
             <Menu size={20} />
@@ -328,7 +379,7 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
           </div>
         </header>
 
-        <div className="flex-1 p-4 lg:p-8 overflow-x-hidden">
+        <div className="p-4 lg:p-8 pb-32 lg:pb-8 w-full">
           {/* Subscription Banner */}
           {user.role === 'teacher' && user.subType !== 'free' && user.subExpiry && user.subExpiry < Date.now() + (7 * 24 * 60 * 60 * 1000) && (
             <div className={`mb-6 p-4 rounded-2xl border flex flex-col md:flex-row items-center justify-between gap-4 animate-pulse-subtle ${user.subExpiry < Date.now() ? 'bg-red-500/10 border-red-500/20 text-red-400' : 'bg-gold/10 border-gold/20 text-gold'}`}>
@@ -356,6 +407,77 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
         </div>
 
       </main>
+
+      {/* 📱 Mobile Bottom Navigation - Application feel */}
+      <nav className="fixed lg:hidden bottom-0 left-0 right-0 z-[60] bg-[#12121f]/90 backdrop-blur-xl border-t border-white/5 px-2 py-2 flex justify-around items-center h-20 shadow-[0_-10px_30px_rgba(0,0,0,0.4)]">
+          <Link href="/teacher/dashboard" className={`flex flex-col items-center gap-1.5 px-3 py-1 rounded-xl transition-all ${pathname === '/teacher/dashboard' ? 'text-gold' : 'text-gray-500'}`}>
+              <LayoutDashboard size={20} className={pathname === '/teacher/dashboard' ? 'scale-110 drop-shadow-[0_0_8px_var(--gold)]' : ''} />
+              <span className="text-[10px] font-bold">الرئيسية</span>
+          </Link>
+          <Link href="/teacher/students" className={`flex flex-col items-center gap-1.5 px-3 py-1 rounded-xl transition-all relative ${pathname === '/teacher/students' ? 'text-gold' : 'text-gray-500'}`}>
+              <Users size={20} className={pathname === '/teacher/students' ? 'scale-110 drop-shadow-[0_0_8px_var(--gold)]' : ''} />
+              <span className="text-[10px] font-bold">الطلاب</span>
+              {registrationRequests.length > 0 && (
+                <span className="absolute -top-1 -right-0 w-4 h-4 bg-red-500 rounded-full text-[8px] text-white flex items-center justify-center font-bold">
+                    {registrationRequests.length}
+                </span>
+              )}
+          </Link>
+          
+          {/* Main Action Button - Quick Exam */}
+          <Link href="/teacher/exams/create" className="w-14 h-14 bg-gradient-to-tr from-gold to-amber-400 rounded-full flex items-center justify-center text-[#12121f] shadow-[0_0_20px_rgba(245,197,24,0.4)] -mt-10 border-4 border-[#12121f] active:scale-95 transition-transform">
+              <PlusCircle size={28} />
+          </Link>
+
+          <Link href="/teacher/exams" className={`flex flex-col items-center gap-1.5 px-3 py-1 rounded-xl transition-all ${pathname === '/teacher/exams' ? 'text-gold' : 'text-gray-500'}`}>
+              <FileText size={20} className={pathname === '/teacher/exams' ? 'scale-110 drop-shadow-[0_0_8px_var(--gold)]' : ''} />
+              <span className="text-[10px] font-bold">الاختبارات</span>
+          </Link>
+          <button onClick={() => setShowMobileMenu(true)} className={`flex flex-col items-center gap-1.5 px-3 py-1 rounded-xl transition-all text-gray-500`}>
+              <Menu size={20} />
+              <span className="text-[10px] font-bold">المزيد</span>
+          </button>
+      </nav>
+
+      {/* 📲 Full Screen Mobile Menu Overlay */}
+      {showMobileMenu && (
+          <div className="fixed inset-0 z-[100] bg-[#0d121f] animate-fade-in flex flex-col overflow-hidden" dir="rtl">
+              <div className="p-6 border-b border-white/5 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-gold/10 flex items-center justify-center text-gold border border-gold/20">
+                          <PlusCircle size={20} />
+                      </div>
+                      <h3 className="text-xl font-black text-white font-cairo">كل القوائم</h3>
+                  </div>
+                  <button onClick={() => setShowMobileMenu(false)} className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-gray-400">
+                      <X size={24} />
+                  </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-6 grid grid-cols-2 gap-4 pb-20">
+                  {filteredNavItems.map(item => (
+                      <Link 
+                        key={item.href} 
+                        href={item.href} 
+                        onClick={() => setShowMobileMenu(false)}
+                        className={`p-4 rounded-2xl flex flex-col gap-3 transition-all active:scale-95 ${
+                            pathname === item.href ? 'bg-gold/10 border border-gold/30' : 'bg-white/5 border border-white/5'
+                        }`}
+                      >
+                          <item.icon size={24} className={pathname === item.href ? 'text-gold' : 'text-gray-400'} />
+                          <span className={`text-xs font-bold ${pathname === item.href ? 'text-white' : 'text-gray-400'}`}>{item.label}</span>
+                      </Link>
+                  ))}
+                  <button 
+                    onClick={() => { handleLogout(); setShowMobileMenu(false); }}
+                    className="p-4 rounded-2xl bg-red-500/10 border border-red-500/20 flex flex-col gap-3 text-red-500"
+                  >
+                      <LogOut size={24} />
+                      <span className="text-xs font-bold">تسجيل الخروج</span>
+                  </button>
+              </div>
+          </div>
+      )}
     </div>
   );
 }

@@ -4,10 +4,44 @@ import { TEACHERS } from '../constants';
 import { fromDB, toDB, manyFromDB } from './dbUtils';
 import type { TeacherUser } from '@/types';
 
+const decode = (str: string) => {
+  try {
+    return typeof window !== 'undefined' && typeof atob !== 'undefined'
+      ? decodeURIComponent(escape(atob(str))) 
+      : Buffer.from(str, 'base64').toString('utf-8');
+  } catch {
+    return str;
+  }
+};
+
+const encode = (str: string) => {
+  try {
+    return typeof window !== 'undefined' && typeof btoa !== 'undefined'
+      ? btoa(unescape(encodeURIComponent(str)))
+      : Buffer.from(str, 'utf-8').toString('base64');
+  } catch {
+    return str;
+  }
+};
+
 export const getTeachers = async (): Promise<TeacherUser[]> => {
   const { data, error } = await supabase.from(TEACHERS).select('*');
   if (error) throw error;
-  return manyFromDB<TeacherUser>(data);
+  
+  return manyFromDB<TeacherUser>(data).map(teacher => {
+    // Deserialize financials from notes field if present
+    const t = teacher as any;
+    if (t.notes) {
+      const tpMatch = t.notes.match(/\[TP:(\d+)\]/);
+      if (tpMatch) teacher.totalPaid = parseInt(tpMatch[1]);
+
+      const histMatch = t.notes.match(/\[HIST:(.*?)\]/);
+      if (histMatch) {
+         try { teacher.paymentHistory = JSON.parse(decode(histMatch[1])); } catch {}
+      }
+    }
+    return teacher;
+  });
 };
 
 export const getSuperAdmin = async (): Promise<TeacherUser | null> => {
@@ -17,7 +51,18 @@ export const getSuperAdmin = async (): Promise<TeacherUser | null> => {
     .eq('role', 'super_admin')
     .maybeSingle();
   if (error) throw error;
-  return data ? fromDB<TeacherUser>(data) : null;
+  if (!data) return null;
+  const admin = fromDB<TeacherUser>(data);
+  const t = admin as any;
+  if (t.notes) {
+      const tpMatch = t.notes.match(/\[TP:(\d+)\]/);
+      if (tpMatch) admin.totalPaid = parseInt(tpMatch[1]);
+      const histMatch = t.notes.match(/\[HIST:(.*?)\]/);
+      if (histMatch) {
+         try { admin.paymentHistory = JSON.parse(decode(histMatch[1])); } catch {}
+      }
+  }
+  return admin;
 };
 
 export const getTeacherByUsername = async (username: string): Promise<TeacherUser | null> => {
@@ -47,7 +92,18 @@ export const getTeacherById = async (id: string): Promise<TeacherUser | null> =>
     .eq('id', id)
     .maybeSingle();
   if (error) throw error;
-  return data ? fromDB<TeacherUser>(data) : null;
+  if (!data) return null;
+  const teacher = fromDB<TeacherUser>(data);
+  const t = teacher as any;
+  if (t.notes) {
+      const tpMatch = t.notes.match(/\[TP:(\d+)\]/);
+      if (tpMatch) teacher.totalPaid = parseInt(tpMatch[1]);
+      const histMatch = t.notes.match(/\[HIST:(.*?)\]/);
+      if (histMatch) {
+         try { teacher.paymentHistory = JSON.parse(decode(histMatch[1])); } catch {}
+      }
+  }
+  return teacher;
 };
 
 export const getTeacherByPhone = async (phone: string): Promise<TeacherUser | null> => {
@@ -68,15 +124,28 @@ export const saveTeacher = async (teacher: Omit<TeacherUser, 'id'> & { id?: stri
   });
   Object.keys(payload).forEach(k => payload[k] === undefined && delete payload[k]);
 
+  // Serialization for Teachers
+  let cleanNotes = (payload.notes || '').replace(/\[TP:\d+\]/g, '').replace(/\[HIST:.*?\]/g, '').trim();
+  
+  if (payload.total_paid !== undefined) {
+    cleanNotes = `${cleanNotes} [TP:${payload.total_paid || 0}]`.trim();
+    delete payload.total_paid;
+  }
+  if (payload.payment_history !== undefined) {
+    const histStr = encode(JSON.stringify(payload.payment_history || []));
+    cleanNotes = `${cleanNotes} [HIST:${histStr}]`.trim();
+    delete payload.payment_history;
+  }
+  
+  payload.notes = cleanNotes || undefined;
+
   if (teacher.id) {
-    // Upsert using Firebase UID as the primary key
     const { error } = await supabase
       .from(TEACHERS)
       .upsert([{ ...payload, id: teacher.id, created_at: payload.created_at ?? Date.now(), is_active: payload.is_active ?? true }], { onConflict: 'id' });
     if (error) throw error;
     return teacher.id;
   } else {
-    // Generate an ID if not provided to avoid NULL primary key error
     const newId = crypto.randomUUID();
     const { data, error } = await supabase
       .from(TEACHERS)
@@ -105,8 +174,6 @@ export const deleteTeacher = async (id: string) => {
 };
 
 export const subscribeToTeachers = (callback: (teachers: TeacherUser[]) => void) => {
-  const noop = () => {};
-  // Don't subscribe if no valid session
   const channel = supabase
     .channel('all_teachers')
     .on(
@@ -123,7 +190,6 @@ export const subscribeToTeachers = (callback: (teachers: TeacherUser[]) => void)
 };
 
 export const subscribeToTeacherProfile = (teacherId: string, callback: (teacher: TeacherUser | null) => void) => {
-  // Guard against invalid IDs - malformed filter causes 400 errors
   if (!teacherId || teacherId === 'undefined' || teacherId === 'unknown_teacher') {
     callback(null);
     return () => {};

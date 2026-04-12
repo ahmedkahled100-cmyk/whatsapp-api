@@ -1,7 +1,8 @@
 'use client';
 // src/app/teacher/courses/page.tsx
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useTeacherStore } from '@/lib/store';
 import { saveMaterial, deleteMaterial, uploadFileToStorage, dispatchNotification } from '@/lib/db';
 import { showToast } from '@/lib/toast';
@@ -81,9 +82,9 @@ const EMPTY_FORM: Partial<CourseMaterial> & { uploadFile?: File | null; newLinkL
   newLinkUrl: '',
 };
 
-export default function CoursesPage() {
-  const { materials, students, exams, assignments, groups } = useTeacherStore();
+function CoursesPageContent() {
   const { queue } = useFileProcessingStore();
+  const { materials, groups, students, exams, assignments } = useTeacherStore();
   const [showAddForm, setShowAddForm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [uploadingFile, setUploadingFile] = useState(false);
@@ -93,6 +94,7 @@ export default function CoursesPage() {
   const [search, setSearch] = useState('');
   const [expandedSubjects, setExpandedSubjects] = useState<Set<string>>(new Set());
   const { openPreview, PreviewModal } = useFilePreview();
+  const searchParams = useSearchParams();
   
   // PDF Compression state
   const [compressionModal, setCompressionModal] = useState<{
@@ -121,6 +123,27 @@ export default function CoursesPage() {
     window.addEventListener('fileUploaded', handleUploaded);
     return () => window.removeEventListener('fileUploaded', handleUploaded);
   }, []);
+
+  // Handle pre-fill from iLovePDF tools
+  useEffect(() => {
+    const prefillUrl = searchParams.get('prefillUrl');
+    const prefillName = searchParams.get('prefillName');
+    const prefillType = searchParams.get('prefillType');
+
+    if (prefillUrl) {
+      setForm({ 
+        ...EMPTY_FORM, 
+        title: prefillName || '', 
+        url: prefillUrl, 
+        fileUrl: prefillUrl,
+        type: (prefillType as any) || 'pdf'
+      });
+      setShowAddForm(true);
+      showToast('📥 تم استلام الملف من أدوات PDF بنجاح');
+      // Clear URL params without refresh
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, [searchParams]);
 
   // Known subjects from existing materials for autocomplete
   const knownSubjects = Array.from(new Set(materials.map(m => m.subject).filter(Boolean)));
@@ -595,7 +618,7 @@ export default function CoursesPage() {
           placeholder="ابحث في الدروس والمواد..."
           value={search}
           onChange={e => setSearch(e.target.value)}
-          className="input-base has-icon text-sm w-full"
+          className="input-base has-icon-right text-sm w-full"
         />
       </div>
 
@@ -760,5 +783,13 @@ export default function CoursesPage() {
         />
       )}
     </div>
+  );
+}
+
+export default function CoursesPage() {
+  return (
+    <Suspense fallback={<div className="p-10 text-center opacity-50">جاري تحميل صفحة المناهج...</div>}>
+      <CoursesPageContent />
+    </Suspense>
   );
 }

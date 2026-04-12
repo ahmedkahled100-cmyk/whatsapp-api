@@ -105,6 +105,56 @@ body::after {
     background: linear-gradient(135deg, var(--dark2), var(--dark3));
     border: 1px solid rgba(255,255,255,0.08);
     border-radius: 1.25rem;
+    overflow: hidden; /* Prevent content spill */
+  }
+
+  /* Modal Utilities */
+  .modal-overlay {
+    @apply fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-sm;
+  }
+  
+  .modal-content {
+    @apply card-base p-0 w-full max-w-lg animate-scale-in max-h-[92vh] flex flex-col relative overflow-hidden;
+  }
+
+  .modal-header {
+    @apply p-5 sm:p-6 border-b border-white/5 flex items-center justify-between shrink-0;
+  }
+
+  .modal-body {
+    @apply p-5 sm:p-6 overflow-y-auto flex-1;
+  }
+
+  .modal-footer {
+    @apply p-5 sm:p-6 border-t border-white/5 flex gap-3 shrink-0;
+  }
+
+  .modal-content-sm { @apply max-w-md; }
+  .modal-content-lg { @apply max-w-2xl; }
+  .modal-content-xl { @apply max-w-4xl; }
+
+  /* Responsive Table Container */
+  .table-container {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Custom Scrollbar Utilities */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  .scrollbar-thin {
+    scrollbar-width: thin;
+  }
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
   }
 
   .gold-gradient {
@@ -137,9 +187,12 @@ body::after {
     box-shadow: 0 0 0 3px rgba(245,197,24,0.08);
   }
 
-  /* Specific padding if input has an icon on the right (RTL) */
-  .has-icon {
-    padding-right: 2.5rem; /* Make room for the absolute icon */
+  /* Robust icon alignment for inputs in RTL (Start = Right) */
+  .has-icon-right {
+    padding-right: 3.25rem !important; /* Forces enough space for icons on the right */
+  }
+  .has-icon-left {
+    padding-left: 3.25rem !important;
   }
 
   .btn-gold {
@@ -311,6 +364,34 @@ body::after {
 .animate-slide-down { animation: slideDown 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
 .animate-scale-in { animation: scaleIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); }
 .animate-blink { animation: blink 1s infinite; }
+
+/* Skeleton Loaders */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.03) 25%,
+    rgba(255, 255, 255, 0.08) 50%,
+    rgba(255, 255, 255, 0.03) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-loading 1.5s infinite linear;
+  border-radius: 0.5rem;
+}
+
+@keyframes skeleton-loading {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Premium Motion */
+.hover-premium {
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.hover-premium:hover {
+  transform: translateY(-4px) scale(1.02);
+  filter: brightness(1.1);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.4);
+}
 
 /* Educational games — motion & feedback */
 @keyframes game-confetti-fall {

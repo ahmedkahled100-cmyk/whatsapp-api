@@ -2,24 +2,26 @@
 // src/components/TeacherDiscovery.tsx
 // شاشة اكتشاف المدرسين والاشتراك معهم
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useStudentStore } from '@/lib/store';
-import { getTeachers, dispatchNotification, saveRegistrationRequest } from '@/lib/db';
-import type { TeacherUser } from '@/types';
+import { getTeachers, dispatchNotification, saveRegistrationRequest, getRegistrationRequestsByPhone } from '@/lib/db';
+import type { TeacherUser, RegistrationRequest } from '@/types';
 import { User, BookOpen, ExternalLink, Search, Loader2, Sparkles, Send } from 'lucide-react';
 import { showToast } from '@/lib/toast';
 
 interface Props {
   currentTeacherId: string;
+  enrolledTeacherIds?: string[];
   onBack: () => void;
 }
 
-export function TeacherDiscovery({ currentTeacherId, onBack }: Props) {
+export function TeacherDiscovery({ currentTeacherId, enrolledTeacherIds = [], onBack }: Props) {
   const student = useStudentStore(state => state.student);
   const [teachers, setTeachers] = useState<TeacherUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [requestingId, setRequestingId] = useState<string | null>(null);
+  const [pendingTeacherIds, setPendingTeacherIds] = useState<string[]>([]);
 
   useEffect(() => {
     getTeachers().then(ts => {
@@ -27,7 +29,17 @@ export function TeacherDiscovery({ currentTeacherId, onBack }: Props) {
       setTeachers(ts.filter(t => t.isActive));
       setLoading(false);
     });
-  }, [currentTeacherId]);
+
+    // Fetch existing registration requests to show "Pending" status
+    if (student?.phone) {
+        getRegistrationRequestsByPhone(student.phone).then(reqs => {
+            const pendingIds = reqs
+                .filter(r => r.status === 'pending')
+                .map(r => r.teacherId);
+            setPendingTeacherIds(pendingIds);
+        });
+    }
+  }, [currentTeacherId, student?.phone]);
 
   const handleJoinRedirect = (teacherId: string) => {
     // Redirect to registration page with teacherId pre-selected
@@ -41,10 +53,12 @@ export function TeacherDiscovery({ currentTeacherId, onBack }: Props) {
     window.location.href = `/register?${params.toString()}`;
   };
 
-  const filtered = teachers.filter((t: TeacherUser) => 
-    t.name.toLowerCase().includes(search.toLowerCase()) || 
-    (t.subject && t.subject.toLowerCase().includes(search.toLowerCase()))
-  );
+  const filtered = useMemo(() => {
+    return teachers.filter((t: TeacherUser) => 
+      t.name.toLowerCase().includes(search.toLowerCase()) || 
+      (t.subject && t.subject.toLowerCase().includes(search.toLowerCase()))
+    );
+  }, [teachers, search]);
 
   if (loading) {
     return (
@@ -74,7 +88,7 @@ export function TeacherDiscovery({ currentTeacherId, onBack }: Props) {
         <input 
           type="text" 
           placeholder="ابحث عن مدرس أو مادة دراسية..." 
-          className="input-base pr-12 w-full h-12 text-sm bg-white/5 border-white/10"
+          className="input-base has-icon-right w-full h-12 text-sm bg-white/5 border-white/10"
           value={search}
           onChange={e => setSearch(e.target.value)}
         />
@@ -108,9 +122,13 @@ export function TeacherDiscovery({ currentTeacherId, onBack }: Props) {
                 <span className="flex items-center gap-1 bg-white/5 px-2 py-0.5 rounded-md border border-white/5 capitalize shrink-0">
                   <BookOpen size={10} className="text-gold" /> {teacher.subject || 'مادة دراسية'}
                 </span>
-                {teacher.subPrice !== undefined && (
+                {teacher.subPrice ? (
                   <span className="flex items-center gap-1 bg-green-500/10 px-2 py-0.5 rounded-md border border-green-500/10 text-green-400 font-bold shrink-0">
                     💰 {teacher.subPrice} ج.م / شهر
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1 bg-blue-500/10 px-2 py-0.5 rounded-md border border-blue-500/10 text-blue-400 font-bold shrink-0">
+                    ✨ مجاني
                   </span>
                 )}
               </div>
@@ -120,18 +138,30 @@ export function TeacherDiscovery({ currentTeacherId, onBack }: Props) {
               {student && student.id !== 'unknown_student' ? (
                 <button
                   onClick={() => handleJoinRedirect(teacher.id)}
-                  className={`btn-gold !py-2 !px-4 text-xs font-bold items-center gap-1.5 shadow-none flex rounded-xl transition-all active:scale-95 ${teacher.id === currentTeacherId ? 'opacity-50 pointer-events-none' : ''}`}
+                  disabled={teacher.id === currentTeacherId || enrolledTeacherIds.includes(teacher.id) || pendingTeacherIds.includes(teacher.id)}
+                  className={`btn-gold !py-2 !px-4 text-xs font-bold items-center gap-1.5 shadow-none flex rounded-xl transition-all active:scale-95 ${
+                    (teacher.id === currentTeacherId || enrolledTeacherIds.includes(teacher.id) || pendingTeacherIds.includes(teacher.id)) ? 'opacity-50 grayscale' : ''
+                  }`}
                 >
-                  <Send size={12} />
-                  <span>{teacher.id === currentTeacherId ? 'مشترك بالفعل' : 'طلب انضمام'}</span>
+                  {pendingTeacherIds.includes(teacher.id) ? (
+                    <>
+                      <Loader2 size={12} className="animate-spin" />
+                      <span>طلبك قيد المراجعة</span>
+                    </>
+                  ) : (
+                    <>
+                      <Send size={12} />
+                      <span>{teacher.id === currentTeacherId || enrolledTeacherIds.includes(teacher.id) ? 'مشترك بالفعل' : 'طلب انضمام'}</span>
+                    </>
+                  )}
                 </button>
               ) : (
-                <a 
+                  <a 
                   href={`/register?teacherId=${teacher.id}`}
                   target="_blank"
-                  className={`btn-gold !py-2 !px-4 text-xs font-bold items-center gap-1.5 shadow-none flex rounded-xl transition-transform active:scale-95 ${teacher.id === currentTeacherId ? 'opacity-50 pointer-events-none' : ''}`}
+                  className={`btn-gold !py-2 !px-4 text-xs font-bold items-center gap-1.5 shadow-none flex rounded-xl transition-transform active:scale-95 ${(teacher.id === currentTeacherId || enrolledTeacherIds.includes(teacher.id)) ? 'opacity-50 pointer-events-none grayscale' : ''}`}
                 >
-                  <span>{teacher.id === currentTeacherId ? 'مشترك بالفعل' : 'تسجيل'}</span>
+                  <span>{teacher.id === currentTeacherId || enrolledTeacherIds.includes(teacher.id) ? 'مشترك بالفعل' : 'تسجيل'}</span>
                   <ExternalLink size={12} />
                 </a>
               )}

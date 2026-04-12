@@ -4,7 +4,7 @@
 import { useState, useMemo } from 'react';
 import { useTeacherStore } from '@/lib/store';
 import { formatDateAr, gradeColor, scoreLabel, getApiBase } from '@/lib/utils';
-import { Search, Download, Trash2, Filter, MessageCircle, Loader2, Share2, X } from 'lucide-react';
+import { Search, Download, Trash2, Filter, MessageCircle, Loader2, Share2, X, Award, CheckCircle2, TrendingUp, Clock, Calendar, XCircle, ImageIcon } from 'lucide-react';
 import { deleteAttempt } from '@/lib/db';
 import { showToast } from '@/lib/toast';
 import html2canvas from 'html2canvas';
@@ -275,157 +275,311 @@ export default function ResultsPage() {
   };
 
   return (
-    <div className="space-y-6 pb-10">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <h1 className="text-2xl sm:text-3xl font-cairo font-black gold-text">📊 النتائج ({filtered.length})</h1>
-        <div className="flex flex-wrap gap-2">
-          <button onClick={exportPDF} disabled={exportingPdf} className="flex-1 sm:flex-none btn-gold text-xs sm:text-sm py-2 px-3 flex items-center justify-center gap-2">
-            {exportingPdf ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />} 
+    <div className="space-y-6 pb-24 w-full overflow-x-hidden">
+      {/* Header with improved actions */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-cairo font-black gold-text flex items-center gap-3">
+             نتائج الطلاب <span className="text-sm font-mono opacity-40 bg-white/5 py-1 px-3 rounded-full">{filtered.length} محاولة</span>
+          </h1>
+          <p className="text-xs text-text-muted mt-1 font-bold">عرض وتحليل نتائج الاختبارات وتصدير التقارير</p>
+        </div>
+        <div className="flex gap-3 w-full md:w-auto">
+          <button 
+            onClick={exportPDF} 
+            disabled={exportingPdf} 
+            className="flex-1 md:flex-none btn-gold py-3 px-6 flex items-center justify-center gap-2 shadow-lg shadow-gold/20"
+          >
+            {exportingPdf ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />} 
             تصدير PDF
           </button>
-          <button onClick={exportCSV} className="flex-1 sm:flex-none btn-outline text-xs sm:text-sm py-2 px-3">
+          <button 
+            onClick={exportCSV} 
+            className="flex-1 md:flex-none btn-outline py-3 px-6 flex items-center justify-center gap-2"
+          >
              تصدير CSV
           </button>
         </div>
       </div>
 
-      {/* Stats */}
+      {/* Stats Dashboard - Premium Look */}
       {stats && (
-        <div className="grid grid-cols-1 xs:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 xs:grid-cols-3 gap-4">
           {[
-            { label: 'المتوسط (%)', value: `${stats.avg}%`, color: gradeColor(stats.avg, 50) },
-            { label: 'نسبة النجاح', value: `${stats.passRate}%`, color: stats.passRate >= 50 ? 'var(--green)' : 'var(--red)' },
+            { label: 'متوسط الدرجات', value: `${stats.avg}%`, icon: Award, color: '#f5c518', bg: 'rgba(245,197,24,0.1)' },
+            { label: 'نسبة النجاح', value: `${stats.passRate}%`, icon: CheckCircle2, color: stats.passRate >= 50 ? '#10b981' : '#ef4444', bg: stats.passRate >= 50 ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)' },
+            { label: 'الدرجة المتوسطة', value: stats.rawAvg, icon: TrendingUp, color: '#3b82f6', bg: 'rgba(59,130,246,0.1)' },
           ].map((s, i) => (
-            <div key={i} className="stat-card text-center py-4 px-2">
-              <div className="text-xl sm:text-2xl font-cairo font-black whitespace-nowrap" style={{ color: s.color }}>{s.value}</div>
-              <div className="text-[10px] sm:text-xs mt-1 font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>{s.label}</div>
+            <div key={i} className="card-base p-4 flex flex-col items-center justify-center relative group overflow-hidden border-white/5 bg-white/5">
+              <div className="absolute top-0 right-0 w-16 h-16 opacity-[0.03] group-hover:scale-150 transition-transform duration-500" style={{ color: s.color }}>
+                <s.icon size={64} />
+              </div>
+              <div className="w-12 h-12 rounded-2xl flex items-center justify-center mb-3 group-hover:scale-110 transition-all duration-300" style={{ background: s.bg, color: s.color }}>
+                <s.icon size={22} />
+              </div>
+              <div className="text-2xl font-black font-cairo leading-none mb-1.5" style={{ color: s.color }}>{s.value}</div>
+              <div className="text-[10px] font-bold text-text-muted opacity-60 uppercase tracking-widest">{s.label}</div>
             </div>
           ))}
         </div>
       )}
 
-      {/* Filters */}
-      <div className="card-base p-4 lg:p-5 flex flex-col md:flex-row gap-4">
-        <div className="relative flex-1">
-          <Search size={16} className="absolute top-1/2 -translate-y-1/2 right-4 opacity-50 text-gold" />
-          <input type="text" placeholder="بحث بالاسم أو الكود..."
-            value={search} onChange={e => setSearch(e.target.value)} className="input-base pr-11 text-sm h-11" />
-        </div>
-        
-        <div className="flex flex-col sm:flex-row gap-3">
-          <select value={examFilter} onChange={e => setExamFilter(e.target.value)} className="input-base text-sm h-11 min-w-[180px]">
-            <option value="">كل الاختبارات</option>
-            {exams.map(e => <option key={e.id} value={e.id}>{e.title}</option>)}
-          </select>
+      {/* Filters Section - Clean & Compact */}
+      <div className="card-base p-4 lg:p-6 space-y-4">
+        <div className="flex flex-col lg:flex-row gap-4">
+          <div className="relative flex-1 group">
+            <Search size={18} className="absolute top-1/2 -translate-y-1/2 right-4 text-gold group-focus-within:scale-110 transition-transform" />
+            <input 
+              type="text" 
+              placeholder="ابحث باسم الطالب أو كوده..."
+              value={search} 
+              onChange={e => setSearch(e.target.value)} 
+              className="input-base has-icon-right text-sm h-12 sm:h-14 w-full shadow-inner bg-white/[0.03] focus:bg-white/[0.05]" 
+            />
+          </div>
           
-          <div className="flex bg-white/5 p-1 rounded-xl border border-white/5">
-            {(['all', 'pass', 'fail'] as const).map(f => (
-              <button 
-                key={f} 
-                onClick={() => setStatusFilter(f)}
-                className={`flex-1 sm:flex-none text-[10px] sm:text-xs px-3 sm:px-4 py-2 rounded-lg font-bold transition-all whitespace-nowrap ${statusFilter === f ? 'bg-gold text-dark shadow-lg' : 'text-muted hover:text-white'}`}
+          <div className="flex flex-col sm:flex-row gap-3 min-w-[300px] lg:min-w-[450px]">
+            <div className="relative flex-1 group">
+              <Filter size={16} className="absolute top-1/2 -translate-y-1/2 right-4 text-gold opacity-60" />
+              <select 
+                value={examFilter} 
+                onChange={e => setExamFilter(e.target.value)} 
+                className="input-base has-icon-right text-sm h-12 sm:h-14 w-full appearance-none cursor-pointer"
               >
-                {f === 'all' ? 'الكل' : f === 'pass' ? '✅ ناجح' : '❌ راسب'}
-              </button>
-            ))}
+                <option value="">كل الاختبارات</option>
+                {exams.map(e => <option key={e.id} value={e.id}>{e.title}</option>)}
+              </select>
+            </div>
+            
+            <div className="flex bg-white/5 p-1 rounded-xl border border-white/5 overflow-x-auto scrollbar-hide shrink-0 h-12 sm:h-14">
+              {(['all', 'pass', 'fail'] as const).map(f => (
+                <button 
+                  key={f} 
+                  onClick={() => setStatusFilter(f)}
+                  className={`flex-1 sm:flex-none text-[11px] sm:text-xs px-4 sm:px-6 py-2 rounded-lg font-bold transition-all whitespace-nowrap flex items-center justify-center gap-1.5 ${
+                    statusFilter === f 
+                      ? 'bg-gold text-dark shadow-xl shadow-gold/10' 
+                      : 'text-muted hover:text-white hover:bg-white/5'
+                  }`}
+                >
+                  {f === 'all' ? 'الكل' : f === 'pass' ? <><CheckCircle2 size={12} /> ناجح</> : <><X size={12} /> راسب</>}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Table */}
+      {/* Content Area */}
       {filtered.length === 0 ? (
-        <div className="card-base p-12 text-center">
-          <div className="text-5xl mb-2">📊</div>
-          <p style={{ color: 'var(--text-muted)' }}>لا توجد نتائج</p>
+        <div className="card-base p-16 text-center border-dashed border-white/10 bg-white/[0.02] animate-fade-in">
+          <div className="w-20 h-20 rounded-full bg-white/5 flex items-center justify-center mx-auto mb-6">
+            <Search size={32} className="text-gold opacity-20" />
+          </div>
+          <h3 className="text-lg font-bold text-white mb-2">لا توجد نتائج مطابقة</h3>
+          <p className="text-sm text-text-muted max-w-xs mx-auto">جرب تغيير فلاتر البحث أو التأكد من الاسم والكود لظهور النتائج المطلوبة.</p>
         </div>
       ) : (
-        <div className="card-base overflow-hidden border border-white/5">
-          <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-gold/20">
-            <table className="w-full text-right min-w-[650px] sm:min-w-[800px]">
-              <thead>
-                <tr className="bg-white/5">
-                  <th className="py-4 px-4 text-xs font-bold uppercase tracking-wider">الطالب</th>
-                  <th className="py-4 px-4 text-xs font-bold uppercase tracking-wider hidden md:table-cell">الاختبار</th>
-                  <th className="py-4 px-4 text-xs font-bold uppercase tracking-wider">النتيجة</th>
-                  <th className="py-4 px-4 text-xs font-bold uppercase tracking-wider hidden sm:table-cell">MCQ</th>
-                  <th className="py-4 px-4 text-xs font-bold uppercase tracking-wider">الحالة</th>
-                  <th className="py-4 px-4 text-xs font-bold uppercase tracking-wider hidden lg:table-cell">التاريخ</th>
-                  <th className="py-4 px-4 text-xs font-bold uppercase tracking-wider text-center">إجراء</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map(att => {
-                  const score = att.finalScore ?? att.mcqScore ?? 0;
-                  const exam = exams.find(e => e.id === att.examId);
-                  return (
-                    <tr key={att.id} className="border-t border-white/5 hover:bg-white/[0.02] transition-colors">
-                      <td className="py-4 px-4">
-                        <div className="font-bold text-sm sm:text-base text-white">{att.studentName}</div>
-                        <div className="text-[10px] sm:text-xs font-mono text-gold/60 mt-0.5">{att.studentCode}</div>
-                        <div className="md:hidden text-[10px] text-muted mt-1 truncate max-w-[120px]">{att.examTitle}</div>
-                      </td>
-                      <td className="py-4 px-4 hidden md:table-cell">
-                        <div className="text-sm truncate max-w-[150px]">{att.examTitle}</div>
-                      </td>
-                      <td className="py-4 px-4">
-                        <div className="flex flex-col">
-                          <span className="font-cairo font-black text-sm sm:text-base" style={{ color: gradeColor(score, exam?.passScore || 50) }}>
-                            {(() => {
-                              const mcqPoints = att.mcqScore * att.mcqTotal / 100;
-                              const essayPoints = att.essayAnswers?.reduce((sum, ea) => sum + (ea.score || 0), 0) || 0;
-                              const totalPoints = att.mcqTotal + (att.essayAnswers?.reduce((sum, ea) => sum + (ea.maxScore || 0), 0) || 0);
-                              return `${Math.round((mcqPoints + essayPoints)*10)/10} / ${totalPoints}`;
-                            })()}
-                          </span>
-                          {att.essayAnswers?.some(ea => ea.pending) ? (
-                            <span className="text-[10px] sm:text-xs font-bold text-purple-400">بانتظار تصحيح المقالي</span>
-                          ) : (
-                            <span className="text-[10px] sm:text-xs font-bold opacity-60">{score}% — {scoreLabel(score)}</span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="py-4 px-4 hidden sm:table-cell text-sm">
-                        {att.mcqTotal > 0 ? `${Math.round((att.mcqScore * att.mcqTotal / 100)*10)/10} / ${att.mcqTotal}` : '—'}
-                      </td>
-                      <td className="py-4 px-4">
-                        {att.essayAnswers?.some(ea => ea.pending) ? (
-                          <span className="badge badge-purple text-[10px] sm:text-xs py-1 px-2 animate-pulse">
-                            ⏳ قيد التصحيح
-                          </span>
+        <div className="space-y-4">
+          {/* Mobile Card List (Dashboard Style) */}
+          <div className="lg:hidden space-y-4">
+            {filtered.map(att => {
+              const score = att.finalScore ?? att.mcqScore ?? 0;
+              const exam = exams.find(e => e.id === att.examId);
+              const mcqPoints = att.mcqScore * att.mcqTotal / 100;
+              const essayPoints = att.essayAnswers?.reduce((sum, ea) => sum + (ea.score || 0), 0) || 0;
+              const totalPoints = att.mcqTotal + (att.essayAnswers?.reduce((sum, ea) => sum + (ea.maxScore || 0), 0) || 0);
+              const student = students.find(s => s.id === att.studentId);
+
+              return (
+                <div key={att.id} className="card-base p-5 border shadow-xl relative group transition-all active:scale-[0.98] border-white/5 bg-white/5">
+                   <div className="flex items-center gap-4 mb-4">
+                      {/* Student Visual */}
+                      <div className="relative">
+                        {student?.imageUrl ? (
+                          <img src={student.imageUrl} className="w-12 h-12 rounded-2xl object-cover border border-white/10" alt="" />
                         ) : (
-                          <span className={`badge ${att.passed ? 'badge-green' : 'badge-red'} text-[10px] sm:text-xs py-1 px-2`}>
-                            {att.passed ? '✅ ناجح' : '❌ راسب'}
-                          </span>
+                          <div className="w-12 h-12 rounded-2xl bg-gold/10 flex items-center justify-center text-gold font-black border border-gold/20">
+                            {att.studentName[0]}
+                          </div>
                         )}
-                        <div className="lg:hidden text-[10px] text-muted mt-1">{att.submittedAt ? formatDateAr(att.submittedAt, false) : ''}</div>
-                      </td>
-                      <td className="py-4 px-4 hidden lg:table-cell text-xs text-muted">
-                        {att.submittedAt ? formatDateAr(att.submittedAt) : '—'}
-                      </td>
-                      <td className="py-4 px-4">
-                        <div className="flex flex-col xs:flex-row gap-2 items-center justify-center">
-                          <button 
-                            onClick={() => handleWhatsApp(att)} 
-                            disabled={generatingWA === att.id}
-                            title="رسالة واتس آب ذكية لولي الأمر"
-                            className="w-full xs:w-auto p-2 rounded-xl bg-green-500/10 text-green-500 hover:bg-green-500/20 border border-green-500/10 transition-all disabled:opacity-50"
-                          >
-                            {generatingWA === att.id ? <Loader2 size={16} className="animate-spin mx-auto" /> : <MessageCircle size={16} className="mx-auto" />}
-                          </button>
-                          
-                          <button onClick={async () => {
-                            if (!confirm('سيتم مسح هذه النتيجة والسماح للطالب بإعادة المحاولة. هل أنت متأكد؟')) return;
-                            await deleteAttempt(att.id);
-                          }} className="w-full xs:w-auto p-2 rounded-xl bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/10 transition-all group" title="إعادة محاولة">
-                            <Trash2 size={16} className="mx-auto" />
-                          </button>
+                        <div className={`absolute -bottom-1 -right-1 w-5 h-5 rounded-full border-2 border-[#12121f] flex items-center justify-center ${att.passed ? 'bg-green-500' : 'bg-red-500'}`}>
+                           {att.passed ? <CheckCircle2 size={10} color="white" /> : <X size={10} color="white" />}
                         </div>
-                      </td>
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-bold text-white text-base truncate">{att.studentName}</h4>
+                        <div className="flex items-center gap-2 mt-0.5">
+                            <span className="text-[10px] font-mono text-gold font-bold px-1.5 py-0.5 bg-gold/10 rounded">{att.studentCode}</span>
+                            <span className="text-[10px] text-muted flex items-center gap-1"><Clock size={10} /> {att.submittedAt ? formatDateAr(att.submittedAt, false) : ''}</span>
+                        </div>
+                      </div>
+
+                      <div className="text-left shrink-0">
+                        <div className="text-[10px] font-bold text-muted uppercase tracking-tighter mb-1">النتيجة</div>
+                        <div className="font-cairo font-black text-xl leading-none" style={{ color: gradeColor(score, exam?.passScore || 50) }}>
+                            {score}%
+                        </div>
+                      </div>
+                   </div>
+
+                   {/* Progress Visual */}
+                   <div className="w-full h-1.5 bg-white/5 rounded-full mb-4 overflow-hidden">
+                      <div 
+                        className="h-full rounded-full transition-all duration-1000" 
+                        style={{ 
+                          width: `${score}%`, 
+                          background: gradeColor(score, exam?.passScore || 50),
+                          boxShadow: `0 0 10px ${gradeColor(score, exam?.passScore || 50)}40`
+                        }} 
+                      />
+                   </div>
+
+                   <div className="py-3 px-4 bg-white/[0.03] rounded-2xl border border-white/5 mb-5 space-y-2">
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-muted">الاختبار:</span>
+                        <span className="text-white font-bold truncate max-w-[150px]">{att.examTitle}</span>
+                      </div>
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-muted">النقاط:</span>
+                        <span className="text-gold font-mono font-bold text-sm">
+                          {Math.round((mcqPoints + essayPoints)*10)/10} <span className="text-[10px] opacity-40 font-normal">/ {totalPoints}</span>
+                        </span>
+                      </div>
+                   </div>
+
+                   <div className="flex gap-3">
+                      <button 
+                          onClick={() => handleWhatsApp(att)} 
+                          disabled={generatingWA === att.id}
+                          className="flex-1 btn-gold py-3 flex items-center justify-center gap-2 shadow-lg shadow-gold/10 active:scale-95 transition-all text-xs"
+                      >
+                          {generatingWA === att.id ? <Loader2 size={16} className="animate-spin" /> : <MessageCircle size={18} />}
+                          نتائج واتساب
+                      </button>
+                      <button 
+                          onClick={async () => {
+                              if (!confirm('سيتم مسح هذه النتيجة والسماح للطالب بإعادة المحاولة. هل أنت متأكد؟')) return;
+                              await deleteAttempt(att.id);
+                          }}
+                          className="w-12 h-12 rounded-xl bg-red-500/10 text-red-400 border border-red-500/10 flex items-center justify-center active:scale-95 hover:bg-red-500/20 transition-all shrink-0"
+                          title="حذف النتيجة"
+                      >
+                          <Trash2 size={20} />
+                      </button>
+                   </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Table for Desktop - Premium Refinement */}
+          <div className="hidden lg:block card-base overflow-hidden border-white/5 bg-white/[0.02]">
+            <div className="overflow-x-auto scrollbar-thin">
+                <table className="w-full text-right border-collapse">
+                <thead>
+                    <tr className="bg-white/5 border-b border-white/5">
+                      <th className="py-5 px-6 text-[11px] font-black uppercase tracking-widest text-text-muted">بيانات الطالب</th>
+                      <th className="py-5 px-6 text-[11px] font-black uppercase tracking-widest text-text-muted">الاختبار</th>
+                      <th className="py-5 px-6 text-[11px] font-black uppercase tracking-widest text-text-muted text-center">النتيجة النهائية</th>
+                      <th className="py-5 px-6 text-[11px] font-black uppercase tracking-widest text-text-muted text-center">التفاصيل (MCQ)</th>
+                      <th className="py-5 px-6 text-[11px] font-black uppercase tracking-widest text-text-muted text-center">الحالة</th>
+                      <th className="py-5 px-6 text-[11px] font-black uppercase tracking-widest text-text-muted">التوقيت</th>
+                      <th className="py-5 px-6 text-[11px] font-black uppercase tracking-widest text-text-muted text-center">الإجراءات</th>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                    {filtered.map(att => {
+                    const score = att.finalScore ?? att.mcqScore ?? 0;
+                    const exam = exams.find(e => e.id === att.examId);
+                    const student = students.find(s => s.id === att.studentId);
+                    return (
+                        <tr key={att.id} className="hover:bg-white/[0.03] transition-all group">
+                        <td className="py-5 px-6">
+                            <div className="flex items-center gap-3">
+                                {student?.imageUrl ? (
+                                  <img src={student.imageUrl} className="w-10 h-10 rounded-xl object-cover border border-white/5" alt="" />
+                                ) : (
+                                  <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-gold font-bold border border-white/5">
+                                    {att.studentName[0]}
+                                  </div>
+                                )}
+                                <div>
+                                  <div className="font-bold text-white text-sm group-hover:text-gold transition-colors">{att.studentName}</div>
+                                  <div className="text-[10px] font-mono text-text-muted mt-0.5 bg-white/5 px-1.5 rounded inline-block">{att.studentCode}</div>
+                                </div>
+                            </div>
+                        </td>
+                        <td className="py-5 px-6">
+                            <div className="text-sm font-medium text-white/80 max-w-[180px] truncate">{att.examTitle}</div>
+                        </td>
+                        <td className="py-5 px-6 text-center">
+                            <div className="inline-flex flex-col items-center">
+                              <span className="font-cairo font-black text-lg" style={{ color: gradeColor(score, exam?.passScore || 50) }}>
+                                {score}%
+                              </span>
+                              <div className="text-[10px] font-bold text-text-muted opacity-50 uppercase mt-0.5">
+                                {(() => {
+                                  const mcqPoints = att.mcqScore * att.mcqTotal / 100;
+                                  const essayPoints = att.essayAnswers?.reduce((sum, ea) => sum + (ea.score || 0), 0) || 0;
+                                  const totalPoints = att.mcqTotal + (att.essayAnswers?.reduce((sum, ea) => sum + (ea.maxScore || 0), 0) || 0);
+                                  return `${Math.round((mcqPoints + essayPoints)*10)/10} / ${totalPoints}`;
+                                })()}
+                              </div>
+                            </div>
+                        </td>
+                        <td className="py-5 px-6 text-center text-sm font-mono text-text-muted">
+                            {att.mcqTotal > 0 ? (
+                              <div className="bg-white/5 px-3 py-1 rounded-full border border-white/5 inline-block text-xs font-bold">
+                                {Math.round((att.mcqScore * att.mcqTotal / 100)*10)/10} <span className="opacity-40 mx-1">/</span> {att.mcqTotal}
+                              </div>
+                            ) : '—'}
+                        </td>
+                        <td className="py-5 px-6 text-center">
+                            {att.essayAnswers?.some(ea => ea.pending) ? (
+                              <span className="px-3 py-1 rounded-full bg-purple-500/10 text-purple-400 text-[10px] font-bold border border-purple-500/20 animate-pulse">⏳ قيد التصحيح</span>
+                            ) : (
+                              <span className={`px-3 py-1 rounded-full text-[10px] font-black border flex items-center justify-center gap-1.5 mx-auto w-fit ${
+                                att.passed 
+                                  ? 'bg-green-500/10 text-green-500 border-green-500/20' 
+                                  : 'bg-red-500/10 text-red-500 border-red-500/20'
+                              }`}>
+                                  {att.passed ? <CheckCircle2 size={10} /> : <XCircle size={10} />}
+                                  {att.passed ? 'ناجح' : 'راسب'}
+                              </span>
+                            )}
+                        </td>
+                        <td className="py-5 px-6 text-xs text-text-muted">
+                            <div className="flex items-center gap-1.5"><Calendar size={12} className="opacity-40" /> {att.submittedAt ? formatDateAr(att.submittedAt) : '—'}</div>
+                        </td>
+                        <td className="py-5 px-6">
+                            <div className="flex gap-2 items-center justify-center">
+                              <button 
+                                  onClick={() => handleWhatsApp(att)} disabled={generatingWA === att.id}
+                                  className="p-2.5 rounded-xl bg-green-500/10 text-green-500 hover:bg-green-500 shadow-sm hover:text-dark hover:shadow-green-500/20 border border-green-500/10 transition-all disabled:opacity-50 active:scale-90"
+                                  title="إرسال النتيجة لواتساب"
+                              >
+                                  {generatingWA === att.id ? <Loader2 size={16} className="animate-spin" /> : <MessageCircle size={18} />}
+                              </button>
+                              <button 
+                                  onClick={async () => {
+                                    if (!confirm('سيتم مسح هذه النتيجة والسماح للطالب بإعادة المحاولة. هل أنت متأكد؟')) return;
+                                    await deleteAttempt(att.id);
+                                  }}
+                                  className="p-2.5 rounded-xl bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white shadow-sm hover:shadow-red-500/20 border border-red-500/10 transition-all active:scale-90"
+                                  title="حذف النتيجة"
+                              >
+                                  <Trash2 size={18} />
+                              </button>
+                            </div>
+                        </td>
+                        </tr>
+                    );
+                    })}
+                </tbody>
+                </table>
+            </div>
           </div>
         </div>
       )}
@@ -532,46 +686,54 @@ export default function ResultsPage() {
 
       {/* Result Image Preview Modal */}
       {resultImagePreview && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
-          <div className="bg-dark2 border border-gold/30 p-6 rounded-2xl w-full max-w-lg shadow-2xl relative animate-scale-in">
-            <button 
-              onClick={() => setResultImagePreview(null)}
-              className="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors"
-            >
-              <X size={24} />
-            </button>
-            
-            <h3 className="text-xl font-bold mb-4 text-center gold-text">صورة نتيجة الطالب</h3>
-            
-            <div className="rounded-xl overflow-hidden border border-white/10 mb-4">
-              <img 
-                src={resultImagePreview.imageUrl} 
-                alt="نتيجة الطالب" 
-                className="w-full h-auto"
-              />
+        <div className="modal-overlay" onClick={() => setResultImagePreview(null)}>
+          <div className="modal-content modal-content-lg" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="text-xl font-bold gold-text flex items-center gap-2">
+                <ImageIcon size={20} /> صورة نتيجة الطالب
+              </h3>
+              <button 
+                onClick={() => setResultImagePreview(null)}
+                className="text-gray-400 hover:text-white transition-colors"
+              >
+                <X size={24} />
+              </button>
             </div>
             
-            <div className="flex gap-3">
+            <div className="modal-body py-6">
+              <div className="rounded-2xl overflow-hidden border border-white/10 bg-black/20 shadow-2xl">
+                <img 
+                  src={resultImagePreview.imageUrl} 
+                  alt="نتيجة الطالب" 
+                  className="w-full h-auto"
+                />
+              </div>
+              <p className="text-[10px] text-gray-500 text-center mt-4 font-bold uppercase tracking-widest">
+                يمكنك تحميل الصورة ثم إرفاقها يدوياً أو الإرسال المباشر
+              </p>
+            </div>
+            
+            <div className="modal-footer bg-white/[0.02]">
               <button 
-                onClick={sendWhatsAppWithImage}
-                className="flex-1 btn-gold flex items-center justify-center gap-2"
+                onClick={() => setResultImagePreview(null)}
+                className="flex-1 btn-outline py-3"
               >
-                <MessageCircle size={18} />
-                إرسال عبر الواتساب
+                إغلاق
               </button>
               <a 
                 href={resultImagePreview.imageUrl}
                 download={`result_${resultImagePreview.attempt.studentCode}.png`}
-                className="flex-1 btn-outline flex items-center justify-center gap-2"
+                className="flex-1 btn-outline py-3 flex items-center justify-center gap-2"
               >
-                <Download size={18} />
-                تحميل الصورة
+                <Download size={18} /> تحميل
               </a>
+              <button 
+                onClick={sendWhatsAppWithImage}
+                className="flex-[2] btn-gold py-3 flex items-center justify-center gap-2 shadow-lg shadow-gold/20"
+              >
+                <MessageCircle size={18} /> إرسال واتساب
+              </button>
             </div>
-            
-            <p className="text-xs text-gray-500 text-center mt-3">
-              يمكنك تحميل الصورة ثم إرفاقها يدوياً مع رسالة الواتساب
-            </p>
           </div>
         </div>
       )}

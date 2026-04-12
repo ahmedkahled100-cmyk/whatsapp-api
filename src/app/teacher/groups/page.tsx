@@ -140,8 +140,8 @@ export default function GroupsPage() {
 
       {/* Modal */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(8px)' }}>
-          <div className="card-base p-6 w-full max-w-lg animate-scale-in max-h-[90vh] overflow-y-auto">
+        <div className="modal-overlay" onClick={() => setShowModal(false)}>
+          <div className="modal-content modal-content-sm" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-cairo font-bold" style={{ color: 'var(--gold)' }}>
                 {editingGroup ? '✏️ تعديل الفصل' : '➕ فصل جديد'}

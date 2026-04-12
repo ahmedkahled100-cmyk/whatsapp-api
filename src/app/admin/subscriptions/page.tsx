@@ -4,9 +4,12 @@
 import { useState, useEffect, useMemo } from 'react';
 import { getTeachers, getAllStudents, saveTeacher, saveStudent, getRegistrationRequests, deleteRegistrationRequest, dispatchNotification } from '@/lib/db';
 import type { TeacherUser, Student, RegistrationRequest } from '@/types';
-import { CreditCard, Users, Search, Bell, TrendingUp, DollarSign, Edit2, Save, X, RefreshCw, CheckCircle, AlertCircle, ArrowRight, Calendar, RotateCcw, Phone, Image as ImageIcon } from 'lucide-react';
+import { CreditCard, Users, Search, Bell, TrendingUp, DollarSign, Edit2, Save, X, RefreshCw, CheckCircle, AlertCircle, ArrowRight, Calendar, RotateCcw, Phone, Image as ImageIcon, ShieldCheck } from 'lucide-react';
 import { showToast } from '@/lib/toast';
 import { useFilePreview } from '@/components/FilePreviewModal';
+import { FinancialReports } from '@/components/FinancialReports';
+import { getSettings } from '@/lib/db';
+import type { Settings } from '@/types';
 
 const daysUntil = (ts: number | null | undefined) => {
   if (!ts) return null;
@@ -23,20 +26,26 @@ export default function AdminSubscriptionsPage() {
   const [students, setStudents] = useState<Student[]>([]);
   const [teacherRenewalRequests, setTeacherRenewalRequests] = useState<RegistrationRequest[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'teachers' | 'students' | 'renewals'>('teachers');
+  const [activeTab, setActiveTab] = useState<'teachers' | 'students' | 'renewals' | 'financials'>('teachers');
   const [search, setSearch] = useState('');
   const [editingTeacher, setEditingTeacher] = useState<TeacherUser | null>(null);
   const [editForm, setEditForm] = useState({ subType: 'free', subExpiry: '', subPrice: '', subLink: '' });
   const [saving, setSaving] = useState(false);
+  const [platformSettings, setPlatformSettings] = useState<Settings | null>(null);
 
   const { openPreview, PreviewModal } = useFilePreview();
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const [tList, sList] = await Promise.all([getTeachers(), getAllStudents()]);
+      const [tList, sList, adminSettings] = await Promise.all([
+        getTeachers(), 
+        getAllStudents(),
+        getSettings('admin') // Admin settings typically stored under 'admin' ID
+      ]);
       setTeachers(tList);
       setStudents(sList);
+      setPlatformSettings(adminSettings);
 
       // Load all teacher renewal requests across all teachers
       const allTeacherRenewals: RegistrationRequest[] = [];
@@ -80,15 +89,23 @@ export default function AdminSubscriptionsPage() {
   }, [teachers, search]);
 
   const filteredStudents = useMemo(() => {
-    return students.filter(s =>
-      s.name.toLowerCase().includes(search.toLowerCase()) ||
-      (s.code || '').toLowerCase().includes(search.toLowerCase())
-    ).sort((a, b) => {
+    return students.filter(s => {
+      const matchBasic = s.name.toLowerCase().includes(search.toLowerCase()) ||
+                         (s.code || '').toLowerCase().includes(search.toLowerCase());
+      
+      const teacher = teachers.find(t => t.id === s.teacherId);
+      const matchTeacher = teacher ? (
+        teacher.name.toLowerCase().includes(search.toLowerCase()) ||
+        (teacher.code || '').toLowerCase().includes(search.toLowerCase())
+      ) : false;
+
+      return matchBasic || matchTeacher;
+    }).sort((a, b) => {
       const da = daysUntil(a.subExpiry) ?? 9999;
       const db2 = daysUntil(b.subExpiry) ?? 9999;
       return da - db2;
     });
-  }, [students, search]);
+  }, [students, teachers, search]);
 
   const getExpiryStatus = (subExpiry: number | null | undefined, subType?: string) => {
     if (subType === 'free' || !subExpiry) return { label: 'مجاني دائم', color: 'text-green-400', bg: 'bg-green-500/10' };
@@ -112,16 +129,41 @@ export default function AdminSubscriptionsPage() {
     });
   };
 
+  const onSubTypeChange = (type: string) => {
+    let price = editForm.subPrice;
+    if (platformSettings) {
+      if (type === 'monthly') price = String(platformSettings.monthlyPrice || 0);
+      else if (type === 'yearly') price = String(platformSettings.yearlyPrice || 0);
+      else if (type === 'free') price = '0';
+    }
+    setEditForm({ ...editForm, subType: type, subPrice: price });
+  };
+
   const handleSaveTeacher = async () => {
     if (!editingTeacher) return;
     setSaving(true);
     try {
+      const newPrice = parseFloat(editForm.subPrice) || 0;
+      const oldPrice = editingTeacher.subPrice || 0;
+      
+      // Calculate payment history if price changed or it's a renewal
+      const history = [...(editingTeacher.paymentHistory || [])];
+      let newTotal = editingTeacher.totalPaid || 0;
+      
+      // If subscriber was free/expired and now is paying, or price is manually set, we log it
+      if (newPrice > 0 && (editingTeacher.subType !== editForm.subType || newPrice !== oldPrice)) {
+         history.push({ date: Date.now(), amount: newPrice, type: editForm.subType });
+         newTotal += newPrice;
+      }
+
       const update: Partial<TeacherUser> = {
         ...editingTeacher,
         subType: editForm.subType as any,
         subExpiry: editForm.subExpiry ? new Date(editForm.subExpiry).getTime() : null,
-        subPrice: parseFloat(editForm.subPrice) || 0,
+        subPrice: newPrice,
         subLink: editForm.subLink,
+        totalPaid: newTotal,
+        paymentHistory: history,
       };
       await saveTeacher(update as any);
       setTeachers(prev => prev.map(t => t.id === editingTeacher.id ? { ...t, ...update } as TeacherUser : t));
@@ -179,16 +221,44 @@ export default function AdminSubscriptionsPage() {
     const subExpiry = base + days * 86400000;
 
     try {
-      await saveTeacher({ ...teacher, subType: req.subType as any, subExpiry });
+      const subExpiry = base + days * 86400000;
+      
+      // Update financials on approval
+      const price = req.subPrice || 
+        (req.subType === 'yearly' ? (platformSettings?.yearlyPrice || 0) : (platformSettings?.monthlyPrice || 0));
+        
+      const history = [...(teacher.paymentHistory || []), { date: Date.now(), amount: price, type: req.subType }];
+      const totalPaid = (teacher.totalPaid || 0) + price;
+
+      await saveTeacher({ 
+        ...teacher, 
+        subType: req.subType as any, 
+        subExpiry, 
+        totalPaid, 
+        paymentHistory: history,
+        subPrice: price
+      });
       await deleteRegistrationRequest(req.id);
 
-      // Notify teacher via in-app notification
+      // Notify teacher (In-App)
       await dispatchNotification({
         teacherId: teacher.id,
         msg: `✅ تم تجديد اشتراك منصتك (${req.subType === 'yearly' ? 'سنوي' : 'شهري'}) حتى ${new Date(subExpiry).toLocaleDateString('ar-EG')}. أهلاً بعودتك!`,
         type: 'success',
         channels: { inApp: true, whatsapp: false },
       });
+
+      // Notify teacher (WhatsApp)
+      if (teacher.phone) {
+        try {
+          await dispatchNotification({
+            teacherId: teacher.id,
+            msg: `✅ تم تمديد اشتراك منصتكم يا أستاذ ${teacher.name}!\n\n📋 نوع التجديد: ${req.subType === 'yearly' ? 'سنوي' : 'شهري'}\n📅 تاريخ الانتهاء الجديد: ${new Date(subExpiry).toLocaleDateString('ar-EG')}\n\nشكراً لاستخدامكم منصة AN Academy!`,
+            whatsappNumbers: [teacher.phone],
+            channels: { inApp: false, whatsapp: true }
+          });
+        } catch (notifErr) { console.error('WhatsApp notify error:', notifErr); }
+      }
 
       setTeacherRenewalRequests(prev => prev.filter(r => r.id !== req.id));
       setTeachers(prev => prev.map(t => t.id === teacher.id ? { ...t, subType: req.subType as any, subExpiry } : t));
@@ -276,13 +346,13 @@ export default function AdminSubscriptionsPage() {
 
       {/* Tabs */}
       <div className="flex items-center gap-2 bg-white/5 p-1 rounded-xl w-fit flex-wrap">
-        {(['teachers', 'students', 'renewals'] as const).map(tab => (
-          <button key={tab} onClick={() => setActiveTab(tab)}
-            className={`px-4 py-2 rounded-lg text-sm font-bold transition-all relative ${activeTab === tab ? (tab === 'renewals' ? 'bg-purple-500 text-white' : 'bg-purple-500 text-white') : 'text-gray-400 hover:text-white'}`}
+        {(['teachers', 'students', 'renewals', 'financials'] as const).map(tab => (
+          <button key={tab} onClick={() => setActiveTab(tab as any)}
+            className={`px-4 py-2 rounded-lg text-sm font-bold transition-all relative ${activeTab === tab ? 'bg-purple-500 text-white' : 'text-gray-400 hover:text-white'}`}
           >
-            {tab === 'teachers' ? `المعلمون (${teachers.length})` : tab === 'students' ? `طلاب المنصة (${students.length})` : (
-              <>طلبات التجديد {teacherRenewalRequests.length > 0 && <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-red-500 rounded-full text-[9px] flex items-center justify-center text-white">{teacherRenewalRequests.length}</span>}</>
-            )}
+            {tab === 'teachers' ? `المعلمون (${teachers.length})` : 
+             tab === 'students' ? `طلاب المنصة (${students.length})` : 
+             tab === 'renewals' ? `الطلبات (${teacherRenewalRequests.length})` : 'التقارير المالية'}
           </button>
         ))}
       </div>
@@ -409,6 +479,12 @@ export default function AdminSubscriptionsPage() {
             </table>
           </div>
         </div>
+      ) : activeTab === 'financials' ? (
+        <FinancialReports 
+          data={teachers.filter(t => t.subType !== 'free')} 
+          type="teachers" 
+          title="إحصائيات إيرادات المعلمين" 
+        />
       ) : (
         /* Teacher Renewal Requests */
         <div className="space-y-4">
@@ -513,39 +589,148 @@ export default function AdminSubscriptionsPage() {
         </div>
       )}
 
-      {/* Edit Teacher Modal */}
+      {/* Redesigned Edit Teacher Modal */}
       {editingTeacher && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={e => e.target === e.currentTarget && setEditingTeacher(null)}>
-          <div className="card-base p-6 w-full max-w-md animate-scale-in border border-purple-500/30 space-y-4">
-            <div className="flex justify-between items-center">
-              <h3 className="text-lg font-bold">تعديل اشتراك: {editingTeacher.name}</h3>
-              <button onClick={() => setEditingTeacher(null)} className="text-gray-400 hover:text-white"><X size={20}/></button>
+        <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setEditingTeacher(null)}>
+          <div className="modal-content modal-content-sm !p-0 border border-purple-500/30 animate-scale-in">
+            {/* Modal Header */}
+            <div className="p-5 sm:p-6 pb-4 flex items-center justify-between border-b border-white/5 bg-purple-500/5">
+                <div className="min-w-0">
+                    <h3 className="text-xl font-black font-cairo text-white truncate">تعديل اشتراك المعلم</h3>
+                    <p className="text-xs text-purple-400 mt-0.5 truncate">{editingTeacher.name}</p>
+                </div>
+                <button 
+                    onClick={() => setEditingTeacher(null)} 
+                    className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-gray-400 hover:text-white hover:bg-red-500/20 hover:text-red-400 transition-all active:scale-90"
+                >
+                    <X size={20}/>
+                </button>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs text-gray-400 mb-1">نوع الاشتراك</label>
-                <select className="input-base w-full text-sm" value={editForm.subType} onChange={e => setEditForm({...editForm, subType: e.target.value})}>
-                  <option value="free">مجاني</option>
-                  <option value="monthly">شهري</option>
-                  <option value="yearly">سنوي</option>
-                </select>
+
+            {/* Modal Body */}
+            <div className="p-5 sm:p-6 space-y-6 overflow-y-auto max-h-[70vh]">
+              {/* Row 1: Type & Price */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="block text-xs text-gray-400 font-bold px-1 uppercase tracking-wider">نوع الاشتراك</label>
+                  <select 
+                    className="input-base w-full text-sm font-bold h-12 border-purple-500/20" 
+                    value={editForm.subType} 
+                    onChange={e => onSubTypeChange(e.target.value)}
+                  >
+                    <option value="free">مجاني (دائم)</option>
+                    <option value="monthly">اشتراك شهري</option>
+                    <option value="yearly">اشتراك سنوي</option>
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="block text-xs text-gray-400 font-bold px-1 uppercase tracking-wider">قيمة الاشتراك (ج.م)</label>
+                  <input 
+                    type="number" 
+                    className="input-base w-full text-sm font-black h-12 text-purple-400" 
+                    value={editForm.subPrice} 
+                    onChange={e => setEditForm({...editForm, subPrice: e.target.value})} 
+                  />
+                </div>
               </div>
-              <div>
-                <label className="block text-xs text-gray-400 mb-1">المبلغ (ج.م)</label>
-                <input type="number" className="input-base w-full text-sm" value={editForm.subPrice} onChange={e => setEditForm({...editForm, subPrice: e.target.value})} />
+
+              {/* Row 2: Manual Dates */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="block text-xs text-gray-400 font-bold px-1 uppercase tracking-wider">تاريخ البداية (اختياري)</label>
+                  <div className="relative">
+                    <Calendar size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
+                    <input 
+                        type="date" 
+                        className="input-base w-full text-sm pl-10 h-12" 
+                        onChange={e => {
+                          if (e.target.value && editingTeacher.subType === 'monthly') {
+                             const start = new Date(e.target.value).getTime();
+                             const end = new Date(start + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+                             setEditForm(f => ({ ...f, subExpiry: end }));
+                          }
+                        }}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="block text-xs text-gray-400 font-bold px-1 uppercase tracking-wider">تاريخ الانتهاء</label>
+                  <div className="relative">
+                    <Calendar size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
+                    <input 
+                        type="date" 
+                        className="input-base w-full text-sm pl-10 h-12 font-bold" 
+                        value={editForm.subExpiry} 
+                        onChange={e => setEditForm({...editForm, subExpiry: e.target.value})} 
+                    />
+                  </div>
+                </div>
               </div>
-              <div className="col-span-2">
-                <label className="block text-xs text-gray-400 mb-1">تاريخ انتهاء الاشتراك</label>
-                <input type="date" className="input-base w-full text-sm" value={editForm.subExpiry} onChange={e => setEditForm({...editForm, subExpiry: e.target.value})} />
+
+              {/* Row 3: Accumulate Days */}
+              <div className="bg-purple-500/5 p-4 rounded-2xl border border-purple-500/10 space-y-3">
+                <div className="flex items-center gap-2 mb-1">
+                    <TrendingUp size={16} className="text-purple-400" />
+                    <label className="block text-xs text-purple-400 font-bold px-1 uppercase tracking-wider">تمديد الاشتراك (إضافة أيام)</label>
+                </div>
+                <input 
+                    type="number" 
+                    placeholder="أدخل عدد الأيام للإضافة على الحالي..." 
+                    className="input-base w-full text-sm bg-black/20 h-12" 
+                    onChange={e => {
+                      const days = parseInt(e.target.value);
+                      if (!isNaN(days) && editingTeacher.subExpiry) {
+                        const base = Math.max(Date.now(), editingTeacher.subExpiry);
+                        const newExpiry = new Date(base + days * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+                        setEditForm(f => ({ ...f, subExpiry: newExpiry }));
+                      }
+                    }}
+                />
+                
+                <div className="flex justify-between items-center text-xs pt-2 border-t border-white/5">
+                    <span className="text-gray-500 font-bold">تاريخ الانتهاء الحالي:</span>
+                    <span className="font-black text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded">
+                      {editingTeacher.subExpiry ? new Date(editingTeacher.subExpiry).toLocaleDateString('ar-EG') : 'غير محدد'}
+                    </span>
+                </div>
               </div>
-              <div className="col-span-2">
-                <label className="block text-xs text-gray-400 mb-1">رابط التجديد (يظهر للمعلم)</label>
-                <input type="text" className="input-base w-full text-sm" placeholder="https://..." value={editForm.subLink} onChange={e => setEditForm({...editForm, subLink: e.target.value})} />
+
+              {/* Row 4: Renewal Link */}
+              <div className="space-y-2">
+                <label className="block text-xs text-gray-400 font-bold px-1 uppercase tracking-wider">رابط التجديد المخصص</label>
+                <div className="relative">
+                    <ShieldCheck size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
+                    <input 
+                      type="text" 
+                      className="input-base w-full text-sm pl-10 h-12" 
+                      placeholder="https://..." 
+                      value={editForm.subLink} 
+                      onChange={e => setEditForm({...editForm, subLink: e.target.value})} 
+                    />
+                </div>
               </div>
             </div>
-            <div className="flex gap-3">
-              <button onClick={() => setEditingTeacher(null)} className="btn-outline flex-1">إلغاء</button>
-              <button onClick={handleSaveTeacher} disabled={saving} className="btn-gold flex-1 bg-purple-500 hover:bg-purple-600">{saving ? 'جاري الحفظ...' : 'حفظ'}</button>
+
+            {/* Modal Footer */}
+            <div className="p-5 sm:p-6 border-t border-white/5 bg-white/[0.02] flex gap-3">
+              <button 
+                onClick={() => setEditingTeacher(null)} 
+                className="btn-outline flex-1 h-12 text-sm justify-center border-white/10 text-gray-400 hover:text-white"
+              >
+                إلغاء التعديل
+              </button>
+              <button 
+                onClick={handleSaveTeacher} 
+                disabled={saving} 
+                className="btn-gold flex-[2] bg-purple-600 hover:bg-purple-700 h-12 text-sm font-black shadow-lg shadow-purple-900/40 active:scale-95 transition-all text-white border-none"
+              >
+                {saving ? (
+                    <div className="flex items-center gap-2">
+                        <RefreshCw size={16} className="animate-spin" />
+                        <span>جاري الحفظ...</span>
+                    </div>
+                ) : 'حفظ التغييرات الآن'}
+              </button>
             </div>
           </div>
         </div>

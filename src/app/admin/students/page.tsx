@@ -102,7 +102,7 @@ export default function ManageStudentsAdminPage() {
           <input 
             type="text" 
             placeholder="بحث بالاسم أو الكود..." 
-            className="input-base pr-10 w-64 focus:w-80 transition-all"
+            className="input-base has-icon-right pr-10 w-64 focus:w-80 transition-all"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />

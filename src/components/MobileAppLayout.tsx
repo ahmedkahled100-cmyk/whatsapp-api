@@ -33,6 +33,7 @@ interface Props {
   appName?: string;
   onAcademySwitch?: () => void;
   hasMultipleAcademies?: boolean;
+  student?: any; // To access points and level
   children: React.ReactNode;
 }
 
@@ -46,8 +47,8 @@ export function MobileAppLayout({
   onNotifClick,
   onLogout,
   appName = 'AN Academy',
-  onAcademySwitch,
   hasMultipleAcademies = false,
+  student,
   children,
 }: Props) {
   const [scrolled, setScrolled] = useState(false);
@@ -61,7 +62,9 @@ export function MobileAppLayout({
   }, []);
 
   return (
-    <div className="min-h-screen flex flex-col" style={{ background: 'var(--dark)', maxWidth: '480px', margin: '0 auto', position: 'relative' }}>
+    <div className="min-h-screen flex flex-col mx-auto bg-dark shadow-2xl relative transition-all duration-300" style={{ maxWidth: 'min(100%, 1280px)' }}>
+      {/* Container to restrict app-feel on huge screens while allowing tablet/desktop expansion */}
+      <div className="flex-1 flex flex-col w-full max-w-4xl mx-auto border-x border-white/5 relative">
       {/* ══ App Header ══ */}
       <header
         className="sticky top-0 z-30 px-4 py-3 flex items-center justify-between transition-all"
@@ -101,7 +104,16 @@ export function MobileAppLayout({
         <div className="text-center">
           <div className="font-cairo font-black text-base gold-text">{appName}</div>
           {studentName && (
-            <div className="text-[11px] text-gray-400 mt-0.5">مرحباً، {studentName}</div>
+            <div className="text-[11px] mt-0.5 flex flex-col items-center justify-center">
+              <span className="text-gray-400">مرحباً، {studentName}</span>
+              {student && (
+                <div className="flex items-center gap-1 mt-0.5 bg-white/5 px-2 py-0.5 rounded-full border border-gold/20 text-gold font-bold text-[10px]">
+                  <span>🏆 مـ {student.level || 1}</span>
+                  <span className="w-1 h-1 bg-white/20 rounded-full mx-0.5"></span>
+                  <span>✨ {student.points || 0} ن</span>
+                </div>
+              )}
+            </div>
           )}
         </div>
 
@@ -139,7 +151,7 @@ export function MobileAppLayout({
         style={{
           transform: 'translateX(-50%)',
           width: '100%',
-          maxWidth: '480px',
+          maxWidth: 'min(100%, 896px)', /* matching max-w-4xl */
           background: 'rgba(10,10,24,0.97)',
           backdropFilter: 'blur(20px)',
           borderTop: '1px solid rgba(245,197,24,0.12)',
@@ -211,6 +223,7 @@ export function MobileAppLayout({
           })}
         </div>
       </nav>
+      </div>
     </div>
   );
 }

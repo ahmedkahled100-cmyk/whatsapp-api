@@ -1,5 +1,6 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useTeacherStore } from '@/lib/store';
 import { getAssignments, saveAssignment, deleteAssignment, getAssignmentSubmissions, gradeSubmission } from '@/lib/db';
 import { Assignment, AssignmentSubmission } from '@/types';
@@ -8,7 +9,7 @@ import { ClipboardList, PlusCircle, Trash2, Users, CheckCircle, X, Download, Eye
 import { useFilePreview, FilePreviewModal } from '@/components/FilePreviewModal';
 import { GlobalFileUpload } from '@/components/GlobalFileUpload';
 
-export default function AssignmentsPage() {
+function AssignmentsPageContent() {
   const { groups, students, user, assignments, setAssignments } = useTeacherStore();
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -29,7 +30,7 @@ export default function AssignmentsPage() {
 
   // File Viewer
   const { openPreview, PreviewModal } = useFilePreview();
-  
+  const searchParams = useSearchParams();
   // Grading state
   const [gradingScores, setGradingScores] = useState<Record<string, string>>({});
   const [gradingComments, setGradingComments] = useState<Record<string, string>>({});
@@ -109,12 +110,28 @@ export default function AssignmentsPage() {
   };
 
   useEffect(() => {
-    if (assignments.length === 0) {
+    if (user?.id) {
       loadData();
-    } else {
-      setLoading(false);
     }
   }, [user?.id]);
+
+  // Handle pre-fill from iLovePDF tools
+  useEffect(() => {
+    const prefillUrl = searchParams.get('prefillUrl');
+    const prefillTitle = searchParams.get('prefillTitle');
+
+    if (prefillUrl) {
+      setNewAssign(prev => ({ 
+        ...prev, 
+        title: prefillTitle || '', 
+        fileUrl: prefillUrl 
+      }));
+      setShowAddForm(true);
+      showToast('📥 تم استلام الملف من أدوات PDF بنجاح');
+      // Clear params
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, [searchParams]);
 
   const handleSave = async () => {
     if (!newAssign.title || !newAssign.dueDate || !newAssign.maxScore) {
@@ -195,6 +212,10 @@ export default function AssignmentsPage() {
   };
 
   const handleSaveGrade = async (sub: AssignmentSubmission) => {
+    if (!sub.id) {
+      showToast('خطأ: معرف التسليم غير موجود');
+      return;
+    }
     const scoreVal = Number(gradingScores[sub.id]);
     if (isNaN(scoreVal) || scoreVal < 0 || scoreVal > selectedAssignment!.maxScore) {
       showToast(`يرجى إدخال درجة صحيحة من 0 إلى ${selectedAssignment!.maxScore}`);
@@ -214,6 +235,7 @@ export default function AssignmentsPage() {
   };
 
   const handleRequestRedo = async (sub: AssignmentSubmission) => {
+    if (!sub.id) return;
     setSavingGrade(sub.id);
     try {
       await gradeSubmission(sub.id, 0, gradingComments[sub.id] || 'يرجى إعادة الواجب مره اخرى', 'redo');
@@ -230,11 +252,12 @@ export default function AssignmentsPage() {
     openPreview(url, fileName);
   };
 
-  if (selectedAssignment) {
-    return (
-      <div className="space-y-6">
+  return (
+    <div className="container-main pb-24">
+      {selectedAssignment ? (
+        <div className="space-y-6">
         <button onClick={() => setSelectedAssignment(null)} className="btn-outline flex items-center gap-2 mb-4">
-          &larr; رجوع للواجبات
+          ← رجوع للواجبات
         </button>
 
         <div className="card-base p-6">
@@ -334,21 +357,15 @@ export default function AssignmentsPage() {
               ))}
             </div>
           )}
+          </div>
         </div>
-
-        {/* File Preview Modal */}
-        {PreviewModal}
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <ClipboardList size={28} className="text-gold" />
-          <h1 className="text-2xl font-cairo font-black gold-text">الواجبات المنزلية</h1>
-        </div>
+      ) : (
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <ClipboardList size={28} className="text-gold" />
+              <h1 className="text-2xl font-cairo font-black gold-text">الواجبات المنزلية</h1>
+            </div>
         <button onClick={() => {
           setEditingId(null);
           setNewAssign({ title: '', description: '', dueDate: '', targetGroup: '', fileUrl: '', maxScore: 10 });
@@ -566,8 +583,18 @@ export default function AssignmentsPage() {
                </div>
              )
           })}
+          </div>
+        )}
         </div>
       )}
     </div>
+  );
+}
+
+export default function AssignmentsPage() {
+  return (
+    <Suspense fallback={<div className="p-10 text-center opacity-50">جاري تحميل صفحة الواجبات...</div>}>
+      <AssignmentsPageContent />
+    </Suspense>
   );
 }

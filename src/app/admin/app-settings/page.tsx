@@ -279,8 +279,8 @@ export default function AppSettingsPage() {
 
       {/* ─── Edit Category Modal ─── */}
       {editingCat && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="card-base p-6 w-full max-w-md border border-gold/30 space-y-4 animate-scale-in">
+        <div className="modal-overlay" onClick={() => setEditingCat(null)}>
+          <div className="modal-content modal-content-sm border border-gold/30">
             <h3 className="text-xl font-bold font-cairo">تعديل القسم</h3>
 
             <div className="grid grid-cols-2 gap-3">

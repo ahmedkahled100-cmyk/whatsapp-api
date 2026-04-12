@@ -4,17 +4,18 @@ import { useState, useEffect } from 'react';
 import { 
   getSettings, saveSettings, getSuperAdmin, 
   updateSuperAdminCredentials, getRegistrationRequests,
-  saveTeacher, deleteRegistrationRequest
+  saveTeacher, deleteRegistrationRequest, uploadFileToStorage
 } from '@/lib/db';
 import { Settings, TeacherUser, RegistrationRequest } from '@/types';
 import { showToast } from '@/lib/toast';
 import { 
   Settings as SettingsIcon, Lock, Phone, CreditCard, 
-  Save, UserPlus, Check, X, Printer, Send, 
-  Trash2, ExternalLink, Clock, User
+  Save, UserPlus, Check, X, 
+  Trash2, ExternalLink, Clock, User, Upload
 } from 'lucide-react';
+import { ImageModal } from '@/components/ImageModal';
+import { GlobalFileUpload } from '@/components/GlobalFileUpload';
 import { useTeacherStore } from '@/lib/store';
-import { cleanWhatsAppPhone } from '@/lib/utils';
 
 export default function AdminSettingsPage() {
   const { user: currentUser } = useTeacherStore();
@@ -23,16 +24,14 @@ export default function AdminSettingsPage() {
   const [requests, setRequests] = useState<RegistrationRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [isUploading, setIsUploading] = useState(false);
+  
+  // Image Modal state
+  const [selectedImg, setSelectedImg] = useState<{ src: string, alt: string } | null>(null);
 
   // Forms
   const [passwordForm, setPasswordForm] = useState({ password: '', confirm: '' });
-  const [receiptForm, setReceiptForm] = useState({
-    teacherName: '',
-    amount: 0,
-    subType: 'monthly',
-    date: new Date().toISOString().split('T')[0],
-    whatsapp: ''
-  });
 
   const loadData = async () => {
     setLoading(true);
@@ -80,6 +79,18 @@ export default function AdminSettingsPage() {
     finally { setSaving(false); }
   };
 
+  const handleUpdateImage = async (url: string) => {
+    if (!currentUser) return;
+    setSaving(true);
+    try {
+      const updatedUser = { ...currentUser, imageUrl: url };
+      await saveTeacher(updatedUser);
+      useTeacherStore.getState().setUser(updatedUser); // Update local store
+      showToast('تم تحديث الصورة الشخصية بنجاح');
+    } catch (e) { showToast('فشل تحديث الصورة'); }
+    finally { setSaving(false); }
+  };
+
   const handleApproveTeacher = async (req: RegistrationRequest) => {
     if (!confirm(`هل أنت متأكد من تفعيل حساب المعلم ${req.name}؟`)) return;
     try {
@@ -100,26 +111,6 @@ export default function AdminSettingsPage() {
       showToast('تم تفعيل حساب المعلم بنجاح');
       loadData();
     } catch (e) { showToast('فشل التفعيل'); }
-  };
-
-  const generateReceiptWhatsApp = () => {
-    if (!receiptForm.teacherName || !receiptForm.whatsapp) {
-      showToast('أكمل بيانات الإيصال المحول');
-      return;
-    }
-    const msg = `🧾 *إيصال اشتراك منصة AN Academy*
----
-👤 *المعلم:* ${receiptForm.teacherName}
-💰 *المبلغ:* ${receiptForm.amount} ج.م
-📅 *التاريخ:* ${receiptForm.date}
-📦 *نوع الاشتراك:* ${receiptForm.subType === 'monthly' ? 'شهري' : 'سنوي'}
----
-✅ تم تفعيل حسابك بنجاح. يمكنك الآن الدخول للمنصة والبدء.
-نتمنى لك تجربة تعليمية ممتعة!`;
-
-    const phone = cleanWhatsAppPhone(receiptForm.whatsapp);
-    const url = `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
-    window.open(url, '_blank');
   };
 
   if (loading) return <div className="p-20 text-center text-gray-400">جاري التحميل...</div>;
@@ -146,23 +137,35 @@ export default function AdminSettingsPage() {
              <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs text-gray-400 mb-1">سعر الاشتراك الشهري (ج.م)</label>
-                  <input type="number" className="input-base w-full" value={settings?.monthlyPrice ?? ''} onChange={e => setSettings(s => s ? {...s, monthlyPrice: e.target.value === '' ? 0 : parseFloat(e.target.value)} : null)}/>
+                  <input type="number" className="input-base w-full" value={settings?.monthlyPrice ?? ''} onChange={e => {
+                    const v = e.target.value === '' ? 0 : parseFloat(e.target.value);
+                    setSettings(s => s ? {...s, monthlyPrice: v} : { monthlyPrice: v, teacherId: superAdmin?.id || '' } as any);
+                  }}/>
                 </div>
                 <div>
                   <label className="block text-xs text-gray-400 mb-1">سعر الاشتراك السنوي (ج.م)</label>
-                  <input type="number" className="input-base w-full" value={settings?.yearlyPrice ?? ''} onChange={e => setSettings(s => s ? {...s, yearlyPrice: e.target.value === '' ? 0 : parseFloat(e.target.value)} : null)}/>
+                  <input type="number" className="input-base w-full" value={settings?.yearlyPrice ?? ''} onChange={e => {
+                    const v = e.target.value === '' ? 0 : parseFloat(e.target.value);
+                    setSettings(s => s ? {...s, yearlyPrice: v} : { yearlyPrice: v, teacherId: superAdmin?.id || '' } as any);
+                  }}/>
                 </div>
              </div>
              <div>
                 <label className="block text-xs text-gray-400 mb-1">رقم واتساب الإدارة (للدعم الفني)</label>
                 <div className="relative">
                   <Phone size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500" />
-                  <input type="text" placeholder="01XXXXXXXXX" className="input-base pr-12 w-full" value={settings?.whatsappNumber || ''} onChange={e => setSettings(s => s ? {...s, whatsappNumber: e.target.value} : null)}/>
+                  <input type="text" placeholder="01XXXXXXXXX" className="input-base pr-12 w-full" value={settings?.whatsappNumber || ''} onChange={e => {
+                    const v = e.target.value;
+                    setSettings(s => s ? {...s, whatsappNumber: v} : { whatsappNumber: v, teacherId: superAdmin?.id || '' } as any);
+                  }}/>
                 </div>
              </div>
              <div>
                 <label className="block text-xs text-gray-400 mb-1">تعليمات الدفع (تظهر في صفحة التسجيل)</label>
-                <textarea className="input-base w-full min-h-[100px]" value={settings?.paymentMethods || ''} onChange={e => setSettings(s => s ? {...s, paymentMethods: e.target.value} : null)} />
+                <textarea className="input-base w-full min-h-[100px]" value={settings?.paymentMethods || ''} onChange={e => {
+                  const v = e.target.value;
+                  setSettings(s => s ? {...s, paymentMethods: v} : { paymentMethods: v, teacherId: superAdmin?.id || '' } as any);
+                }} />
              </div>
              <button type="submit" disabled={saving} className="btn-gold w-full bg-purple-500 flex items-center justify-center gap-2">
                <Save size={18} /> {saving ? 'جاري الحفظ...' : 'حفظ الإعدادات'}
@@ -170,11 +173,60 @@ export default function AdminSettingsPage() {
           </form>
         </div>
 
-        {/* Change Password */}
+        {/* Admin Profile & Password */}
         <div className="card-base p-6 space-y-6">
           <h2 className="text-xl font-bold flex items-center gap-2">
-            <Lock size={20} className="text-red-400" /> تغيير كلمة سر الأدمن
+            <Lock size={20} className="text-red-400" /> حساب الأدمن (المدير)
           </h2>
+          
+          <div className="flex flex-col items-center gap-4 p-4 rounded-2xl bg-white/5 border border-white/10 mb-6">
+            <div className="flex items-center gap-5">
+               {currentUser?.imageUrl ? (
+                 <img 
+                  src={currentUser.imageUrl} 
+                  alt="Admin" 
+                  className="w-20 h-20 rounded-full object-cover border-4 border-purple-500/30 cursor-pointer hover:brightness-110 active:scale-95 transition-all" 
+                  onClick={() => setSelectedImg({ src: currentUser.imageUrl!, alt: currentUser.name })}
+                 />
+               ) : (
+                 <div className="w-20 h-20 rounded-full bg-purple-500/20 flex items-center justify-center text-purple-400 text-3xl font-black border-4 border-purple-500/10">
+                   {currentUser?.name?.[0]}
+                 </div>
+               )}
+               <div className="flex-1">
+                 <GlobalFileUpload 
+                    accept="image/*"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      setIsUploading(true);
+                      setUploadProgress(0);
+                      try {
+                        const url = await uploadFileToStorage(file, `admins/profile_${currentUser?.id}_${Date.now()}`, setUploadProgress);
+                        await handleUpdateImage(url);
+                      } catch (err: any) { 
+                        showToast(err.message || 'فشل رفع الصورة'); 
+                      } finally { 
+                        setIsUploading(false); 
+                        setUploadProgress(0); 
+                      }
+                    }}
+                    disabled={isUploading}
+                    isUploading={isUploading}
+                    uploadProgress={uploadProgress}
+                    label="تغيير الصورة الشخصية"
+                    needCrop={true}
+                    circularCrop={true}
+                    cropAspect={1}
+                 />
+               </div>
+            </div>
+            <div className="text-center w-full pt-4 border-t border-white/5">
+              <div className="font-bold text-lg">{currentUser?.name}</div>
+              <div className="text-xs text-gray-500 mt-1">@{currentUser?.username}</div>
+            </div>
+          </div>
+
           <form onSubmit={handleUpdatePassword} className="space-y-4">
              <div>
                 <label className="block text-xs text-gray-400 mb-1">كلمة المرور الجديدة</label>
@@ -190,29 +242,6 @@ export default function AdminSettingsPage() {
           </form>
         </div>
 
-        {/* Receipt Generator */}
-        <div className="card-base p-6 space-y-6 lg:col-span-2 bg-gradient-to-r from-purple-500/5 to-transparent">
-          <div className="flex justify-between items-center">
-             <h2 className="text-xl font-bold flex items-center gap-2">
-                <Printer size={22} className="text-blue-400" /> منشئ إيصالات اشتراك المعلمين
-             </h2>
-             <span className="text-[10px] text-gray-500">سيتم إرسال التفاصيل مباشرة عبر الواتساب</span>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-             <input type="text" placeholder="اسم المعلم" className="input-base" value={receiptForm.teacherName} onChange={e => setReceiptForm({...receiptForm, teacherName: e.target.value})}/>
-             <input type="text" placeholder="رقم الموبايل" className="input-base" value={receiptForm.whatsapp} onChange={e => setReceiptForm({...receiptForm, whatsapp: e.target.value})}/>
-             <input type="number" placeholder="المبلغ" className="input-base" value={receiptForm.amount || ''} onChange={e => setReceiptForm({...receiptForm, amount: parseFloat(e.target.value) || 0})}/>
-             <select className="input-base" value={receiptForm.subType} onChange={e => setReceiptForm({...receiptForm, subType: e.target.value})}>
-                <option value="monthly">اشتراك شهري</option>
-                <option value="yearly">اشتراك سنوي</option>
-             </select>
-             <input type="date" className="input-base" value={receiptForm.date} onChange={e => setReceiptForm({...receiptForm, date: e.target.value})}/>
-             <button onClick={generateReceiptWhatsApp} className="btn-gold bg-green-600 flex items-center justify-center gap-2 shadow-green-900/40">
-                <Send size={18} /> إرسال الإيصال للأستاذ
-             </button>
-          </div>
-        </div>
-
         {/* Teacher Requests */}
         <div className="lg:col-span-2 space-y-4">
           <h2 className="text-xl font-bold flex items-center gap-2 px-2">
@@ -226,7 +255,12 @@ export default function AdminSettingsPage() {
                   <div className="flex justify-between items-start mb-4 border-b border-white/5 pb-4">
                      <div className="flex items-center gap-3">
                         {req.imageUrl ? (
-                           <img src={req.imageUrl} alt={req.name} className="w-12 h-12 rounded-xl object-cover shadow-lg shadow-purple-500/20 border border-purple-500/30" />
+                           <img 
+                            src={req.imageUrl} 
+                            alt={req.name} 
+                            className="w-12 h-12 rounded-xl object-cover shadow-lg shadow-purple-500/20 border border-purple-500/30 cursor-pointer hover:scale-110 active:scale-95 transition-all" 
+                            onClick={() => setSelectedImg({ src: req.imageUrl!, alt: req.name })}
+                           />
                         ) : (
                            <div className="w-12 h-12 rounded-xl bg-purple-500/20 flex items-center justify-center text-purple-400 text-xl font-black">
                               {req.name[0]}
@@ -259,9 +293,13 @@ export default function AdminSettingsPage() {
                         <Check size={14} /> تفعيل الحساب
                      </button>
                      {req.receiptUrl && (
-                        <a href={req.receiptUrl} target="_blank" className="w-9 h-9 rounded-lg bg-white/5 flex items-center justify-center text-gray-400 hover:text-white transition-colors">
+                        <button 
+                          onClick={() => setSelectedImg({ src: req.receiptUrl!, alt: `إيصال دفع: ${req.name}` })}
+                          className="w-9 h-9 rounded-lg bg-white/5 flex items-center justify-center text-gray-400 hover:text-white transition-colors"
+                          title="عرض الإيصال"
+                        >
                            <ExternalLink size={14} />
-                        </a>
+                        </button>
                      )}
                      <button onClick={() => deleteRegistrationRequest(req.id).then(loadData)} className="w-9 h-9 rounded-lg bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white flex items-center justify-center transition-colors">
                         <Trash2 size={14} />
@@ -272,6 +310,15 @@ export default function AdminSettingsPage() {
           </div>
         </div>
       </div>
+
+      {/* Image Modal overlay */}
+      {selectedImg && (
+        <ImageModal 
+          src={selectedImg.src} 
+          alt={selectedImg.alt} 
+          onClose={() => setSelectedImg(null)} 
+        />
+      )}
     </div>
   );
 }

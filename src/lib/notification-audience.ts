@@ -6,14 +6,26 @@ import type { Notification } from '@/types';
 const JOIN_MSG_MARKERS = ['طلب انضمام', 'تسجيل معلم'];
 
 export function isAdminDirectedNotification(n: Notification): boolean {
-  if (n.targetRoles?.includes('admin')) return true;
+  if (n.targetRoles?.includes('super_admin')) return true;
+  if (n.targetRoles?.includes('admin')) return true; // Legacy support
   const m = (n.msg || '').toLowerCase();
-  return JOIN_MSG_MARKERS.some((x) => m.includes(x.toLowerCase()));
+  // Teacher registration belongs to Super Admin
+  return m.includes('تسجيل معلم');
 }
 
 /** إشعارات لوحة المعلم: بدون ما يخص الإدارة فقط */
+/** إشعارات لوحة المعلم: تشمل ما هو موجه له أو للطلاب عموماً */
 export function filterNotificationsForTeacherInbox(notifs: Notification[]): Notification[] {
-  return notifs.filter((n) => !isAdminDirectedNotification(n));
+  return notifs.filter((n) => {
+    // If specifically for super_admin, hide from teacher
+    if (n.targetRoles?.includes('super_admin')) return false;
+    
+    // If specifically for teacher role, show
+    if (n.targetRoles?.includes('teacher')) return true;
+
+    // Default: side with not being an admin-only message
+    return !isAdminDirectedNotification(n);
+  });
 }
 
 /** إشعارات لوحة السوبر أدمن: طلبات انضمام وتنبيهات موجّهة للإدارة فقط */

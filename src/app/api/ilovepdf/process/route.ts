@@ -56,6 +56,7 @@ export async function POST(req: Request) {
     
     // Support multiple files or single file
     const filesToRegister = serverFilenames || [serverFilename];
+    const s = settings || {};
     
     filesToRegister.forEach((sfn: string, index: number) => {
       taskInstance.files.push({
@@ -67,7 +68,6 @@ export async function POST(req: Request) {
 
     // 2. Prepare process parameters based on tool and settings
     let processParams: any = {};
-    const s = settings || {};
     
     if (tool === 'compress') {
       processParams = { compression_level: compression_level || s.compression_level || 'recommended' };
@@ -113,7 +113,7 @@ export async function POST(req: Request) {
         processParams = {}; // Organize uses file params mostly
     } else if (tool === 'pdfocr') {
       processParams = {
-        language: s.language || 'ara'
+        ocr_languages: Array.isArray(s.languages) ? s.languages : [s.language || 'ara']
       };
     } else if (tool === 'protect') {
       processParams = {
@@ -129,10 +129,72 @@ export async function POST(req: Request) {
         margin: s.margin || 0,
         pagesize: s.pagesize || 'fit'
       };
+    } else if (tool === 'pdfoffice') {
+      // PDF to Word conversion
+      processParams = {
+        output_type: s.outputType || 'Word', // Word, Pptx, xlsx
+        try_pdf_repair: true
+      };
+    } else if (tool === 'unlock') {
+      processParams = {
+        password: s.password || ''
+      };
     } else if (tool === 'editpdf') {
-        processParams = {
-            elements: s.elements || []
-        };
+        // PDF dimensions reference: A4 = 595 x 842 points, origin at bottom-left
+        const PDF_W = 595, PDF_H = 842;
+
+        // Check if we have interactive editor elements (_textElements from the page)
+        const interactiveElements: any[] = s._textElements || [];
+
+        if (interactiveElements.length > 0) {
+            // Map each element's percentage position → PDF coordinates
+            interactiveElements.forEach((el: any) => {
+                if (!el.text) return;
+                const xPdf = Math.round((el.x / 100) * PDF_W);
+                // PDF y-origin is bottom-left, browser y is top-left → invert
+                const yPdf = Math.round(PDF_H - (el.y / 100) * PDF_H);
+                if (taskInstance.elements && Array.isArray(taskInstance.elements)) {
+                    taskInstance.elements.push({
+                        params: {
+                            type: 'text',
+                            text: el.text,
+                            coordinates: { x: xPdf, y: yPdf },
+                            dimensions: { w: Math.round(PDF_W * 0.8), h: (el.fontSize || 14) * 2 },
+                            font_size: el.fontSize || 14,
+                            font_family: 'Arial',
+                            font_color: el.color || '#000000',
+                            pages: el.pages || 'all'
+                        }
+                    });
+                }
+            });
+        } else {
+            // Fallback: single text from settings (old behavior)
+            const textStr = s.text || '';
+            const fontSize = s.size || 14;
+            const pos = s.position || 'Bottom Center';
+            let x = 250, y = 30;
+            if (pos === 'Top Left') { x = 30; y = 780; }
+            else if (pos === 'Top Center') { x = 250; y = 780; }
+            else if (pos === 'Top Right') { x = 450; y = 780; }
+            else if (pos === 'Bottom Left') { x = 30; y = 30; }
+            else if (pos === 'Bottom Center') { x = 250; y = 30; }
+            else if (pos === 'Bottom Right') { x = 450; y = 30; }
+            if (taskInstance.elements && Array.isArray(taskInstance.elements) && textStr) {
+                taskInstance.elements.push({
+                    params: {
+                        type: 'text', text: textStr,
+                        coordinates: { x, y },
+                        dimensions: { w: 400, h: fontSize * 2 },
+                        font_size: fontSize,
+                        font_family: 'Arial',
+                        font_color: s.color || '#000000',
+                        pages: 'all'
+                    }
+                });
+            }
+        }
+        processParams = {};
     }
 
     console.log(`[iLovePDF Process] SDK starting process for ${task} with params:`, JSON.stringify(processParams));

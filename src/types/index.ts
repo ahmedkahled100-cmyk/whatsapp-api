@@ -16,6 +16,8 @@ export interface TeacherUser {
   subExpiry?: number | null;
   subLink?: string;
   subPrice?: number;
+  totalPaid?: number;
+  paymentHistory?: { date: number; amount: number; type: string }[];
   createdAt: number;
 }
 
@@ -35,9 +37,16 @@ export interface Student {
   groupIds: string[];
   notes?: string;
   imageUrl?: string;
-  subType: 'none' | 'monthly' | 'yearly' | 'session' | 'halfYearly' | 'course';
+  subType: 'none' | 'free' | 'monthly' | 'yearly' | 'session' | 'halfYearly' | 'course';
   subPrice?: number;
+  subStart?: number | null;
   subExpiry?: number | null;
+  cancelReason?: string;
+  totalPaid?: number;
+  paymentHistory?: { date: number; amount: number; type: string }[];
+  points?: number; // Gamification: Student's experience points
+  level?: number; // Gamification: Student's calculated level
+  badges?: string[]; // Gamification: Badges earned by the student
   registeredAt: string;
   createdAt: number;
 }
@@ -160,6 +169,7 @@ export interface Attempt {
   startedAt: string;
   timeSpent?: number;
   tabSwitches?: number;
+  aiFeedback?: string; // AI explanation/feedback for this attempt
 }
 
 export interface Notification {
@@ -171,7 +181,7 @@ export interface Notification {
   time: string;
   createdAt: number;
   targetUsers?: string[]; 
-  targetRoles?: ('admin' | 'student')[];
+  targetRoles?: ('admin' | 'super_admin' | 'teacher' | 'student')[];
   targetGroups?: string[];
   actionPath?: string;
 }
@@ -232,6 +242,7 @@ export interface RegistrationRequest {
   subPrice?: number; // Subscription price matched during registration
   imageUrl?: string; // Student profile image if uploaded during registration
   studentId?: string; // For renewal requests: links to existing student
+  existingCode?: string; // For unified identity: the student's existing platform code
   notes?: string; // Additional notes from student/teacher
 }
 

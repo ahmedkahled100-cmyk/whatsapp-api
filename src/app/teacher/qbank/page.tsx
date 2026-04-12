@@ -1,7 +1,8 @@
 'use client';
 // src/app/teacher/qbank/page.tsx
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useTeacherStore } from '@/lib/store';
 import { getQBank, addToQBank, deleteFromQBank, uploadFileToStorage } from '@/lib/db';
 import { showToast } from '@/lib/toast';
@@ -11,8 +12,9 @@ import { GlobalFileUpload } from '@/components/GlobalFileUpload';
 
 import { useRouter } from 'next/navigation';
 
-export default function QBankPage() {
+function QBankPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user, setTempExamQuestions } = useTeacherStore();
   const [questions, setQuestions] = useState<QuestionBankItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -62,7 +64,18 @@ export default function QBankPage() {
 
   useEffect(() => {
     loadQuestions();
-  }, []);
+  }, [user?.id]);
+
+  // Handle pre-fill from iLovePDF
+  useEffect(() => {
+    const prefillUrl = searchParams.get('prefillUrl');
+    if (prefillUrl) {
+      setNewQuestion(prev => ({ ...prev, imageUrl: prefillUrl }));
+      setShowAddForm(true);
+      showToast('📥 تم استلام صورة السؤال من أدوات PDF');
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, [searchParams]);
 
   const handleAddQuestion = async () => {
     if (!newQuestion.text) {
@@ -377,7 +390,7 @@ export default function QBankPage() {
             placeholder="ابحث في الأسئلة..."
             value={search}
             onChange={e => setSearch(e.target.value)}
-            className="input-base pr-11 text-sm w-full"
+            className="input-base has-icon-right pr-11 text-sm w-full"
           />
         </div>
         
@@ -473,8 +486,8 @@ export default function QBankPage() {
 
       {/* Quick Exam Modal */}
       {showQuickExamModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="card-base p-6 w-full max-w-sm animate-scale-in border border-gold/30">
+        <div className="modal-overlay" onClick={() => setShowQuickExamModal(false)}>
+          <div className="modal-content modal-content-sm" onClick={e => e.stopPropagation()}>
             <h3 className="text-xl font-bold mb-4 font-cairo">إنشاء اختبار سريع</h3>
             <p className="text-sm text-gray-400 mb-4">
                سيتم اختيار أسئلة عشوائية من النتائج المفلترة حالياً ({filtered.length} سؤال متاح).
@@ -511,5 +524,13 @@ export default function QBankPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function QBankPage() {
+  return (
+    <Suspense fallback={<div className="p-10 text-center opacity-50 font-cairo">جاري تحميل بنك الأسئلة...</div>}>
+      <QBankPageContent />
+    </Suspense>
   );
 }

@@ -15,8 +15,10 @@ interface TeacherStore {
   attempts: Attempt[];
   groups: Group[];
   notifications: Notification[];
+  adminNotifications: Notification[];
   settings: Settings | null;
   registrationRequests: RegistrationRequest[];
+  teacherJoinRequests: RegistrationRequest[];
   materials: CourseMaterial[];
   assignments: Assignment[];
   conversations: Conversation[];
@@ -31,11 +33,13 @@ interface TeacherStore {
   setAttempts: (attempts: Attempt[]) => void;
   setGroups: (groups: Group[]) => void;
   setNotifications: (notifs: Notification[]) => void;
+  setAdminNotifications: (notifs: Notification[]) => void;
   setRegistrationRequests: (requests: RegistrationRequest[]) => void;
+  setTeacherJoinRequests: (requests: RegistrationRequest[]) => void;
   setMaterials: (materials: CourseMaterial[]) => void;
   setAssignments: (assignments: Assignment[]) => void;
   setConversations: (conversations: Conversation[]) => void;
-  setSettings: (settings: Settings) => void;
+  setSettings: (settings: Settings | null) => void;
   setActiveTab: (tab: string) => void;
   setLoading: (val: boolean) => void;
   setTempExamQuestions: (questions: Question[] | null) => void;
@@ -51,7 +55,9 @@ export const useTeacherStore = create<TeacherStore>()(
       attempts: [],
       groups: [],
       notifications: [],
+      adminNotifications: [],
       registrationRequests: [],
+      teacherJoinRequests: [],
       materials: [],
       assignments: [],
       conversations: [],
@@ -66,7 +72,9 @@ export const useTeacherStore = create<TeacherStore>()(
       setAttempts: (attempts) => set({ attempts }),
       setGroups: (groups) => set({ groups }),
       setNotifications: (notifications) => set({ notifications }),
+      setAdminNotifications: (adminNotifications) => set({ adminNotifications }),
       setRegistrationRequests: (registrationRequests) => set({ registrationRequests }),
+      setTeacherJoinRequests: (teacherJoinRequests) => set({ teacherJoinRequests }),
       setMaterials: (materials) => set({ materials }),
       setAssignments: (assignments) => set({ assignments }),
       setConversations: (conversations) => set({ conversations }),
@@ -74,7 +82,7 @@ export const useTeacherStore = create<TeacherStore>()(
       setActiveTab: (activeTab) => set({ activeTab }),
       setLoading: (isLoading) => set({ isLoading }),
       setTempExamQuestions: (tempExamQuestions) => set({ tempExamQuestions }),
-      logout: () => set({ user: null, tempExamQuestions: null }),
+      logout: () => set({ user: null, settings: null, tempExamQuestions: null }),
     }),
     {
       name: 'an-academy-teacher',

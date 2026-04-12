@@ -3,6 +3,27 @@ import { supabase } from '@/lib/supabase';
 import { STUDENTS, ATTEMPTS, GROUPS, REG_REQUESTS } from '../constants';
 import { fromDB, toDB, manyFromDB } from './dbUtils';
 import type { Student, Group, RegistrationRequest } from '@/types';
+import { normalizePhone, generateCode } from '@/lib/utils';
+
+const decode = (str: string) => {
+  try {
+    return typeof window !== 'undefined' && typeof atob !== 'undefined'
+      ? decodeURIComponent(escape(atob(str))) 
+      : Buffer.from(str, 'base64').toString('utf-8');
+  } catch {
+    return str;
+  }
+};
+
+const encode = (str: string) => {
+  try {
+    return typeof window !== 'undefined' && typeof btoa !== 'undefined'
+      ? btoa(unescape(encodeURIComponent(str)))
+      : Buffer.from(str, 'utf-8').toString('base64');
+  } catch {
+    return str;
+  }
+};
 
 export const getStudents = async (teacherId: string): Promise<Student[]> => {
   if (!teacherId || teacherId === 'unknown_teacher') return [];
@@ -11,23 +32,154 @@ export const getStudents = async (teacherId: string): Promise<Student[]> => {
     .select('*')
     .eq('teacher_id', teacherId);
   if (error) throw error;
-  return manyFromDB<Student>(data);
+  
+  return manyFromDB<Student>(data).map(student => {
+    // UI CLEANING: Strip shadow sub-codes (-T...)
+    if (student.code) student.code = student.code.replace(/-T[a-zA-Z0-9]+$/, '');
+  
+    if (student.notes) {
+      // Extract subStart
+      const stMatch = student.notes.match(/\[ST:(\d+)\]/);
+      if (stMatch) student.subStart = parseInt(stMatch[1]);
+      
+      // Extract Total Paid
+      const tpMatch = student.notes.match(/\[TP:(\d+)\]/);
+      if (tpMatch) student.totalPaid = parseInt(tpMatch[1]);
+  
+      // Extract subPrice (Shadow)
+      const prcMatch = student.notes.match(/\[PRC:(\d+)\]/);
+      if (prcMatch) student.subPrice = parseInt(prcMatch[1]);
+  
+      // Extract History
+      const histMatch = student.notes.match(/\[HIST:(.*?)\]/);
+      if (histMatch) {
+         try { student.paymentHistory = JSON.parse(decode(histMatch[1])); } catch {}
+      }
+  
+      // Extract imageUrl if not in column
+      if (!student.imageUrl) {
+        const imgMatch = student.notes.match(/\[IMG:(.*?)\]/);
+        if (imgMatch) student.imageUrl = imgMatch[1];
+      }
+
+      // Extract cancelReason from notes if not in dedicated column
+      if (!student.cancelReason) {
+        const crMatch = student.notes.match(/\[CR:(.*?)\]/);
+        if (crMatch) {
+          try { student.cancelReason = decode(crMatch[1]); } catch { student.cancelReason = crMatch[1]; }
+        }
+      }
+  
+      // CLEAN the notes field for the UI
+      student.notes = student.notes
+        .replace(/\[ST:\d+\]/g, '')
+        .replace(/\[IMG:.*?\]/g, '')
+        .replace(/\[TP:\d+\]/g, '')
+        .replace(/\[PRC:\d+\]/g, '')
+        .replace(/\[HIST:.*?\]/g, '')
+        .replace(/\[CR:.*?\]/g, '')
+        .trim();
+    }
+    return student;
+  });
 };
 
 export const getAllStudents = async (): Promise<Student[]> => {
   const { data, error } = await supabase.from(STUDENTS).select('*');
   if (error) throw error;
-  return manyFromDB<Student>(data);
+  return manyFromDB<Student>(data).map(student => {
+    if (student.notes) {
+      const stMatch = student.notes.match(/\[ST:(\d+)\]/);
+      if (stMatch) student.subStart = parseInt(stMatch[1]);
+      
+      const tpMatch = student.notes.match(/\[TP:(\d+)\]/);
+      if (tpMatch) student.totalPaid = parseInt(tpMatch[1]);
+
+      const prcMatch = student.notes.match(/\[PRC:(\d+)\]/);
+      if (prcMatch) student.subPrice = parseInt(prcMatch[1]);
+
+      const histMatch = student.notes.match(/\[HIST:(.*?)\]/);
+      if (histMatch) {
+         try { student.paymentHistory = JSON.parse(decode(histMatch[1])); } catch {}
+      }
+
+      if (!student.imageUrl) {
+        const imgMatch = student.notes.match(/\[IMG:(.*?)\]/);
+        if (imgMatch) student.imageUrl = imgMatch[1];
+      }
+
+      student.notes = student.notes
+        .replace(/\[ST:\d+\]/g, '')
+        .replace(/\[IMG:.*?\]/g, '')
+        .replace(/\[TP:\d+\]/g, '')
+        .replace(/\[PRC:\d+\]/g, '')
+        .replace(/\[HIST:.*?\]/g, '')
+        .trim();
+    }
+    return student;
+  });
 };
 
-export const getStudentByCode = async (code: string): Promise<Student | null> => {
+export const getStudentByCode = async (code: string): Promise<Student[]> => {
+  const cleanCode = code.trim().toUpperCase();
   const { data, error } = await supabase
     .from(STUDENTS)
     .select('*')
-    .eq('code', code.toUpperCase())
-    .maybeSingle();
+    .or(`code.eq.${cleanCode},code.ilike.${cleanCode}-T%`);
   if (error) throw error;
-  return data ? fromDB<Student>(data) : null;
+  
+  const results = manyFromDB<Student>(data).map(s => {
+    // Strip shadow sub-codes (-T...)
+    if (s.code) s.code = s.code.replace(/-T[a-zA-Z0-9]+$/, '');
+    // Decode cancelReason from notes fallback if not in dedicated column
+    if (!s.cancelReason && s.notes) {
+      const crMatch = s.notes.match(/\[CR:(.*?)\]/);
+      if (crMatch) {
+        try { s.cancelReason = decode(crMatch[1]); } catch { s.cancelReason = crMatch[1]; }
+      }
+    }
+    return s;
+  });
+  return results;
+};
+
+/**
+ * Subscribe to real-time changes for a specific student by ID.
+ * Fires callback immediately with current data, then on every DB change.
+ * Returns an unsubscribe function.
+ */
+export const subscribeToStudent = (studentId: string, teacherId: string, callback: (student: Student) => void) => {
+  const channel = supabase
+    .channel(`student:${studentId}`)
+    .on(
+      'postgres_changes',
+      {
+        event: 'UPDATE',
+        schema: 'public',
+        table: STUDENTS,
+        filter: `id=eq.${studentId}`,
+      },
+      async (payload) => {
+        // Re-fetch full data from getStudents to apply all deserialization (notes decoding, etc.)
+        try {
+          const freshList = await getStudents(teacherId);
+          const fresh = freshList.find(s => s.id === studentId);
+          if (fresh) {
+            console.log('⚡ Student status updated via Supabase Realtime');
+            callback(fresh);
+          }
+        } catch (err) {
+          console.warn('subscribeToStudent re-fetch failed:', err);
+          // Fallback: convert raw payload
+          const raw = fromDB<Student>(payload.new);
+          if (raw.code) raw.code = raw.code.replace(/-T[a-zA-Z0-9]+$/, '');
+          callback(raw);
+        }
+      }
+    )
+    .subscribe();
+
+  return () => supabase.removeChannel(channel);
 };
 
 export const getStudentByParentPhone = async (parentPhone: string): Promise<Student | null> => {
@@ -40,6 +192,32 @@ export const getStudentByParentPhone = async (parentPhone: string): Promise<Stud
   return data ? fromDB<Student>(data) : null;
 };
 
+/** البحث عن طالب في أي مكان بالمنصة بواسطة رقم الهاتف */
+export const getStudentByPhoneAnywhere = async (phone: string): Promise<Student | null> => {
+  if (!phone) return null;
+  const normalized = normalizePhone(phone);
+  const { data, error } = await supabase
+    .from(STUDENTS)
+    .select('*')
+    .eq('phone', normalized)
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return data ? fromDB<Student>(data) : null;
+};
+
+/** البحث عن كافة طلبات التسجيل (الحالية والسابقة) لرقم هاتف */
+export const getRegistrationRequestsByPhone = async (phone: string): Promise<RegistrationRequest[]> => {
+  if (!phone) return [];
+  const normalized = normalizePhone(phone);
+  const { data, error } = await supabase
+    .from(REG_REQUESTS)
+    .select('*')
+    .eq('phone', normalized);
+  if (error) throw error;
+  return manyFromDB<RegistrationRequest>(data);
+};
+
 export const getEnrollmentsByParentPhone = async (parentPhone: string): Promise<Student[]> => {
   if (!parentPhone) return [];
   const { data, error } = await supabase
@@ -47,17 +225,44 @@ export const getEnrollmentsByParentPhone = async (parentPhone: string): Promise<
     .select('*')
     .eq('parent_phone', parentPhone.trim());
   if (error) throw error;
-  return manyFromDB<Student>(data);
+  return manyFromDB<Student>(data).map(s => {
+    // UI CLEANING: Strip shadow sub-codes (-T...)
+    if (s.code) s.code = s.code.replace(/-T[a-zA-Z0-9]+$/, '');
+    return s;
+  });
 };
 
 export const getEnrollmentsByPhone = async (phone: string): Promise<Student[]> => {
   if (!phone) return [];
+  const normalized = normalizePhone(phone);
   const { data, error } = await supabase
     .from(STUDENTS)
     .select('*')
-    .eq('phone', phone.trim());
+    .eq('phone', normalized);
   if (error) throw error;
-  return manyFromDB<Student>(data);
+  return manyFromDB<Student>(data).map(student => {
+    // UI CLEANING: Strip shadow sub-codes (-T...)
+    if (student.code) student.code = student.code.replace(/-T[a-zA-Z0-9]+$/, '');
+
+    if (student.notes) {
+      const stMatch = student.notes.match(/\[ST:(\d+)\]/);
+      if (stMatch) student.subStart = parseInt(stMatch[1]);
+
+      const tpMatch = student.notes.match(/\[TP:(\d+)\]/);
+      if (tpMatch) student.totalPaid = parseInt(tpMatch[1]);
+
+      const prcMatch = student.notes.match(/\[PRC:(\d+)\]/);
+      if (prcMatch) student.subPrice = parseInt(prcMatch[1]);
+
+      student.notes = student.notes
+        .replace(/\[ST:\d+\]/g, '')
+        .replace(/\[IMG:.*?\]/g, '')
+        .replace(/\[TP:\d+\]/g, '')
+        .replace(/\[PRC:\d+\]/g, '')
+        .trim();
+    }
+    return student;
+  });
 };
 
 export const saveStudent = async (student: Omit<Student, 'id'> & { id?: string }): Promise<string> => {
@@ -68,43 +273,139 @@ export const saveStudent = async (student: Omit<Student, 'id'> & { id?: string }
   delete payload.teacher_code;
   delete payload.teacher_name;
 
+  // Serialize everything into notes to prevent DB schema errors
+  let cleanNotes = (payload.notes || '')
+    .replace(/\[ST:\d+\]/g, '')
+    .replace(/\[IMG:.*?\]/g, '')
+    .replace(/\[TP:\d+\]/g, '')
+    .replace(/\[PRC:\d+\]/g, '')
+    .replace(/\[HIST:.*?\]/g, '')
+    .trim();
+  
+  if (payload.sub_start !== undefined) {
+    if (payload.sub_start !== null) {
+      cleanNotes = `${cleanNotes} [ST:${payload.sub_start}]`.trim();
+    }
+    delete payload.sub_start;
+  }
+
+  if (payload.sub_price !== undefined) {
+    cleanNotes = `${cleanNotes} [PRC:${payload.sub_price || 0}]`.trim();
+    // We keep sub_price in payload too if column exists
+  }
+
+  if (payload.total_paid !== undefined) {
+    cleanNotes = `${cleanNotes} [TP:${payload.total_paid || 0}]`.trim();
+    delete payload.total_paid;
+  }
+
+  if (payload.payment_history !== undefined) {
+    const histStr = encode(JSON.stringify(payload.payment_history || []));
+    cleanNotes = `${cleanNotes} [HIST:${histStr}]`.trim();
+    delete payload.payment_history;
+  }
+
+  // Serialize imageUrl into notes to prevent DB schema errors if column is missing
+  if (payload.image_url !== undefined && payload.image_url !== null) {
+    cleanNotes = `${cleanNotes} [IMG:${payload.image_url}]`.trim();
+    // We keep image_url in payload too, in case the column exists
+  }
+  
   if (payload.registered_at && typeof payload.registered_at === 'string') {
     const parsed = new Date(payload.registered_at);
-    if (isNaN(parsed.getTime())) {
-      delete payload.registered_at;
-    } else {
-      payload.registered_at = parsed.toISOString();
+    if (!isNaN(parsed.getTime())) {
+      cleanNotes = `${cleanNotes} [REG:${parsed.toISOString()}]`.trim();
+    }
+    delete payload.registered_at;
+  }
+
+  // Preserve created_at in notes as well
+  const createdAtToUse = payload.created_at || Date.now();
+  cleanNotes = `${cleanNotes} [CAT:${createdAtToUse}]`.trim();
+  delete payload.created_at;
+
+  // Serialize cancelReason into notes as [CR:...] to ensure it always persists (must be BEFORE payload.notes assignment)
+  const cancelReason = (student as any).cancelReason;
+  if (cancelReason !== undefined) {
+    cleanNotes = cleanNotes.replace(/\[CR:.*?\]/g, '').trim();
+    if (cancelReason) {
+      // Using base64 encoding to handle Arabic text and special characters safely
+      cleanNotes = `${cleanNotes} [CR:${encode(cancelReason)}]`.trim();
     }
   }
 
-  // Normalize phone numbers
-  if (payload.phone) payload.phone = String(payload.phone).trim();
-  if (payload.parent_phone) payload.parent_phone = String(payload.parent_phone).trim();
+  payload.notes = cleanNotes || undefined;
+
   if (payload.code) payload.code = String(payload.code).trim().toUpperCase();
+  
+  // Normalize phone numbers radically to ensure 01xxxxxxxxx format
+  if (payload.phone) payload.phone = normalizePhone(payload.phone);
+  if (payload.parent_phone) payload.parent_phone = normalizePhone(payload.parent_phone);
 
-  if (student.id) {
-    const { error } = await supabase
-      .from(STUDENTS)
-      .update(payload)
-      .eq('id', student.id);
-    if (error) {
-       if (error.code === '23505') throw new Error('DUPLICATE_CODE_OR_PHONE');
-       throw error;
-    }
-    return student.id;
-  } else {
-    const newId = crypto.randomUUID();
-    const { data, error } = await supabase
-      .from(STUDENTS)
-      .insert([{ ...payload, id: newId }])
-      .select()
-      .single();
-    if (error) {
-      if (error.code === '23505') throw new Error('DUPLICATE_CODE_OR_PHONE');
-      throw error;
-    }
-    return data.id;
+  // RADICAL ENFORCEMENT: Force code unification by searching anywhere for this phone
+  const existingForCode = await getStudentByPhoneAnywhere(payload.phone);
+  if (existingForCode && existingForCode.code) {
+    // If we found an existing code, we MUST use it to maintain unified identity
+    payload.code = existingForCode.code;
+  } else if (!payload.code) {
+    // Fallback if no code provided and no existing student found
+    payload.code = generateCode();
   }
+
+  // CONFLICT PREVENTION: Check if THIS teacher already has this student record (by phone)
+  let idToUse = student.id;
+  if (!idToUse && payload.phone && payload.teacher_id) {
+    try {
+      const enrollments = await getEnrollmentsByPhone(payload.phone);
+      const match = enrollments.find(e => e.teacherId === payload.teacher_id);
+      if (match) {
+        idToUse = match.id;
+      }
+    } catch (e) {
+      console.warn('Conflict check lookup failed:', e);
+    }
+  }
+
+  if (!idToUse) idToUse = crypto.randomUUID();
+
+  // FIELD FILTERING: Only send columns highly likely to be standard in the database
+  const finalSafePayload: any = {
+    id: idToUse,
+    teacher_id: payload.teacher_id,
+    name: payload.name,
+    phone: payload.phone,
+    parent_phone: payload.parent_phone,
+    grade: payload.grade,
+    code: payload.code,
+    sub_type: payload.sub_type,
+    sub_expiry: payload.sub_expiry,
+    sub_price: payload.sub_price,
+    notes: payload.notes
+  };
+
+
+  // Use upsert to handle both new and existing students correctly
+  let { error } = await supabase
+    .from(STUDENTS)
+    .upsert([finalSafePayload], { onConflict: 'id' });
+
+  // RADICAL FIX: If 409/23505 Conflict occurs on Code, use a Shadow Code Suffix
+  if (error && (error.code === '23505' || (error as any).status === 409)) {
+      console.warn('Conflict detected, applying Shadow Code Fix...');
+      const shadowCode = `${finalSafePayload.code}-T${payload.teacher_id.slice(0, 4)}`.toUpperCase();
+      finalSafePayload.code = shadowCode;
+      const retryResponse = await supabase
+        .from(STUDENTS)
+        .upsert([finalSafePayload], { onConflict: 'id' });
+      error = retryResponse.error;
+  }
+
+  if (error) {
+    if (error.code === '23505') throw new Error('DUPLICATE_CODE_OR_PHONE');
+    throw error;
+  }
+  
+  return idToUse;
 };
 
 export const deleteStudent = async (id: string) => {
@@ -112,6 +413,17 @@ export const deleteStudent = async (id: string) => {
   if (attemptErr) console.error('deleteStudent attempts error:', attemptErr);
   const { error: studentErr } = await supabase.from(STUDENTS).delete().eq('id', id);
   if (studentErr) throw studentErr;
+};
+
+export const wipeStudentInteraction = async (studentId: string) => {
+    // 1. Delete Attempts
+    await supabase.from(ATTEMPTS).delete().eq('student_id', studentId);
+    
+    // 2. Delete Game Results
+    await supabase.from('game_results').delete().eq('student_id', studentId);
+    
+    // 3. Delete Assignment Submissions
+    await supabase.from('assignment_submissions').delete().eq('student_id', studentId);
 };
 
 export const subscribeToStudents = (teacherId: string, callback: (students: Student[]) => void) => {
@@ -130,10 +442,13 @@ export const subscribeToStudents = (teacherId: string, callback: (students: Stud
           const students = await getStudents(teacherId);
           callback(students);
         } else if (payload.eventType === 'UPDATE') {
-          // Check if it's more than just presence (e.g. name, grade, code)
+          // Trigger re-fetch on any subscription-related or key field change
           const n = payload.new as any;
           const o = payload.old as any;
-          if (n.name !== o.name || n.grade !== o.grade || n.code !== o.code || n.phone !== o.phone) {
+          // check notes instead of cancel_reason since cancel_reason is not a DB column anymore
+          const subChanged = n.sub_type !== o.sub_type || n.sub_expiry !== o.sub_expiry || n.notes !== o.notes;
+          const profileChanged = n.name !== o.name || n.grade !== o.grade || n.code !== o.code || n.phone !== o.phone;
+          if (subChanged || profileChanged) {
              const students = await getStudents(teacherId);
              callback(students);
           }
@@ -153,10 +468,9 @@ export const subscribeToAllStudents = (callback: (students: Student[]) => void) 
       'postgres_changes',
       { event: '*', schema: 'public', table: STUDENTS },
       async (payload) => {
-        if (payload.eventType !== 'UPDATE' || (payload.new as any).name !== (payload.old as any).name) {
-          const students = await getAllStudents();
-          callback(students);
-        }
+        // Simplify and fetch on any change to guarantee admin dashboard accuracy
+        const students = await getAllStudents();
+        callback(students);
       }
     )
     .subscribe();
@@ -228,29 +542,55 @@ export const getRegistrationRequests = async (teacherId: string): Promise<Regist
     .select('*')
     .eq('teacher_id', teacherId);
   if (error) throw error;
-  return manyFromDB<RegistrationRequest>(data);
+  
+  const requests = manyFromDB<RegistrationRequest>(data);
+  
+  // Deserialize extras from payment_ref if present
+  return requests.map(req => {
+    if (req.paymentRef && req.paymentRef.includes('|EXT:')) {
+      try {
+        const match = req.paymentRef.match(/\|EXT:(.*?)\|/);
+        if (match && match[1]) {
+          const extras = JSON.parse(match[1]);
+          // Re-hydrate the request object and convert snake_case to camelCase
+          Object.assign(req, fromDB(extras));
+
+          // Clean up paymentRef text for display
+          req.paymentRef = req.paymentRef.replace(/\|EXT:.*?\|/, '').trim();
+        }
+      } catch (e) {
+        console.error('Failed to parse registration request extras', e);
+      }
+    }
+    return req;
+  });
 };
 
 export const saveRegistrationRequest = async (req: Omit<RegistrationRequest, 'id'> & { id?: string }): Promise<string> => {
   const payload = toDB({ ...req });
   
-  // Workaround: Database table 'registration_requests' is missing some columns.
-  // We serialize them into 'payment_ref' if they exist to prevent 400 Bad Request.
-  const extras = [];
-  if (req.notes && req.notes.trim()) extras.push(`ملاحظة: ${req.notes.trim()}`);
-  if (req.studentId) extras.push(`ID: ${req.studentId}`);
+  // Serialize extras into a structured string in payment_ref to prevent data loss 
+  // since these columns might be missing in the 'registration_requests' table.
+  const extraPayload: any = {};
+  const possibleExtras = ['notes', 'subject', 'sub_price', 'image_url', 'student_id', 'existing_code'];
   
-  if (extras.length > 0) {
-    const extraStr = `(${extras.join(' | ')})`;
+  possibleExtras.forEach(key => {
+    if ((payload as any)[key] !== undefined) {
+      extraPayload[key] = (payload as any)[key];
+    }
+  });
+
+  if (Object.keys(extraPayload).length > 0) {
+    const serialized = `|EXT:${JSON.stringify(extraPayload)}|`;
     payload.payment_ref = payload.payment_ref 
-      ? `${payload.payment_ref} ${extraStr}` 
-      : extraStr;
+      ? `${payload.payment_ref} ${serialized}` 
+      : serialized;
   }
 
-  // Remove fields that don't exist in the DB schema to prevent crashes
+  // Remove fields that strictly don't exist in the legacy DB schema to prevent 400 errors
   const fieldsToRemove = [
     'notes', 'teacher_code', 'teacher_name', 'student_id', 
-    'subject', 'sub_price', 'image_url'
+    'subject', 'sub_price', 'image_url', 'existing_code'
   ];
   fieldsToRemove.forEach(f => delete payload[f]);
 

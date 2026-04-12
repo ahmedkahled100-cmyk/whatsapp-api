@@ -1,14 +1,17 @@
 'use client';
 // src/app/teacher/students/page.tsx
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useTeacherStore } from '@/lib/store';
 import { showToast } from '@/lib/toast';
 import { saveStudent, deleteStudent, uploadFileToStorage, deleteRegistrationRequest, getSettings, wipeStudentInteraction } from '@/lib/db';
 import { generateCode, formatDateAr } from '@/lib/utils';
 import type { Student } from '@/types';
-import { UserPlus, Search, Trash2, Copy, Users, Phone, Upload, Loader2, FileSpreadsheet, Download, Edit, Eye, Printer, Calendar, Clock, Award, CheckCircle2, XCircle, RotateCcw } from 'lucide-react';
+import { UserPlus, Search, Trash2, Copy, Users, Phone, Upload, Loader2, FileSpreadsheet, Download, Edit, Eye, Printer, Calendar, Clock, Award, CheckCircle2, XCircle, RotateCcw, ImageIcon, X } from 'lucide-react';
 import { GlobalFileUpload } from '@/components/GlobalFileUpload';
+import { ImageModal } from '@/components/ImageModal';
+import { FinancialReports } from '@/components/FinancialReports';
 
 const EMPTY_STUDENT: Omit<Student, 'id'> = {
   name: '', code: '', email: '', phone: '', parentPhone: '',
@@ -17,10 +20,10 @@ const EMPTY_STUDENT: Omit<Student, 'id'> = {
   imageUrl: '', teacherId: ''
 };
 
-export default function StudentsPage() {
+function StudentsPageContent() {
+  const searchParams = useSearchParams();
   const { students, groups, attempts, exams, user, registrationRequests } = useTeacherStore();
   const [viewStudent, setViewStudent] = useState<Student | null>(null);
-  const [activeTab, setActiveTab] = useState<'active' | 'requests'>('active');
   const [search, setSearch] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState<Omit<Student, 'id'>>(EMPTY_STUDENT);
@@ -28,12 +31,26 @@ export default function StudentsPage() {
   const [uploadingCSV, setUploadingCSV] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [settings, setSettings] = useState<any>(null);
+  
+  // Image Modal state
+  const [selectedImg, setSelectedImg] = useState<{ src: string, alt: string } | null>(null);
 
   useEffect(() => {
     if (user?.id) {
-      getSettings(user.id).then(s => setSettings(s));
+      getSettings(user.id).then(setSettings);
     }
   }, [user?.id]);
+
+  // Handle pre-fill from iLovePDF
+  useEffect(() => {
+    const prefillPhoto = searchParams.get('prefillPhoto');
+    if (prefillPhoto) {
+      setForm(prev => ({ ...prev, imageUrl: prefillPhoto }));
+      setShowModal(true);
+      showToast('📥 تم استلام صورة الطالب من أدوات PDF');
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, [searchParams]);
 
   const handleSubTypeChange = (newType: string) => {
     let newPrice = form.subPrice || 0;
@@ -46,7 +63,9 @@ export default function StudentsPage() {
     } else if (newType === 'none') {
       newPrice = 0;
     }
-    setForm(f => ({ ...f, subType: newType as any, subPrice: newPrice }));
+    // Clear cancelReason if re-activating subscription
+    const cancelReason = newType !== 'none' ? '' : (form as any).cancelReason || '';
+    setForm(f => ({ ...f, subType: newType as any, subPrice: newPrice, cancelReason }));
   };
 
   const filtered = useMemo(() =>
@@ -69,23 +88,43 @@ export default function StudentsPage() {
     setShowModal(true);
   };
 
-  const handleSave = async () => {
+   const handleSave = async (shouldNotify = false) => {
     if (!form.name.trim()) { showToast('❗ أدخل اسم الطالب'); return; }
     if (!user) { showToast('❗ خطأ في الجلسة'); return; }
 
     const studentData = { 
       ...form, 
-      id: (form as any).id || crypto.randomUUID(),
       teacherId: user.id,
-      teacherCode: user.code || ''
+      teacherCode: user.code || '',
+      id: (form as any).id || crypto.randomUUID(),
     } as Student;
+
+    // Financial Tracking Logic
+    const isNew = !(form as any).id;
+    const oldStudent = isNew ? null : students.find(s => s.id === (form as any).id);
+    
+    let newTotal = studentData.totalPaid || 0;
+    const history = [...(studentData.paymentHistory || [])];
+    
+    // If it's a new student with a price, or an existing student with a price change/renewal
+    const subPrice = studentData.subPrice || 0;
+    if (studentData.subType !== 'none' && subPrice > 0) {
+       const hasChanged = isNew || (oldStudent && (oldStudent.subType !== studentData.subType || oldStudent.subExpiry !== studentData.subExpiry));
+       if (hasChanged) {
+          history.push({ date: Date.now(), amount: subPrice, type: studentData.subType });
+          newTotal += subPrice;
+       }
+    }
+    
+    studentData.totalPaid = newTotal;
+    studentData.paymentHistory = history;
     
     // Optimistic Update
     const previousStudents = [...students];
     if ((form as any).id) {
-      useTeacherStore.getState().setStudents(previousStudents.map(s => s.id === (form as any).id ? studentData : s));
+       useTeacherStore.getState().setStudents(previousStudents.map(s => s.id === (form as any).id ? studentData : s));
     } else {
-      useTeacherStore.getState().setStudents([...previousStudents, studentData]);
+       useTeacherStore.getState().setStudents([...previousStudents, studentData]);
     }
 
     setSaving(true);
@@ -93,6 +132,9 @@ export default function StudentsPage() {
       await saveStudent(studentData);
       setShowModal(false);
       showToast('✅ تم حفظ بيانات الطالب');
+      if (shouldNotify) {
+        handleWhatsAppReport(studentData);
+      }
     } catch (err: any) { 
       useTeacherStore.getState().setStudents(previousStudents);
       if (err.message === 'DUPLICATE_CODE_OR_PHONE') {
@@ -123,6 +165,13 @@ export default function StudentsPage() {
       createdAt: Date.now(),
       notes: ''
     };
+
+    // Financials for new approved student
+    const approvedPrice = newStudent.subPrice || 0;
+    if (newStudent.subType !== 'none' && approvedPrice > 0) {
+       newStudent.paymentHistory = [{ date: Date.now(), amount: approvedPrice, type: newStudent.subType }];
+       newStudent.totalPaid = approvedPrice;
+    }
 
     // Optimistic Updates
     const prevStudents = [...students];
@@ -227,6 +276,84 @@ export default function StudentsPage() {
     finally { setUploadingCSV(false); e.target.value = ''; }
   };
 
+  const handleWhatsAppReport = (student: Student) => {
+    if (!student.parentPhone) {
+      showToast('❗ لا يوجد رقم هاتف لولي الأمر لإرسال التقرير');
+      return;
+    }
+
+    const teacherName = user?.name || 'المعلم';
+    const totalPaid = student.totalPaid || 0;
+    const history = student.paymentHistory || [];
+
+    // Build subscription status text
+    const subTypeMap: Record<string, string> = {
+      monthly: 'شهري', yearly: 'سنوي', halfYearly: 'نصف سنوي',
+      course: 'كورس', session: 'بالحصة', none: 'ملغى', free: 'مجاني'
+    };
+    const isCancelled = student.subType === 'none';
+    const isExpired = !isCancelled && student.subExpiry != null && student.subExpiry < Date.now();
+    const subStatus = isCancelled ? '⛔ ملغى'
+      : isExpired ? '❌ منتهي'
+      : '✅ نشط';
+    const expiryStr = student.subExpiry
+      ? new Date(student.subExpiry).toLocaleDateString('ar-EG')
+      : 'مفتوح';
+
+    const lines = [
+      `📊 *تقرير الطالب - أكاديمية ${teacherName}*`,
+      ``,
+      `👤 *بيانات الطالب:*`,
+      `• الاسم: ${student.name}`,
+      `• الكود: ${student.code}`,
+      `• الصف: ${student.grade || 'غير محدد'}`,
+      ``,
+      `🏆 *التميز والتفاعل:*`,
+      `• المستوى: ${student.level || 1}`,
+      `• إجمالي النقاط: 🌟 ${student.points || 0} نقطة`,
+      ...(student.badges && student.badges.length > 0 ? [`• الأوسمة المكتسبة: 🏅 ${student.badges.length} وسام`] : []),
+      ``,
+      `📋 *حالة الاشتراك:*`,
+      `• النوع: ${subTypeMap[student.subType] || student.subType}`,
+      `• الحالة: ${subStatus}`,
+      `• تاريخ الانتهاء: ${expiryStr}`,
+      `• سعر الاشتراك: ${student.subPrice || 0} ج.م`,
+      ``,
+    ];
+
+    if (isCancelled && (student as any).cancelReason) {
+      lines.push(`📝 *سبب إلغاء الاشتراك:*`);
+      lines.push(`${(student as any).cancelReason}`);
+      lines.push(``);
+    }
+
+    lines.push(`💰 *ملخص الحساب:*`);
+    lines.push(`• إجمالي المدفوعات: ${totalPaid} ج.م`);
+    lines.push(``);
+
+    if (history.length > 0) {
+      lines.push(`📅 *سجل العمليات:*`);
+      history.slice().reverse().forEach(h => {
+        const typeMap: any = { monthly: 'شهري', yearly: 'سنوي', halfYearly: 'نصف سنوي', course: 'كورس', session: 'حصة' };
+        const date = new Date(h.date).toLocaleDateString('ar-EG');
+        lines.push(`• ${date}: ${h.amount} ج.م (${typeMap[h.type] || h.type})`);
+      });
+      lines.push(``);
+    }
+
+    lines.push(`شكراً لثقتكم بنا. 🙏`);
+
+    const msg = lines.join('\n');
+    const { cleanWhatsAppPhone } = require('@/lib/utils');
+    const cleanPhone = cleanWhatsAppPhone(student.parentPhone);
+    
+    if (cleanPhone) {
+      window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`, '_blank');
+    } else {
+      window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+    }
+  };
+
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -244,23 +371,10 @@ export default function StudentsPage() {
         </div>
       </div>
 
-      <div className="flex bg-white/5 p-1 rounded-2xl border border-white/5">
-        <button onClick={() => setActiveTab('active')} className={`flex-1 py-3 rounded-xl font-bold transition-all ${activeTab === 'active' ? 'bg-gold text-dark' : 'text-gray-400'}`}>
-          الطلاب النشطين ({students.length})
-        </button>
-        <button onClick={() => setActiveTab('requests')} className={`flex-1 py-3 rounded-xl font-bold transition-all relative ${activeTab === 'requests' ? 'bg-gold text-dark' : 'text-gray-400'}`}>
-          طلبات التسجيل ({registrationRequests.length})
-          {registrationRequests.length > 0 && activeTab !== 'requests' && (
-            <span className="absolute top-2 left-4 w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-          )}
-        </button>
-      </div>
 
-      {activeTab === 'active' ? (
-        <>
           <div className="relative">
             <Search size={15} className="absolute top-1/2 -translate-y-1/2 right-3 opacity-50" />
-            <input type="text" placeholder="ابحث بالاسم أو الكود أو الصف..." value={search} onChange={e => setSearch(e.target.value)} className="input-base has-icon pr-11 text-sm w-full" />
+            <input type="text" placeholder="ابحث بالاسم أو الكود أو الصف..." value={search} onChange={e => setSearch(e.target.value)} className="input-base has-icon-right text-sm w-full" />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -269,7 +383,7 @@ export default function StudentsPage() {
               { label: 'الفصول', value: groups.length, icon: '🏫' },
               { label: 'المحاولات', value: attempts.filter(a => a.completed).length, icon: '📝' },
             ].map((s, i) => (
-              <div key={i} className="stat-card text-center py-3">
+              <div key={i} className="stat-card hover-premium text-center py-3">
                 <div className="text-2xl mb-1">{s.icon}</div>
                 <div className="text-xl font-cairo font-black text-gold">{s.value}</div>
                 <div className="text-xs text-text-muted">{s.label}</div>
@@ -283,7 +397,7 @@ export default function StudentsPage() {
             </div>
           ) : (
             <div className="card-base overflow-hidden">
-              <div className="hidden lg:block overflow-x-auto">
+              <div className="hidden lg:block table-container">
                 <table className="w-full text-right">
                   <thead>
                     <tr className="bg-white/5 text-[11px] uppercase text-text-muted">
@@ -296,13 +410,41 @@ export default function StudentsPage() {
                   </thead>
                   <tbody className="divide-y divide-white/5">
                     {filtered.map(student => {
-                      const studentAttempts = attempts.filter(a => a.studentId === student.id && a.completed);
+                        const studentAttempts = attempts.filter(a => a.studentId === student.id && a.completed);
+                      const isCancelledByTeacher = student.subType === 'none' && !!(student as any).cancelReason;
+                      const isFreeStudent = student.subType === 'none' && !(student as any).cancelReason;
+                      const isExpired = !isCancelledByTeacher && !isFreeStudent && student.subExpiry != null && student.subExpiry < Date.now();
+                      const isActive = student.subType !== 'none' && !isExpired;
                       return (
                         <tr key={student.id} className="hover:bg-white/5 transition-colors">
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-2">
-                              {student.imageUrl ? <img src={student.imageUrl} className="w-8 h-8 rounded-full border border-white/10" alt="" /> : <div className="w-8 h-8 rounded-full bg-gold/20 flex items-center justify-center text-gold text-xs font-bold">{student.name[0]}</div>}
-                              <div className="text-sm font-medium">{student.name}</div>
+                              {student.imageUrl ? (
+                                <img 
+                                  src={student.imageUrl} 
+                                  className="w-10 h-10 rounded-full border border-white/10 object-cover cursor-pointer hover:scale-110 hover:border-gold transition-all" 
+                                  alt={student.name}
+                                  onClick={() => setSelectedImg({ src: student.imageUrl!, alt: student.name })}
+                                />
+                              ) : (
+                                <div className="w-10 h-10 rounded-full bg-gold/20 flex items-center justify-center text-gold text-xs font-bold">
+                                  {student.name[0]}
+                                </div>
+                              )}
+                              <div>
+                                <div className="text-sm font-medium">{student.name}</div>
+                                <div className="flex items-center gap-1 mt-0.5">
+                                  {isCancelledByTeacher ? (
+                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/10 text-red-400 border border-red-500/20 font-bold">⛔ ملغى</span>
+                                  ) : isFreeStudent ? (
+                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-500/10 text-gray-400 border border-white/10 font-bold">مجاني</span>
+                                  ) : isExpired ? (
+                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-500/10 text-orange-400 border border-orange-500/20 font-bold">⚠️ منتهي</span>
+                                  ) : (
+                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/10 text-green-400 border border-green-500/20 font-bold">✅ نشط</span>
+                                  )}
+                                </div>
+                              </div>
                             </div>
                           </td>
                           <td className="px-4 py-3"><code className="bg-gold/10 text-gold px-2 py-0.5 rounded text-xs">{student.code}</code></td>
@@ -310,6 +452,7 @@ export default function StudentsPage() {
                           <td className="px-4 py-3 text-sm text-text-muted">{studentAttempts.length} محاولة</td>
                           <td className="px-4 py-3">
                             <div className="flex gap-2 justify-end">
+                              <button onClick={() => handleWhatsAppReport(student)} className="text-emerald-400 hover:text-emerald-300 p-1 bg-white/5 rounded" title="إرسال تقرير واتساب"><Phone size={16} /></button>
                               <button onClick={() => handleResetInteraction(student.id, student.name)} className="text-orange-400 hover:text-orange-300 p-1 bg-white/5 rounded" title="تصفير التفاعل"><RotateCcw size={16} /></button>
                               <button onClick={() => setViewStudent(student)} className="text-green-400 hover:text-green-300 p-1 bg-white/5 rounded" title="تفاصيل الطالب"><Eye size={16} /></button>
                               <button onClick={() => openEdit(student)} className="text-blue-400 hover:text-blue-300 p-1 bg-white/5 rounded"><Edit size={16} /></button>
@@ -322,68 +465,67 @@ export default function StudentsPage() {
                   </tbody>
                 </table>
               </div>
-              <div className="lg:hidden divide-y divide-white/5">
-                {filtered.map(student => (
-                  <div key={student.id} className="p-4 flex items-center justify-between">
-                    <div>
-                      <div className="font-bold text-sm">{student.name}</div>
-                      <div className="text-[10px] text-text-muted mt-0.5">{student.grade} | {student.code}</div>
+              <div className="lg:hidden grid grid-cols-1 gap-3 p-3">
+                {filtered.map(student => {
+                  const isCancelledByTeacher = student.subType === 'none' && !!(student as any).cancelReason;
+                  const isFreeStudent = student.subType === 'none' && !(student as any).cancelReason;
+                  const isExpired = !isCancelledByTeacher && !isFreeStudent && student.subExpiry != null && student.subExpiry < Date.now();
+                  return (
+                  <div key={student.id} className="card-base p-4 flex items-center justify-between border border-white/5 hover-premium">
+                    <div className="flex items-center gap-3">
+                      {student.imageUrl ? (
+                        <img 
+                          src={student.imageUrl} 
+                          className="w-10 h-10 rounded-full border border-white/10 object-cover" 
+                          alt={student.name}
+                        />
+                      ) : (
+                        <div className="w-10 h-10 rounded-full bg-gold/20 flex items-center justify-center text-gold text-xs font-bold">
+                          {student.name[0]}
+                        </div>
+                      )}
+                      <div>
+                        <div className="font-bold text-sm">{student.name}</div>
+                        <div className="text-[10px] text-text-muted mt-0.5 flex items-center gap-1">
+                          <span>{student.grade}</span>
+                          <span>|</span>
+                          <code className="text-gold">{student.code}</code>
+                          {isCancelledByTeacher ? (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/10 text-red-400 border border-red-500/20 font-bold">⛔ ملغى</span>
+                          ) : isFreeStudent ? (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-500/10 text-gray-400 border border-white/10 font-bold">مجاني</span>
+                          ) : isExpired ? (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-500/10 text-orange-400 border border-orange-500/20 font-bold">⚠️ منتهي</span>
+                          ) : (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/10 text-green-400 border border-green-500/20 font-bold">✅ نشط</span>
+                          )}
+                        </div>
+                      </div>
                     </div>
                     <div className="flex gap-2">
-                      <button onClick={() => handleResetInteraction(student.id, student.name)} className="p-2 bg-white/5 rounded-lg text-orange-400"><RotateCcw size={14} /></button>
+                      <button onClick={() => handleWhatsAppReport(student)} className="p-2 bg-white/5 rounded-lg text-emerald-400"><Phone size={14} /></button>
                       <button onClick={() => setViewStudent(student)} className="p-2 bg-white/5 rounded-lg text-green-400"><Eye size={14} /></button>
                       <button onClick={() => openEdit(student)} className="p-2 bg-white/5 rounded-lg text-blue-400"><Edit size={14} /></button>
                       <button onClick={() => handleDelete(student.id, student.name)} className="p-2 bg-white/5 rounded-lg text-red-400"><Trash2 size={14} /></button>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
-        </>
-      ) : (
-        <div className="space-y-4">
-          {registrationRequests.length === 0 ? (
-            <div className="card-base p-12 text-center text-text-muted">📩 لا توجد طلبات جديدة</div>
-          ) : (
-            registrationRequests.map(req => (
-              <div key={req.id} className="card-base p-5 border border-white/5">
-                <div className="flex justify-between items-start mb-4">
-                  <div>
-                    <h4 className="font-bold text-lg">{req.name}</h4>
-                    <p className="text-xs text-text-muted">{req.grade} | {formatDateAr(new Date(req.createdAt).toISOString())}</p>
-                  </div>
-                  <div className="badge badge-gold">
-                    {req.subType === 'monthly' ? 'شهري' : req.subType === 'yearly' ? 'سنوي' : req.subType === 'halfYearly' ? 'نصف سنوي' : req.subType === 'course' ? 'كورس' : 'حصة'}
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm mb-4 bg-white/5 p-4 rounded-xl font-cairo">
-                   <div>هاتف الطالب: {req.phone}</div>
-                   <div>هاتف ولي الأمر: {req.parentPhone}</div>
-                   {req.paymentRef && <div className="col-span-full opacity-60">كود الدفع: {req.paymentRef}</div>}
-                </div>
-                <div className="flex gap-2">
-                  {req.receiptUrl && <button onClick={() => window.open(req.receiptUrl, '_blank')} className="btn-outline flex-1 py-2 text-xs">👁 الإيصال</button>}
-                  <button onClick={() => handleApproveRequest(req)} className="btn-gold flex-[2] py-2 text-xs">✅ قبول</button>
-                  <button onClick={() => handleRejectRequest(req.id)} className="btn-danger flex-1 py-2 text-xs">❌ رفض</button>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      )}
 
       {/* Student Profile & Print Modal */}
       {viewStudent && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 bg-black/90 backdrop-blur-sm print:p-0 print:bg-white print:block overflow-y-auto">
-          <div className="card-base w-full max-w-4xl max-h-[90vh] overflow-y-auto print:max-h-none print:shadow-none print:border-none print:bg-white print:text-black">
+        <div className="modal-overlay print:p-0 print:bg-white print:block overflow-y-auto" onClick={e => e.target === e.currentTarget && setViewStudent(null)}>
+          <div className="modal-content modal-content-xl print:max-h-none print:shadow-none print:border-none print:bg-white print:text-black">
             {/* Header / Actions */}
             <div className="sticky top-0 z-10 flex items-center justify-between p-4 bg-[#0a0f18]/90 backdrop-blur border-b border-white/5 print:hidden">
               <h3 className="font-black text-xl gold-text flex items-center gap-2"><Eye size={24} /> ملف الطالب الشامل</h3>
               <div className="flex gap-2">
-                <button onClick={() => handleResetInteraction(viewStudent.id, viewStudent.name)} className="btn-outline border-orange-500/50 text-orange-400 py-2 px-4 flex items-center gap-2"><RotateCcw size={18} /> تصفير التفاعل</button>
-                <button onClick={() => window.print()} className="btn-gold py-2 px-4 flex items-center gap-2"><Printer size={18} /> طباعة التقرير</button>
-                <button onClick={() => setViewStudent(null)} className="btn-outline py-2 px-4">إغلاق</button>
+                <button onClick={() => handleWhatsAppReport(viewStudent)} className="btn-outline border-green-500/50 text-green-400 py-2 px-4 flex items-center gap-2 print:hidden"><Phone size={18} /> تقرير واتساب لولي الأمر</button>
+                <button onClick={() => window.print()} className="btn-gold py-2 px-4 flex items-center gap-2 print:hidden"><Printer size={18} /> طباعة التقرير</button>
+                <button onClick={() => setViewStudent(null)} className="btn-outline py-2 px-4 print:hidden">إغلاق</button>
               </div>
             </div>
 
@@ -391,7 +533,12 @@ export default function StudentsPage() {
               {/* Profile Header */}
               <div className="flex flex-col sm:flex-row gap-6 items-center sm:items-start text-center sm:text-right border-b border-white/10 print:border-gray-200 pb-6">
                 {viewStudent.imageUrl ? (
-                  <img src={viewStudent.imageUrl} className="w-24 h-24 sm:w-32 sm:h-32 rounded-full border-4 border-gold shadow-lg object-cover" alt={viewStudent.name} />
+                  <img 
+                    src={viewStudent.imageUrl} 
+                    className="w-24 h-24 sm:w-32 sm:h-32 rounded-full border-4 border-gold shadow-lg object-cover cursor-pointer hover:brightness-110 active:scale-95 transition-all" 
+                    alt={viewStudent.name} 
+                    onClick={() => setSelectedImg({ src: viewStudent.imageUrl!, alt: viewStudent.name })}
+                  />
                 ) : (
                   <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-full border-4 border-gold bg-gold/10 flex items-center justify-center text-4xl font-black text-gold">
                     {viewStudent.name[0]}
@@ -496,85 +643,171 @@ export default function StudentsPage() {
       )}
 
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="card-base p-6 w-full max-w-lg animate-scale-in max-h-[90vh] overflow-y-auto">
-            <h3 className="font-bold text-lg mb-4 text-gold">{(form as any).id ? '📝 تعديل بيانات طالب' : '➕ إضافة طالب جديد'}</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
-              <div className="sm:col-span-2">
-                <label className="block text-[11px] mb-1 text-text-muted">الاسم الكامل *</label>
-                <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className="input-base text-sm w-full py-2" />
-              </div>
-              <div>
-                <label className="block text-[11px] mb-1 text-text-muted">رقم الهاتف</label>
-                <input value={form.phone || ''} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} className="input-base text-sm w-full py-2" />
-              </div>
-              <div>
-                <label className="block text-[11px] mb-1 text-text-muted">هاتف ولي الأمر</label>
-                <input value={form.parentPhone || ''} onChange={e => setForm(f => ({ ...f, parentPhone: e.target.value }))} className="input-base text-sm w-full py-2" />
-              </div>
-              <div>
-                <label className="block text-[11px] mb-1 text-text-muted">الصف الدراسي</label>
-                <input value={form.grade || ''} onChange={e => setForm(f => ({ ...f, grade: e.target.value }))} className="input-base text-sm w-full py-2" />
-              </div>
-              <div>
-                <label className="block text-[11px] mb-1 text-text-muted">الكود (تلقائي)</label>
-                <input value={form.code} onChange={e => setForm(f => ({ ...f, code: e.target.value }))} className="input-base text-sm w-full py-2 font-mono" />
-              </div>
-              <div>
-                <label className="block text-[11px] mb-1 text-text-muted">نوع الاشتراك</label>
-                <select value={form.subType} onChange={e => handleSubTypeChange(e.target.value)} className="input-base text-sm w-full h-[42px]">
-                  <option value="none">مجاني</option>
-                  <option value="monthly">شهري</option>
-                  <option value="halfYearly">نصف سنوي</option>
-                  <option value="yearly">سنوي</option>
-                  <option value="course">كورس</option>
-                  <option value="session">بالحصة</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-[11px] mb-1 text-text-muted">مبلغ الاشتراك (ج.م)</label>
-                <input type="number" value={form.subPrice || 0} onChange={e => setForm(f => ({ ...f, subPrice: Number(e.target.value) }))} className="input-base text-sm w-full py-2" />
-              </div>
-              <div>
-                <label className="block text-[11px] mb-1 text-text-muted">تاريخ الانتهاء</label>
-                <input type="date" value={form.subExpiry ? new Date(form.subExpiry).toISOString().split('T')[0] : ''} 
-                  onChange={e => setForm(f => ({ ...f, subExpiry: e.target.value ? new Date(e.target.value).getTime() : null }))} className="input-base text-sm w-full py-2" />
-              </div>
-              <div className="sm:col-span-2">
-                <label className="block text-[11px] mb-1 text-text-muted">صورة الطالب (اختياري)</label>
-                <div className="flex gap-3 items-center h-12">
-                  <div className="flex-1 h-full">
-                    <GlobalFileUpload
-                      accept="image/*"
-                      variant="compact"
-                      onChange={async e => {
-                        const file = e.target.files?.[0];
-                        if (!file) return;
-                        setUploadProgress(10);
-                        try {
-                          const url = await uploadFileToStorage(file, `students/${Date.now()}_${file.name}`, p => setUploadProgress(p));
-                          setForm(f => ({ ...f, imageUrl: url }));
-                        } catch { showToast('فشل رفع الصورة'); }
-                        finally { setUploadProgress(0); }
-                      }}
-                      isUploading={uploadProgress > 0}
-                      label={<span className="text-xs">رفع صورة</span>}
-                    />
+        <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setShowModal(false)}>
+          <div className="modal-content">
+            <div className="modal-header">
+              <h3 className="font-bold text-lg text-gold flex items-center gap-2">
+                {(form as any).id ? <Edit size={20} /> : <UserPlus size={20} />}
+                {(form as any).id ? 'تعديل بيانات طالب' : 'إضافة طالب جديد'}
+              </h3>
+              <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-white transition-colors">
+                <X size={24} />
+              </button>
+            </div>
+            
+            <div className="modal-body">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-4">
+                <div className="sm:col-span-2">
+                  <label className="block text-[11px] mb-1.5 text-text-muted font-bold uppercase tracking-wider">الاسم الكامل *</label>
+                  <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className="input-base text-sm w-full py-2.5" placeholder="أدخل اسم الطالب رباعي..." />
+                </div>
+                <div>
+                  <label className="block text-[11px] mb-1.5 text-text-muted font-bold uppercase tracking-wider">رقم الهاتف</label>
+                  <input value={form.phone || ''} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} className="input-base text-sm w-full py-2.5" placeholder="01xxxxxxxxx" />
+                </div>
+                <div>
+                  <label className="block text-[11px] mb-1.5 text-text-muted font-bold uppercase tracking-wider">هاتف ولي الأمر</label>
+                  <input value={form.parentPhone || ''} onChange={e => setForm(f => ({ ...f, parentPhone: e.target.value }))} className="input-base text-sm w-full py-2.5" placeholder="01xxxxxxxxx" />
+                </div>
+                <div>
+                  <label className="block text-[11px] mb-1.5 text-text-muted font-bold uppercase tracking-wider">الصف الدراسي</label>
+                  <input value={form.grade || ''} onChange={e => setForm(f => ({ ...f, grade: e.target.value }))} className="input-base text-sm w-full py-2.5" placeholder="مثلاً: الصف الأول الثانوي" />
+                </div>
+                <div>
+                  <label className="block text-[11px] mb-1.5 text-text-muted font-bold uppercase tracking-wider">الكود (تلقائي)</label>
+                  <input value={form.code} onChange={e => setForm(f => ({ ...f, code: e.target.value }))} className="input-base text-sm w-full py-2.5 font-mono text-gold bg-gold/5" />
+                </div>
+                <div>
+                  <label className="block text-[11px] mb-1.5 text-text-muted font-bold uppercase tracking-wider">نوع الاشتراك</label>
+                  <select value={form.subType} onChange={e => handleSubTypeChange(e.target.value)} className="input-base text-sm w-full h-[46px]">
+                    <option value="none">مجاني</option>
+                    <option value="monthly">شهري</option>
+                    <option value="halfYearly">نصف سنوي</option>
+                    <option value="yearly">سنوي</option>
+                    <option value="course">كورس</option>
+                    <option value="session">بالحصة</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[11px] mb-1.5 text-text-muted font-bold uppercase tracking-wider">مبلغ الاشتراك (ج.م)</label>
+                  <input type="number" value={form.subPrice || 0} onChange={e => setForm(f => ({ ...f, subPrice: Number(e.target.value) }))} className="input-base text-sm w-full py-2.5" />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="block text-[11px] mb-1.5 text-text-muted font-bold uppercase tracking-wider">تاريخ الانتهاء <span className="text-text-muted/50 normal-case font-normal">(سينتهي عند نهاية هذا اليوم)</span></label>
+                  <input
+                    type="date"
+                    value={form.subExpiry ? (() => { const d = new Date(form.subExpiry); const y = d.getFullYear(); const m = String(d.getMonth()+1).padStart(2,'0'); const day = String(d.getDate()).padStart(2,'0'); return `${y}-${m}-${day}`; })() : ''}
+                    onChange={e => {
+                      if (!e.target.value) { setForm(f => ({ ...f, subExpiry: null })); return; }
+                      // Set to end of the selected day (23:59:59.999) in local timezone
+                      const [y, m, d] = e.target.value.split('-').map(Number);
+                      const endOfDay = new Date(y, m - 1, d, 23, 59, 59, 999);
+                      setForm(f => ({ ...f, subExpiry: endOfDay.getTime() }));
+                    }}
+                    className="input-base text-sm w-full py-2.5"
+                  />
+                  {form.subExpiry && (
+                    <p className="text-[11px] text-text-muted mt-1.5 flex items-center gap-1">
+                      <Clock size={11} />
+                      ينتهي: {new Date(form.subExpiry).toLocaleString('ar-EG', { dateStyle: 'medium', timeStyle: 'short' })}
+                    </p>
+                  )}
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="block text-[11px] mb-1.5 text-text-muted font-bold uppercase tracking-wider">صورة الطالب (اختياري)</label>
+                  <div className="flex gap-4 items-center p-3 bg-white/5 rounded-xl border border-white/5">
+                    <div className="flex-1">
+                      <GlobalFileUpload
+                        accept="image/*"
+                        variant="compact"
+                        needCrop={true}
+                        circularCrop={true}
+                        cropAspect={1}
+                        onChange={async e => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          setUploadProgress(10);
+                          try {
+                            const url = await uploadFileToStorage(file, `students/${Date.now()}_${file.name}`, p => setUploadProgress(p));
+                            setForm(f => ({ ...f, imageUrl: url }));
+                          } catch { showToast('فشل رفع الصورة'); }
+                          finally { setUploadProgress(0); }
+                        }}
+                        isUploading={uploadProgress > 0}
+                        label={<div className="flex items-center gap-2"><Upload size={14} /> رفع صورة</div>}
+                      />
+                    </div>
+                    {form.imageUrl ? (
+                      <div className="relative group">
+                        <img src={form.imageUrl} className="w-14 h-14 rounded-full object-cover border-2 border-gold shadow-lg" alt="" />
+                        <button onClick={() => setForm(f => ({ ...f, imageUrl: '' }))} className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white scale-0 group-hover:scale-100 transition-transform">
+                          <X size={12} />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="w-14 h-14 rounded-full bg-white/5 border border-dashed border-white/20 flex items-center justify-center text-text-muted">
+                        <ImageIcon size={24} />
+                      </div>
+                    )}
                   </div>
-                  {form.imageUrl && <img src={form.imageUrl} className="w-10 h-10 rounded-full object-cover" alt="" />}
+                </div>
+                {/* Cancel Reason — only shown when subType is 'none' */}
+                {form.subType === 'none' && (
+                  <div className="sm:col-span-2">
+                    <label className="block text-[11px] mb-1.5 text-text-muted font-bold uppercase tracking-wider flex items-center gap-1">
+                      <XCircle size={12} className="text-red-400" />
+                      سبب إلغاء الاشتراك <span className="text-red-400">(سيُعرض للطالب)</span>
+                    </label>
+                    <textarea
+                      value={(form as any).cancelReason || ''}
+                      onChange={e => setForm(f => ({ ...f, cancelReason: e.target.value } as any))}
+                      rows={2}
+                      className="input-base text-sm resize-none py-3 border-red-500/20 focus:border-red-500/40"
+                      placeholder="مثال: عدم الانتظام في الحضور، عدم سداد الاشتراك..."
+                    />
+                    <p className="text-[11px] text-red-400/70 mt-1">هذا السبب سيظهر للطالب عند محاولة الدخول للمنصة ويُرسل في رسالة الواتساب.</p>
+                  </div>
+                )}
+                <div className="sm:col-span-2">
+                  <label className="block text-[11px] mb-1.5 text-text-muted font-bold uppercase tracking-wider">ملاحظات إضافية</label>
+                  <textarea 
+                    value={form.notes || ''} 
+                    onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} 
+                    rows={3} 
+                    className="input-base text-sm resize-none py-3" 
+                    placeholder="أي ملاحظات تخص الطالب (ستكون مخفية عن الطالب)..."
+                  />
                 </div>
               </div>
-              <div className="sm:col-span-2">
-                <label className="block text-[11px] mb-1 text-text-muted">ملاحظات</label>
-                <textarea value={form.notes || ''} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} rows={2} className="input-base text-sm resize-none py-2" />
-              </div>
             </div>
-            <div className="flex gap-2 mt-6">
-              <button onClick={() => setShowModal(false)} className="btn-outline flex-1">إلغاء</button>
-              <button onClick={handleSave} disabled={saving} className="btn-gold flex-1 justify-center">{saving ? '⏳ جاري الحفظ...' : '✅ حفظ الطالب'}</button>
+
+            <div className="modal-footer gap-2">
+              <button onClick={() => setShowModal(false)} className="btn-outline flex-1 py-3">إلغاء</button>
+              {form.subType === 'none' && (
+                <button 
+                  onClick={() => handleSave(true)} 
+                  disabled={saving} 
+                  className="btn-gold flex-[2] justify-center py-3 shadow-xl bg-emerald-600 hover:bg-emerald-500 border-emerald-500/50"
+                  title="حفظ وإرسال سبب الإلغاء عبر واتساب"
+                >
+                  {saving ? <Loader2 size={18} className="animate-spin ml-2" /> : <><Phone size={14} className="ml-2" /> حفظ وإبلاغ</>}
+                </button>
+              )}
+              <button onClick={() => handleSave(false)} disabled={saving} className="btn-gold flex-[2] justify-center py-3 shadow-xl">
+                {saving ? <><Loader2 size={18} className="animate-spin ml-2" /> جاري الحفظ...</> : '✅ حفظ البيانات'}
+              </button>
             </div>
           </div>
         </div>
+      )}
+
+      {/* Image Modal overlay */}
+      {selectedImg && (
+        <ImageModal 
+          src={selectedImg.src} 
+          alt={selectedImg.alt} 
+          onClose={() => setSelectedImg(null)} 
+        />
       )}
 
       <style jsx global>{`
@@ -595,5 +828,13 @@ export default function StudentsPage() {
         }
       `}</style>
     </div>
+  );
+}
+
+export default function StudentsPage() {
+  return (
+    <Suspense fallback={<div className="p-10 text-center opacity-50 font-cairo">جاري تحميل إدارة الطلاب...</div>}>
+      <StudentsPageContent />
+    </Suspense>
   );
 }

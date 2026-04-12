@@ -2,7 +2,7 @@
 // src/components/SubscriptionExpiredOverlay.tsx
 
 import { useState } from 'react';
-import { Lock, Phone, RefreshCw, LogOut, Calendar, CreditCard, User, BookOpen } from 'lucide-react';
+import { Lock, Phone, RefreshCw, LogOut, Calendar, CreditCard, User, BookOpen, AlertCircle, Loader2 } from 'lucide-react';
 import type { Student, TeacherUser, Settings } from '@/types';
 import { RenewalRequestModal } from './RenewalRequestModal';
 import { cleanWhatsAppPhone } from '@/lib/utils';
@@ -10,32 +10,40 @@ import { cleanWhatsAppPhone } from '@/lib/utils';
 // ============================================================
 // Helper: Student WhatsApp message builder
 // ============================================================
-function buildStudentWhatsAppMessage(student: Student, teacherInfo: TeacherUser | null): string {
+function buildStudentWhatsAppMessage(student: Student, teacherInfo: TeacherUser | null, isCancelled?: boolean): string {
   const subTypeMap: Record<string, string> = {
     monthly: 'شهري', halfYearly: 'نصف سنوي', yearly: 'سنوي',
-    course: 'كورس كامل', session: 'بالحصة', none: 'غير مشترك',
+    course: 'كورس كامل', session: 'بالحصة', none: 'ملغى',
   };
   const expiry = student.subExpiry ? new Date(student.subExpiry).toLocaleDateString('ar-EG') : 'غير محدد';
 
-  return [
-    `📚 *طلب تواصل من طالب - منصة ${teacherInfo?.name || 'AN Academy'}*`,
+  const lines = [
+    `🎓 *تواصل بشأن اشتراك منصة ${teacherInfo?.name || 'AN Academy'}*`,
     ``,
-    `👤 *بيانات الطالب:*`,
-    `• الاسم: ${student.name}`,
-    `• كود الطالب: ${student.code}`,
-    `• الهاتف: ${student.phone || 'غير محدد'}`,
-    `• هاتف ولي الأمر: ${student.parentPhone || 'غير محدد'}`,
-    `• الصف الدراسي: ${student.grade || 'غير محدد'}`,
+    `📝 *بيانات الطالب:* ${student.name}`,
+    `🆔 *كود الطالب:* ${student.code}`,
+    `📱 *الهاتف:* ${student.phone || '—'}`,
     ``,
-    `📋 *بيانات الاشتراك:*`,
-    `• نوع الاشتراك: ${subTypeMap[student.subType] || student.subType}`,
-    `• تاريخ انتهاء الاشتراك: ${expiry}`,
-    `• قيمة الاشتراك: ${student.subPrice || 0} ج.م`,
+    `📋 *حالة الاشتراك:*`,
+    `• النوع: ${subTypeMap[student.subType] || student.subType}`,
+    `• الصلاحية حتى: ${expiry}`,
     ``,
-    `⚠️ *السبب:* انتهاء الاشتراك وعدم القدرة على الدخول للمنصة`,
-    ``,
-    `يرجى التواصل لتجديد الاشتراك. شكراً 🙏`,
-  ].join('\n');
+  ];
+
+  if (isCancelled) {
+    lines.push(`🚫 *تنبيه:* تم إيقاف الاشتراك من قِبل المعلم.`);
+    if (student.cancelReason) {
+      lines.push(`💬 *السبب المذكور:* ${student.cancelReason}`);
+    }
+    lines.push(``);
+    lines.push(`أود الاستفسار عن كيفية استعادة الوصول للمنصة. شكراً لك.`);
+  } else {
+    lines.push(`⚠️ *تنبيه:* انتهت صلاحية الاشتراك الحالي.`);
+    lines.push(``);
+    lines.push(`أود تجديد اشتراكي لمتابعة الدروس والاختبارات. شكراً لك.`);
+  }
+
+  return lines.join('\n');
 }
 
 // ============================================================
@@ -53,17 +61,17 @@ function buildTeacherWhatsAppMessage(teacher: TeacherUser, adminInfo: TeacherUse
     `👨‍🏫 *بيانات المعلم:*`,
     `• الاسم: ${teacher.name}`,
     `• اسم المستخدم: @${teacher.username}`,
-    `• الهاتف: ${teacher.phone || 'غير محدد'}`,
-    `• المادة الدراسية: ${teacher.subject || 'غير محدد'}`,
+    `• الكود: ${teacher.code || '—'}`,
+    `• المادة: ${teacher.subject || '—'}`,
     ``,
     `📋 *بيانات الاشتراك:*`,
     `• نوع الاشتراك: ${subTypeMap[teacher.subType || 'free'] || teacher.subType}`,
-    `• تاريخ انتهاء الاشتراك: ${expiry}`,
-    `• قيمة الاشتراك: ${teacher.subPrice || 0} ج.م`,
+    `• تاريخ الانتهاء: ${expiry}`,
+    `• قيمة التجديد: ${teacher.subPrice || 0} ج.م`,
     ``,
-    `⚠️ *السبب:* انتهاء اشتراك المنصة وعدم القدرة على الدخول`,
+    `⚠️ *السبب:* انتهى اشتراك المنصة الخاص بي وأود تجديد الوصول.`,
     ``,
-    `يرجى التواصل لتجديد الاشتراك. شكراً 🙏`,
+    `يرجى التواصل لتفعيل الحساب. شكراً 🙏`,
   ].join('\n');
 }
 
@@ -76,6 +84,7 @@ interface StudentOverlayProps {
   student: Student;
   teacherInfo: TeacherUser | null;
   settings: Settings | null;
+  isCancelled?: boolean;
   hasMultipleAcademies?: boolean;
   onSwitchAcademy?: () => void;
   onLogout: () => void;
@@ -112,10 +121,10 @@ export function SubscriptionExpiredOverlay(props: SubscriptionExpiredOverlayProp
     let msg = '';
 
     if (isStudent) {
-      const { student, teacherInfo, settings } = props as StudentOverlayProps;
+      const { student, teacherInfo, settings, isCancelled } = props as StudentOverlayProps;
       // Prioritize settings.whatsappNumber (teacher's support number), then teacher.phone
       phone = settings?.whatsappNumber || teacherInfo?.phone || '';
-      msg = buildStudentWhatsAppMessage(student, teacherInfo);
+      msg = buildStudentWhatsAppMessage(student, teacherInfo, isCancelled);
     } else {
       const { teacher, adminInfo } = props as TeacherOverlayProps;
       // Teachers contact the platform super_admin
@@ -248,160 +257,162 @@ export function SubscriptionExpiredOverlay(props: SubscriptionExpiredOverlayProp
   const studentInfo = isStudent ? (props as StudentOverlayProps).student : null;
   const teacherUser = !isStudent ? (props as TeacherOverlayProps).teacher : null;
 
+  // ---- Derived state ----
+  const isCancelled = isStudent ? !!(props as StudentOverlayProps).isCancelled : false;
+  const cancelReason = isStudent ? (props as StudentOverlayProps).student?.cancelReason : undefined;
+
   return (
     <div
-      className="fixed inset-0 z-[150] flex items-center justify-center p-4"
-      style={{ background: 'linear-gradient(135deg, #070910 0%, #0d1117 50%, #080c12 100%)' }}
+      className="fixed inset-0 z-[150] flex items-center justify-center p-4 sm:p-6"
+      style={{ 
+        background: 'radial-gradient(circle at 50% 50%, #0d121f 0%, #070910 100%)' 
+      }}
       dir="rtl"
     >
-      {/* Decorative background glow */}
+      {/* Dynamic Background Glows */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-1/3 right-1/3 w-96 h-96 rounded-full opacity-[0.04]"
-          style={{ background: 'radial-gradient(circle, #ef4444, transparent)', filter: 'blur(80px)' }} />
-        <div className="absolute bottom-1/3 left-1/3 w-80 h-80 rounded-full opacity-[0.04]"
-          style={{ background: 'radial-gradient(circle, #f59e0b, transparent)', filter: 'blur(80px)' }} />
+        <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] rounded-full opacity-[0.03] animate-pulse"
+          style={{ background: isCancelled ? '#f59e0b' : '#ef4444', filter: 'blur(120px)' }} />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] rounded-full opacity-[0.03] animate-pulse"
+          style={{ background: 'var(--gold)', filter: 'blur(120px)', animationDelay: '1s' }} />
       </div>
 
-      <div className="relative w-full max-w-md animate-scale-in space-y-4">
-
-        {/* Lock icon + status */}
-        <div className="text-center space-y-4">
-          <div className="relative inline-block">
-            <div className="w-24 h-24 rounded-3xl bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto">
-              <Lock size={40} className="text-red-400" />
+      <div className="relative w-full max-w-sm sm:max-w-md animate-scale-in">
+        <div className="card-base p-6 sm:p-8 space-y-6 border-white/10 shadow-2xl shadow-black/80 backdrop-blur-xl relative overflow-hidden group">
+          {/* Top Status Bar */}
+          <div className={`absolute top-0 left-0 w-full h-1.5 ${isCancelled ? 'bg-orange-500' : 'bg-red-500'} opacity-80`} />
+          
+          <div className="text-center space-y-4">
+            <div className="relative inline-block group">
+              <div className={`w-20 h-20 sm:w-24 sm:h-24 rounded-[2rem] flex items-center justify-center mx-auto border transition-transform duration-500 group-hover:rotate-6 ${
+                isCancelled 
+                  ? 'bg-orange-500/10 border-orange-500/20'
+                  : 'bg-red-500/10 border-red-500/20'
+              }`}>
+                <Lock size={40} className={isCancelled ? 'text-orange-400' : 'text-red-400'} />
+              </div>
+              <div className={`absolute -top-1 -right-1 w-8 h-8 rounded-full flex items-center justify-center border-2 border-[#12121f] ${
+                isCancelled ? 'bg-orange-500' : 'bg-red-500'
+              } animate-bounce-slow`}>
+                <span className="text-white text-xs font-black">!</span>
+              </div>
             </div>
-            <div className="absolute -top-2 -right-2 w-7 h-7 rounded-full bg-red-500 flex items-center justify-center">
-              <span className="text-white text-sm font-black">!</span>
+
+            <div className="space-y-2">
+              <h1 className="text-xl sm:text-2xl font-black text-white font-cairo leading-tight">
+                {isCancelled 
+                  ? (isStudent ? 'عذراً، اشتراكك غير مفعل' : 'تنبيه: حساب المنصة متوقف')
+                  : (isStudent ? 'انتهت صلاحية اشتراكك' : 'تنبيه: اشتراك المنصة منتهي')
+                }
+              </h1>
+              <p className="text-gray-400 text-xs sm:text-sm leading-relaxed px-2">
+                {isCancelled
+                  ? `أهلاً ${name}، نأسف لإبلاغك بأن اشتراكك متوقف حالياً بناءً على تعليمات المعلم.`
+                  : isStudent
+                    ? `أهلاً ${name}، يؤسفنا إبلاغك بانتهاء فترة اشتراكك الحالية بالمنصة.`
+                    : `أهلاً أستاذ ${name}، نود تذكيرك بانتهاء اشتراك المنصة الخاص بك.`}
+              </p>
             </div>
           </div>
 
-          <div>
-            <h1 className="text-2xl font-cairo font-black text-white mb-2">
-              {isStudent ? 'انتهى اشتراكك في المنصة' : 'انتهى اشتراك منصتك'}
-            </h1>
-            <p className="text-gray-400 text-sm leading-relaxed">
-              {isStudent
-                ? `عزيزي الطالب ${name}، انتهت صلاحية اشتراكك ولا يمكنك الوصول للمنصة حتى يتم تجديد الاشتراك.`
-                : `عزيزي الأستاذ ${name}، انتهت صلاحية اشتراك منصتك ولا يمكنك الوصول حتى يتم التجديد.`}
-            </p>
-          </div>
-        </div>
-
-        {/* Expiry Status Card */}
-        <div className="card-base p-4 border border-red-500/20 bg-red-500/5 space-y-3">
-          <div className="flex items-center gap-2 mb-1">
-            <Calendar size={14} className="text-red-400" />
-            <span className="text-red-400 font-bold text-xs uppercase tracking-wider">بيانات الاشتراك المنتهي</span>
-          </div>
-
-          {studentInfo && (
-            <div className="space-y-2 text-sm">
-              {[
-                ['الاسم', studentInfo.name, User],
-                ['كود الطالب', studentInfo.code, BookOpen],
-                ['تاريخ الانتهاء', expiryDate || '—', Calendar],
-                ['منذ', daysSinceExpiry ? `${daysSinceExpiry} يوم` : '—', Calendar],
-              ].map(([label, value, Icon]) => (
-                <div key={label as string} className="flex justify-between items-center">
-                  <span className="text-gray-500 flex items-center gap-1.5">
-                    {/* @ts-ignore */}
-                    <Icon size={12} className="opacity-60" />
-                    {label}
-                  </span>
-                  <span className="text-gray-200 font-bold font-mono">{value as string}</span>
-                </div>
-              ))}
+          {/* Cancellation Info Section */}
+          {isCancelled && (
+            <div className="p-4 rounded-2xl bg-orange-500/5 border border-orange-500/10 space-y-2 animate-fade-in">
+              <div className="flex items-center gap-2 text-orange-400 text-[10px] font-bold uppercase tracking-widest">
+                <AlertCircle size={14} /> سبب الإيقاف
+              </div>
+              <p className="text-sm text-gray-200 leading-relaxed font-bold bg-black/20 p-3 rounded-xl border border-white/5">
+                {cancelReason || 'يرجى التواصل مع المعلم لمعرفة تفاصيل إيقاف الحساب.'}
+              </p>
             </div>
           )}
 
-          {teacherUser && (
-            <div className="space-y-2 text-sm">
-              {[
-                ['المعلم', teacherUser.name],
-                ['اسم المستخدم', `@${teacherUser.username}`],
-                ['تاريخ الانتهاء', expiryDate || '—'],
-                ['منذ', daysSinceExpiry ? `${daysSinceExpiry} يوم` : '—'],
-              ].map(([label, value]) => (
-                <div key={label} className="flex justify-between items-center">
-                  <span className="text-gray-500">{label}</span>
-                  <span className="text-gray-200 font-bold">{value}</span>
+          {/* Details Grid (Teacher or Student) */}
+          {!isCancelled && (
+            <div className="grid grid-cols-2 gap-3 pb-2">
+              <div className="p-3 rounded-2xl bg-white/5 border border-white/5 text-center">
+                <div className="text-[10px] text-gray-500 mb-1">الاسم</div>
+                <div className="text-xs font-bold text-white truncate">
+                  {isStudent ? studentInfo?.name : teacherUser?.name}
                 </div>
-              ))}
+              </div>
+              <div className="p-3 rounded-2xl bg-white/5 border border-white/5 text-center">
+                <div className="text-[10px] text-gray-500 mb-1">الكود / الكود</div>
+                <div className="text-xs font-black text-gold font-mono tracking-wider">
+                  {isStudent ? studentInfo?.code : (teacherUser?.code || teacherUser?.username?.slice(0, 8))}
+                </div>
+              </div>
+              <div className="p-3 rounded-2xl bg-white/5 border border-white/5 text-center col-span-2">
+                <div className="text-[10px] text-gray-500 mb-1 flex items-center justify-center gap-1">
+                  <Calendar size={10} /> تاريخ الانتهاء
+                </div>
+                <div className="text-xs font-bold text-red-400">{expiryDate || 'منتهي'}</div>
+              </div>
             </div>
           )}
-        </div>
 
-        {/* Action Buttons */}
-        {renewalSent ? (
-          <div className="card-base p-5 border border-green-500/20 bg-green-500/5 text-center space-y-2">
-            <div className="text-4xl">✅</div>
-            <h3 className="font-bold text-green-400">تم إرسال طلب التجديد!</h3>
-            <p className="text-gray-400 text-sm">
-              {isStudent
-                ? 'انتظر موافقة المعلم على طلب التجديد. سيتم تفعيل حسابك قريباً.'
-                : 'انتظر موافقة الإدارة على طلب التجديد. سيتم تفعيل حسابك قريباً.'}
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {/* Renew Button */}
-            <button
-              onClick={() => setShowRenewalModal(true)}
-              className="w-full flex items-center justify-center gap-3 py-4 rounded-2xl font-cairo font-black text-base transition-all active:scale-[0.98]"
-              style={{
-                background: 'linear-gradient(135deg, var(--gold), #e8a000)',
-                color: '#000',
-                boxShadow: '0 8px 30px rgba(245,197,24,0.3)',
-              }}
-            >
-              <RefreshCw size={20} />
-              🔄 تجديد الاشتراك الآن
-            </button>
-
-            {/* WhatsApp Contact Button */}
-            <button
-              onClick={handleContactWhatsApp}
-              disabled={isContactLoading}
-              className={`w-full flex items-center justify-center gap-3 py-3.5 rounded-2xl font-bold text-sm transition-all active:scale-[0.98] border ${
-                isContactLoading 
-                  ? 'bg-gray-500/10 border-white/5 text-gray-500 cursor-not-allowed' 
-                  : 'bg-green-600/20 border-green-500/30 text-green-400 hover:bg-green-600/30'
-              }`}
-            >
-              {isContactLoading ? (
-                <>جاري تحميل بيانات التواصل...</>
-              ) : (
-                <>
-                  <Phone size={18} />
-                  {isStudent ? '📲 تواصل مع المعلم عبر واتساب' : '📲 تواصل مع الإدارة عبر واتساب'}
-                </>
+          {/* Action Area */}
+          {renewalSent ? (
+            <div className="p-6 text-center space-y-3 bg-emerald-500/5 border border-emerald-500/10 rounded-3xl animate-scale-in">
+              <div className="w-12 h-12 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto text-emerald-400">
+                <RefreshCw size={24} className="animate-spin-slow" />
+              </div>
+              <h3 className="font-bold text-emerald-400">طلبك قيد المراجعة</h3>
+              <p className="text-[11px] text-gray-400">سيتم تفعيل حسابك فور مراجعة بيانات الدفع من قِبل الإدارة.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {!isCancelled && (
+                <button
+                  onClick={() => setShowRenewalModal(true)}
+                  className="w-full flex items-center justify-center gap-3 py-4 rounded-2xl font-black text-sm transition-all active:scale-[0.98] premium-gold-btn"
+                >
+                  <RefreshCw size={18} /> تجديد الاشتراك الآن
+                </button>
               )}
-            </button>
 
-            {/* Switch Academy Button */}
-            {isStudent && (props as StudentOverlayProps).hasMultipleAcademies && (
               <button
-                onClick={(props as StudentOverlayProps).onSwitchAcademy}
-                className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl font-bold text-sm bg-white/5 border border-white/10 text-white hover:bg-white/10 transition-colors"
+                onClick={handleContactWhatsApp}
+                disabled={isContactLoading}
+                className={`w-full flex items-center justify-center gap-3 py-3.5 rounded-2xl font-bold text-xs transition-all active:scale-[0.98] border ${
+                  isContactLoading 
+                    ? 'bg-gray-500/10 border-white/5 text-gray-500' 
+                    : 'bg-[#25D366]/10 border-[#25D366]/20 text-[#25D366] hover:bg-[#25D366]/20 shadow-lg shadow-[#25D366]/5'
+                }`}
               >
-                <RefreshCw size={16} />
-                العودة لاختيار الأكاديمية (معلم آخر)
+                {isContactLoading ? (
+                  <Loader2 className="animate-spin" size={16} />
+                ) : (
+                  <>
+                    <Phone size={16} />
+                    {isCancelled 
+                      ? 'تواصل مع المعلم للاستفسار'
+                      : isStudent ? 'تواصل مع المعلم عبر واتساب' : 'تواصل مع الدعم الفني'}
+                  </>
+                )}
               </button>
-            )}
 
-            {/* Logout */}
-            <button
-              onClick={props.onLogout}
-              className="w-full flex items-center justify-center gap-2 py-2.5 text-sm text-gray-500 hover:text-gray-300 transition-colors"
-            >
-              <LogOut size={14} />
-              تسجيل الخروج
-            </button>
-          </div>
-        )}
+              <div className="flex gap-2 pt-2">
+                {isStudent && (props as StudentOverlayProps).hasMultipleAcademies && (
+                  <button
+                    onClick={(props as StudentOverlayProps).onSwitchAcademy}
+                    className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl font-bold text-[10px] bg-white/5 border border-white/5 text-gray-300 hover:bg-white/10 transition-colors"
+                  >
+                    تبديل الأكاديمية
+                  </button>
+                )}
+                <button
+                  onClick={props.onLogout}
+                  className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl font-bold text-[10px] bg-red-500/5 border border-red-500/10 text-red-400 hover:bg-red-500/10 transition-colors"
+                >
+                  بريد الخروج
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Renewal Modal */}
       {showRenewalModal && (
         <RenewalRequestModal
           settings={isStudent ? (props as StudentOverlayProps).settings : null}
@@ -411,6 +422,24 @@ export function SubscriptionExpiredOverlay(props: SubscriptionExpiredOverlayProp
           onSubmit={handleRenewalSubmit}
         />
       )}
+
+      <style jsx>{`
+        .premium-gold-btn {
+          background: linear-gradient(135deg, #f5c518 0%, #e8a000 100%);
+          color: #000;
+          box-shadow: 0 10px 25px -5px rgba(245, 197, 24, 0.4);
+        }
+        .animate-bounce-slow {
+          animation: bounce 3s infinite;
+        }
+        .animate-spin-slow {
+          animation: spin 4s linear infinite;
+        }
+        @keyframes bounce {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-4px); }
+        }
+      `}</style>
     </div>
   );
 }

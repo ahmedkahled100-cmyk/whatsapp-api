@@ -1,8 +1,8 @@
 'use client';
 // src/app/teacher/exams/create/page.tsx
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useTeacherStore } from '@/lib/store';
 import { saveExam, uploadFileToStorage, dispatchNotification } from '@/lib/db';
 import { showToast } from '@/lib/toast';
@@ -11,12 +11,12 @@ import type { Question, Exam } from '@/types';
 import { PlusCircle, Trash2, Save, GripVertical, ChevronDown, ChevronUp, Image as ImageIcon, FileText, Upload, X, Loader2 } from 'lucide-react';
 import { GlobalFileUpload } from '@/components/GlobalFileUpload';
 
-import { useEffect } from 'react';
 
 type QForm = Question & { expanded?: boolean };
 
-export default function CreateExamPage() {
+function CreateExamPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user, groups, tempExamQuestions, setTempExamQuestions } = useTeacherStore();
   const [saving, setSaving] = useState(false);
 
@@ -45,11 +45,24 @@ export default function CreateExamPage() {
   // Load temp questions if any
   useEffect(() => {
     if (tempExamQuestions && tempExamQuestions.length > 0) {
-      setQuestions(tempExamQuestions.map((q) => ({ ...q, expanded: true })));
-      // Clear them from store after loading so they don't persist on subsequent visits
-      setTempExamQuestions(null);
+      setQuestions(tempExamQuestions.map(q => ({ ...q, expanded: true })));
+      // Clear after load
+      setTempExamQuestions([]);
     }
   }, [tempExamQuestions, setTempExamQuestions]);
+
+  // Handle pre-fill from iLovePDF
+  useEffect(() => {
+    const prefillUrl = searchParams.get('prefillUrl');
+    const prefillName = searchParams.get('prefillName');
+
+    if (prefillUrl) {
+      setExamPdfUrl(prefillUrl);
+      if (prefillName) setTitle(prefillName);
+      showToast('📥 تم استلام الملف المرجعي للاختبار');
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, [searchParams]);
 
   const addMCQ = () => {
     setQuestions(prev => [...prev, {
@@ -538,5 +551,13 @@ export default function CreateExamPage() {
         </button>
       </div>
     </div>
+  );
+}
+
+export default function CreateExamPage() {
+  return (
+    <Suspense fallback={<div className="p-10 text-center opacity-50 font-cairo">جاري تحميل منشئ الاختبارات...</div>}>
+      <CreateExamPageContent />
+    </Suspense>
   );
 }

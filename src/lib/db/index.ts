@@ -7,7 +7,7 @@ export {
   deleteTeacher, subscribeToTeachers, subscribeToTeacherProfile 
 } from './supabase/teachers';
 
-export { getSettings, saveSettings } from './supabase/settings';
+export { getSettings, saveSettings, subscribeToSettings } from './supabase/settings';
 
 export { 
   getExams, getPublishedExams, getExam, saveExam, deleteExam, 
@@ -18,8 +18,9 @@ export {
 
 export { 
   getStudents, getAllStudents, getStudentByCode, getStudentByParentPhone, 
-  getEnrollmentsByParentPhone, getEnrollmentsByPhone, saveStudent, 
-  deleteStudent, subscribeToStudents, subscribeToAllStudents, getGroups, 
+  getEnrollmentsByParentPhone, getEnrollmentsByPhone, getStudentByPhoneAnywhere,
+  getRegistrationRequestsByPhone, saveStudent, deleteStudent, 
+  subscribeToStudents, subscribeToAllStudents, subscribeToStudent, getGroups, 
   saveGroup, deleteGroup, subscribeToGroups, getRegistrationRequests, 
   saveRegistrationRequest, deleteRegistrationRequest, subscribeToRegistrationRequests 
 } from './supabase/students';

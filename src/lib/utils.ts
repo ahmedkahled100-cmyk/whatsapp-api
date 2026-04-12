@@ -147,3 +147,23 @@ export function cleanWhatsAppPhone(phone: string | undefined | null): string {
 
   return digits;
 }
+
+/**
+ * Standardize phone numbers to 11-digit Egypt format (01xxxxxxxxx).
+ * This ensures that students are uniquely identified regardless of how their number was typed.
+ */
+export function normalizePhone(phone: string | undefined | null): string {
+  if (!phone) return '';
+  // Extract only digits
+  const d = String(phone).replace(/\D/g, '');
+  if (!d) return '';
+
+  // 12 digits starting with 20: 201012345678 -> 01012345678
+  if (d.length === 12 && d.startsWith('20')) return '0' + d.slice(2);
+  // 10 digits starting with 1: 1012345678 -> 01012345678
+  if (d.length === 10 && d.startsWith('1')) return '0' + d;
+  // 11 digits starting with 0: 01012345678 (Standard)
+  if (d.length === 11 && d.startsWith('0')) return d;
+
+  return d;
+}

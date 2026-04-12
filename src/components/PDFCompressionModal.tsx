@@ -165,14 +165,14 @@ export function PDFCompressionModal({ file, showSelection = false, onClose, onCo
   };
 
   return (
-    <div className="fixed inset-0 z-[10000] bg-black/60 backdrop-blur-2xl flex items-center justify-center p-4 animate-fade-in" dir="rtl">
+    <div className="modal-overlay !z-[10000] !bg-black/60 !p-4" dir="rtl" onClick={onCancel}>
       <style jsx global>{`
         .custom-scrollbar::-webkit-scrollbar { width: 4px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,191,0,0.1); border-radius: 10px; }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,191,0,0.2); }
       `}</style>
-      <div className="bg-[#11111a]/95 border border-white/10 rounded-[32px] max-w-md w-full overflow-hidden shadow-[0_40px_100px_rgba(0,0,0,0.5)] backdrop-saturate-150 flex flex-col max-h-[90vh]">
+      <div className="modal-content modal-content-sm !bg-[#11111a]/95 rounded-[32px] !p-0 flex flex-col" onClick={e => e.stopPropagation()}>
         <div className="absolute inset-0 bg-gradient-to-br from-gold/5 via-transparent to-accent/5 pointer-events-none" />
         
         {/* iLovePDF Style Header */}

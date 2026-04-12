@@ -278,8 +278,8 @@ export default function GamesPage() {
 
       {/* Create Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
-          <div className="card-base w-full max-w-4xl max-h-[90vh] overflow-y-auto p-0 border-gold/20 flex flex-col">
+        <div className="modal-overlay" onClick={() => setShowCreateModal(false)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()}>
              <div className="p-6 border-b border-white/5 flex items-center justify-between sticky top-0 bg-dark z-10">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-gold/10 flex items-center justify-center text-gold">
@@ -410,8 +410,8 @@ export default function GamesPage() {
 
       {/* Results Modal */}
       {showResultsModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
-          <div className="card-base w-full max-w-2xl p-0 flex flex-col overflow-hidden border-blue-500/20">
+        <div className="modal-overlay" onClick={() => setShowResultsModal(null)}>
+          <div className="modal-content modal-content-lg" onClick={e => e.stopPropagation()}>
              <div className="p-6 bg-gradient-to-r from-blue-500/20 to-transparent border-b border-white/5 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-blue-500 flex items-center justify-center text-white">

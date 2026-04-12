@@ -79,6 +79,7 @@ export function MobileStudentPortalWrapper({
       onAcademySwitch={onAcademySwitch}
       hasMultipleAcademies={hasMultipleAcademies}
       appName={appSettings?.appName}
+      student={student}
     >
       {/* Home Tab */}
       {(activeTab === 'home' || !['exams','courses','assignments','results','messages','profile','discover','games','schedule'].includes(activeTab)) && appSettings ? (

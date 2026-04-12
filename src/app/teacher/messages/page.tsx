@@ -280,7 +280,7 @@ export default function TeacherMessagesPage() {
             <input 
               type="text" 
               placeholder="بحث في الرسائل..." 
-              className="input-base pr-10 w-full text-xs"
+              className="input-base has-icon-right w-full text-xs"
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
             />
@@ -511,7 +511,7 @@ export default function TeacherMessagesPage() {
                    <input 
                      type="text" 
                      placeholder="ابحث عن طالب أو معلم..." 
-                     className="input-base pr-12 w-full"
+                     className="input-base has-icon-right w-full"
                      onChange={e => setSearchQuery(e.target.value)}
                    />
                 </div>

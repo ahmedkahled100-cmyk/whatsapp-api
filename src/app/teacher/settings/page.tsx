@@ -2,11 +2,12 @@
 // src/app/teacher/settings/page.tsx
 
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useTeacherStore } from '@/lib/store';
 import { saveSettings, uploadFileToStorage, wipeAllData, saveTeacher, getSuperAdmin, getSettings } from '@/lib/db';
 import type { Settings } from '@/types';
-import { Save, Eye, EyeOff, Copy, Upload, Loader2, MessageCircle, Phone, Trash2, AlertTriangle } from 'lucide-react';
+import { Save, Eye, EyeOff, Copy, Upload, Loader2, MessageCircle, Phone, Trash2, AlertTriangle, X } from 'lucide-react';
 import { showToast } from '@/lib/toast';
 import { GlobalFileUpload } from '@/components/GlobalFileUpload';
 
@@ -25,8 +26,9 @@ const DEFAULT_SETTINGS: Settings = {
   whatsappTemplate: 'السلام عليكم، أود إبلاغكم بأن الطالب/ة {name} أتم/ت اختبار "{exam}" وحصل/ت على درجة {score} من {total}. {status}',
 };
 
-export default function SettingsPage() {
-  const { user, settings, setSettings } = useTeacherStore();
+function SettingsPageContent() {
+  const searchParams = useSearchParams();
+  const { user, setUser, settings, setSettings } = useTeacherStore();
   const [form, setForm] = useState<Settings>(settings || { ...DEFAULT_SETTINGS, teacherId: user?.id || '' });
   const [initialized, setInitialized] = useState(false);
   const [showPass, setShowPass] = useState(false);
@@ -59,6 +61,16 @@ export default function SettingsPage() {
     }
   }, [settings, user, initialized]);
 
+  // Sync teacher profile image
+  const [teacherImageUrl, setTeacherImageUrl] = useState(user?.imageUrl || '');
+  const [uploadingProfile, setUploadingProfile] = useState(false);
+  const [profileProgress, setProfileProgress] = useState(0);
+  const [teacherSubject, setTeacherSubject] = useState(user?.subject || '');
+
+  useEffect(() => {
+    if (user?.imageUrl) setTeacherImageUrl(user.imageUrl);
+    if (user?.subject !== undefined) setTeacherSubject(user.subject);
+  }, [user?.imageUrl, user?.subject]);
   useEffect(() => {
     getSuperAdmin().then(admin => {
       if (admin) {
@@ -68,6 +80,16 @@ export default function SettingsPage() {
       }
     });
   }, []);
+
+  // Handle pre-fill from iLovePDF
+  useEffect(() => {
+    const prefillLogo = searchParams.get('prefillLogo');
+    if (prefillLogo) {
+      update('logoUrl', prefillLogo);
+      showToast('📥 تم استلام الشعار من أدوات PDF');
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, [searchParams]);
 
   const update = (key: keyof Settings, value: any) => setForm(f => ({ ...f, [key]: value }));
 
@@ -81,9 +103,22 @@ export default function SettingsPage() {
       await saveSettings(finalForm);
       setSettings(finalForm);
 
-      // Save Teacher Code if changed and user is super_admin
-      if (user.role === 'super_admin' && teacherCode !== user.code) {
-        await saveTeacher({ ...user, code: teacherCode.trim().toUpperCase() });
+      // Save Teacher Profile if changed
+      const passwordChanged = form.teacherPassword !== user.password;
+      const codeChanged = user.role === 'super_admin' && teacherCode !== user.code;
+      const profileImgChanged = teacherImageUrl !== user.imageUrl;
+      const subjectChanged = teacherSubject !== user.subject;
+
+      if (passwordChanged || codeChanged || profileImgChanged || subjectChanged) {
+        const updatedUser = { 
+          ...user, 
+          password: form.teacherPassword, 
+          code: codeChanged ? teacherCode.trim().toUpperCase() : user.code,
+          imageUrl: teacherImageUrl,
+          subject: teacherSubject
+        };
+        await saveTeacher(updatedUser);
+        setUser(updatedUser as any);
       }
 
       setSaved(true);
@@ -119,7 +154,6 @@ export default function SettingsPage() {
   const handleSignatureUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 100 * 1024 * 1024) { showToast('حجم الصورة يجب أن لا يتجاوز 100 ميجابايت'); return; }
     setUploadingSignature(true);
     setSignatureProgress(0);
     try {
@@ -132,7 +166,24 @@ export default function SettingsPage() {
     } finally { 
       setUploadingSignature(false); 
       setSignatureProgress(0);
-      if (e.target) e.target.value = ''; 
+    }
+  };
+
+  const handleProfileImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingProfile(true);
+    setProfileProgress(0);
+    try {
+      const url = await uploadFileToStorage(file, `profiles/${user?.id || 'teacher'}_${Date.now()}_${file.name}`, setProfileProgress);
+      setTeacherImageUrl(url);
+      showToast('تم تحديث صورة الملف الشخصي!');
+    } catch (err: any) {
+      console.error(err);
+      showToast('فشل رفع الصورة: ' + (err.message || ''));
+    } finally {
+      setUploadingProfile(false);
+      setProfileProgress(0);
     }
   };
 
@@ -182,6 +233,10 @@ export default function SettingsPage() {
             <label className="block text-sm mb-1.5" style={{ color: 'var(--text-muted)' }}>اسم المعلم</label>
             <input value={form.teacherName} onChange={e => update('teacherName', e.target.value)} className="input-base" />
           </div>
+          <div>
+            <label className="block text-sm mb-1.5" style={{ color: 'var(--text-muted)' }}>المادة الدراسية</label>
+            <input value={teacherSubject} onChange={e => setTeacherSubject(e.target.value)} className="input-base" placeholder="مثال: لغة إنجليزية" />
+          </div>
 
           {/* Logo Upload */}
           <div>
@@ -199,6 +254,8 @@ export default function SettingsPage() {
                   isUploading={uploadingLogo}
                   uploadProgress={logoProgress}
                   label="رفع شعار من جهازك"
+                  needCrop={true}
+                  cropAspect={1}
                 />
                 <input
                   value={form.logoUrl || ''}
@@ -209,7 +266,35 @@ export default function SettingsPage() {
                 />
               </div>
             </div>
-            <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>الحد الأقصى 100 ميجابايت. يُفضل PNG أو JPG.</p>
+            <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>يُفضل PNG أو JPG.</p>
+          </div>
+
+          {/* Teacher Profile Image */}
+          <div>
+            <label className="block text-sm mb-1.5" style={{ color: 'var(--text-muted)' }}>صورة المعلم الشخصية</label>
+            <div className="flex items-center gap-3">
+              {teacherImageUrl ? (
+                <img src={teacherImageUrl} alt="المعلم" className="w-14 h-14 object-cover rounded-full border border-gold/30 shadow-lg flex-shrink-0" />
+              ) : (
+                <div className="w-14 h-14 rounded-full bg-gold/10 border border-gold/20 flex items-center justify-center text-gold font-black flex-shrink-0">
+                  {user?.name?.[0]}
+                </div>
+              )}
+              <div className="flex-1">
+                <GlobalFileUpload 
+                  accept="image/*"
+                  onChange={handleProfileImageUpload}
+                  disabled={uploadingProfile}
+                  uploadedUrl={teacherImageUrl}
+                  isUploading={uploadingProfile}
+                  uploadProgress={profileProgress}
+                  label="تغيير صورتك الشخصية"
+                  needCrop={true}
+                  circularCrop={true}
+                  cropAspect={1}
+                />
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -219,7 +304,7 @@ export default function SettingsPage() {
         <h2 className="font-cairo font-bold mb-4" style={{ color: 'var(--gold)' }}>🔐 كلمة مرور لوحة التحكم</h2>
         <div className="relative">
           <input type={showPass ? 'text' : 'password'} value={form.teacherPassword}
-            onChange={e => update('teacherPassword', e.target.value)} className="input-base has-icon pl-10" />
+            onChange={e => update('teacherPassword', e.target.value)} className="input-base has-icon-left" />
           <button type="button" onClick={() => setShowPass(!showPass)}
             className="absolute top-1/2 left-3 -translate-y-1/2 opacity-50 hover:opacity-100">
             {showPass ? <EyeOff size={17} /> : <Eye size={17} />}
@@ -398,6 +483,8 @@ export default function SettingsPage() {
                   isUploading={uploadingSignature}
                   uploadProgress={signatureProgress}
                   label={form.certSignatureUrl ? 'تغيير التوقيع/الختم' : 'رفع توقيع أو ختم'}
+                  needCrop={true}
+                  cropAspect={2}
                 />
                 {form.certSignatureUrl && (
                   <button onClick={() => update('certSignatureUrl', '')} className="text-xs text-red-400 hover:text-red-300 w-full text-center">
@@ -508,34 +595,45 @@ export default function SettingsPage() {
 
       {/* Wipe Confirmation Modal */}
       {showWipeModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
-          <div className="bg-dark2 border border-red-500/30 p-6 rounded-2xl w-full max-w-md shadow-2xl relative animate-scale-in">
-            <div className="mx-auto w-12 h-12 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mb-4">
-              <AlertTriangle size={24} />
+        <div className="modal-overlay" onClick={() => setShowWipeModal(false)}>
+          <div className="modal-content modal-content-sm" onClick={e => e.stopPropagation()}>
+            <div className="modal-header border-red-500/10 bg-red-500/5">
+              <h3 className="font-bold text-lg text-red-500 flex items-center gap-2">
+                <AlertTriangle size={20} /> تحذير نهائي!
+              </h3>
+              <button onClick={() => setShowWipeModal(false)} className="text-gray-400 hover:text-white transition-colors">
+                <X size={24} />
+              </button>
             </div>
-            <h2 className="text-2xl font-bold text-center mb-2 font-cairo">تحذير نهائي!</h2>
-            <p className="text-gray-300 text-center text-sm mb-6 leading-relaxed">
-              أنت على وشك مسح <span className="text-red-400 font-bold">جميع</span> البيانات من المنصة بشكل نهائي ولا يمكن التراجع عن هذا الإجراء أبداً.
-            </p>
             
-            <div className="mb-6">
-              <label className="block text-sm mb-2 text-center text-gray-400">
-                للتأكيد، اكتب كلمة <span className="font-bold text-white bg-black/50 px-2 py-1 rounded">مسح</span> في المربع التالي:
-              </label>
-              <input
-                type="text"
-                value={wipeConfirmText}
-                onChange={(e) => setWipeConfirmText(e.target.value)}
-                className="input-base text-center font-bold text-red-400 text-lg border-red-500/30 focus:border-red-500 focus:ring-1 focus:ring-red-500"
-                placeholder="اكتب مسح"
-                autoComplete="off"
-              />
+            <div className="modal-body py-8 text-center">
+              <div className="mx-auto w-16 h-16 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mb-6 animate-pulse">
+                <Trash2 size={32} />
+              </div>
+              <p className="text-gray-300 text-sm mb-6 leading-relaxed">
+                أنت على وشك مسح <span className="text-red-400 font-bold underline">جميع</span> البيانات من المنصة بشكل نهائي ولا يمكن التراجع عن هذا الإجراء أبداً.
+              </p>
+              
+              <div className="bg-black/40 p-5 rounded-2xl border border-red-500/20">
+                <label className="block text-xs mb-3 text-gray-400 font-bold uppercase tracking-wider">
+                  للتأكيد، اكتب كلمة <span className="text-white px-2 py-0.5 bg-red-600 rounded">مسح</span> أدناه:
+                </label>
+                <input
+                  type="text"
+                  value={wipeConfirmText}
+                  onChange={(e) => setWipeConfirmText(e.target.value)}
+                  className="input-base text-center font-black text-red-400 text-xl border-red-500/30 focus:border-red-500 focus:ring-2 focus:ring-red-500/50 bg-red-500/5"
+                  placeholder="اكتب هنا..."
+                  autoComplete="off"
+                  autoFocus
+                />
+              </div>
             </div>
 
-            <div className="flex gap-3">
+            <div className="modal-footer bg-red-500/5">
               <button
                 onClick={() => setShowWipeModal(false)}
-                className="flex-1 btn-outline"
+                className="flex-1 btn-outline py-3"
                 disabled={wiping}
               >
                 إلغاء
@@ -543,9 +641,9 @@ export default function SettingsPage() {
               <button
                 onClick={handleWipeData}
                 disabled={wipeConfirmText !== 'مسح' || wiping}
-                className="flex-1 btn-danger justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 btn-danger justify-center py-3 shadow-lg shadow-red-500/20 disabled:opacity-50 disabled:grayscale"
               >
-                {wiping ? 'جاري المسح...' : 'تأكيد المسح'}
+                {wiping ? <><Loader2 size={18} className="animate-spin ml-2" /> جاري المسح...</> : 'تأكيد المسح النهائي'}
               </button>
             </div>
           </div>
@@ -554,8 +652,8 @@ export default function SettingsPage() {
 
       {/* Certificate Preview Modal */}
       {showCertPreview && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-fade-in">
-          <div className="w-full max-w-4xl max-h-[90vh] overflow-y-auto bg-white rounded-2xl shadow-2xl relative animate-scale-in p-1">
+        <div className="modal-overlay !bg-black/90" onClick={() => setShowCertPreview(false)}>
+          <div className="modal-content modal-content-lg !p-1" onClick={e => e.stopPropagation()}>
              <button 
                onClick={() => setShowCertPreview(false)}
                className="absolute top-4 right-4 z-20 bg-black/50 text-white w-10 h-10 rounded-full flex items-center justify-center hover:bg-black"
@@ -631,6 +729,14 @@ export default function SettingsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function SettingsPage() {
+  return (
+    <Suspense fallback={<div className="p-10 text-center opacity-50 font-cairo">جاري تحميل الإعدادات...</div>}>
+      <SettingsPageContent />
+    </Suspense>
   );
 }
 

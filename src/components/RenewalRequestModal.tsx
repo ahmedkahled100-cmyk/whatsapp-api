@@ -30,8 +30,8 @@ const SUB_TYPES_STUDENT = [
 ] as const;
 
 const SUB_TYPES_TEACHER = [
-  { value: 'monthly', label: 'شهري' },
-  { value: 'yearly', label: 'سنوي' },
+  { value: 'monthly', label: 'شهري', priceKey: 'monthlyPrice' },
+  { value: 'yearly', label: 'سنوي', priceKey: 'yearlyPrice' },
 ] as const;
 
 export function RenewalRequestModal({ settings, target, userData, onClose, onSubmit }: RenewalRequestModalProps) {
@@ -51,8 +51,8 @@ export function RenewalRequestModal({ settings, target, userData, onClose, onSub
     return (settings as any)[key];
   };
 
-  const selectedSubTypeData = SUB_TYPES_STUDENT.find(s => s.value === subType);
-  const selectedPrice = target === 'student' && selectedSubTypeData && 'priceKey' in selectedSubTypeData
+  const selectedSubTypeData = subTypes.find(s => s.value === subType);
+  const selectedPrice = selectedSubTypeData && 'priceKey' in selectedSubTypeData
     ? getPrice(selectedSubTypeData.priceKey)
     : undefined;
 
@@ -120,15 +120,15 @@ export function RenewalRequestModal({ settings, target, userData, onClose, onSub
 
         <div className="p-5 space-y-4 max-h-[75vh] overflow-y-auto">
           {/* Prices panel */}
-          {target === 'student' && settings && (
+          {settings && (
             <div className="bg-gradient-to-br from-gold/8 to-transparent border border-gold/20 rounded-xl p-4">
               <div className="flex items-center gap-2 mb-3">
                 <span className="text-gold font-bold text-sm">💰 أسعار الاشتراكات</span>
               </div>
               <div className="grid grid-cols-2 gap-2">
-                {SUB_TYPES_STUDENT.map(s => {
-                  const price = getPrice(s.priceKey);
-                  if (!price) return null;
+                {subTypes.map(s => {
+                  const price = 'priceKey' in s ? getPrice(s.priceKey) : undefined;
+                  if (price === undefined && target === 'student') return null;
                   return (
                     <button
                       key={s.value}
@@ -140,32 +140,12 @@ export function RenewalRequestModal({ settings, target, userData, onClose, onSub
                       }`}
                     >
                       <div className="font-bold text-sm">{s.label}</div>
-                      <div className={`text-lg font-black ${subType === s.value ? 'text-gold' : 'text-white'}`}>{price} ج.م</div>
+                      <div className={`text-lg font-black ${subType === s.value ? 'text-gold' : 'text-white'}`}>
+                        {price !== undefined ? `${price} ج.م` : 'تواصل للإستفسار'}
+                      </div>
                     </button>
                   );
                 })}
-              </div>
-            </div>
-          )}
-
-          {/* Sub type selector (if no prices or teacher) */}
-          {(target === 'teacher' || !settings?.monthlyPrice) && (
-            <div>
-              <label className="block text-xs text-gray-400 mb-2 font-bold">نوع الاشتراك</label>
-              <div className="grid grid-cols-2 gap-2">
-                {subTypes.map(s => (
-                  <button
-                    key={s.value}
-                    onClick={() => setSubType(s.value)}
-                    className={`p-3 rounded-xl border text-center font-bold text-sm transition-all ${
-                      subType === s.value
-                        ? 'border-gold bg-gold/10 text-gold'
-                        : 'border-white/10 bg-white/5 text-gray-400 hover:border-gold/30'
-                    }`}
-                  >
-                    {s.label}
-                  </button>
-                ))}
               </div>
             </div>
           )}

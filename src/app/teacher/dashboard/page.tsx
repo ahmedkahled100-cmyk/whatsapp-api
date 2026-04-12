@@ -8,7 +8,7 @@ import { formatDateAr, scoreLabel, gradeColor } from '@/lib/utils';
 import { Users, FileText, TrendingUp, Clock, PlusCircle, Eye, Share2, ChevronLeft, AlertCircle } from 'lucide-react';
 
 export default function DashboardPage() {
-  const { user, exams, students, attempts, groups, notifications } = useTeacherStore();
+  const { user, exams, students, attempts, groups, notifications, registrationRequests } = useTeacherStore();
 
   const stats = useMemo(() => {
     const completed = attempts.filter(a => a.completed);
@@ -21,13 +21,13 @@ export default function DashboardPage() {
       : 0;
     
     // Calculate total revenue from students (ignore those who didn't pay)
-    const totalRevenue = students.reduce((sum, s) => {
-      const price = s.subPrice ? Number(s.subPrice) : 0;
-      return sum + (isNaN(price) ? 0 : price);
-    }, 0);
+    const totalRevenue = students.reduce((sum, s) => sum + (s.totalPaid || 0), 0);
+
+    // Filter pending renewals/registrations
+    const pendingRequests = registrationRequests.filter(r => r.status === 'pending').length;
     
-    return { pendingEssays, avgScore, passRate, totalRevenue };
-  }, [attempts, students]);
+    return { pendingEssays, avgScore, passRate, totalRevenue, pendingRequests };
+  }, [attempts, students, registrationRequests]);
 
   const recentExams = useMemo(() => [...exams].reverse().slice(0, 5), [exams]);
   const recentAttempts = useMemo(() =>
@@ -122,14 +122,20 @@ export default function DashboardPage() {
       )}
 
       {/* Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
         {[
           { id: 'exams', label: 'اختبار', value: exams.length, icon: '📋', color: 'var(--accent)', sub: `${exams.filter(e => e.published).length} منشور`, href: '/teacher/exams' },
           { id: 'students', label: 'طالب', value: students.length, icon: '👥', color: 'var(--green)', sub: `${groups.length} فصل`, href: '/teacher/students' },
           { id: 'results', label: 'محاولة', value: attempts.length, icon: '📝', color: 'var(--gold)', sub: `${attempts.filter(a => a.completed).length} مكتملة`, href: '/teacher/results' },
-          { id: 'analytics', label: 'مقالي ينتظر', value: stats.pendingEssays, icon: '⏳', color: 'var(--red)', sub: `معدل النجاح ${stats.passRate}%`, href: '/teacher/essays' },
+          { id: 'essays', label: 'مقالي ينتظر', value: stats.pendingEssays, icon: '⏳', color: 'var(--red)', sub: `معدل النجاح ${stats.passRate}%`, href: '/teacher/essays' },
+          { id: 'requests', label: 'طلبات معلقة', value: stats.pendingRequests, icon: '📩', color: '#8B5CF6', sub: 'تسجيل وتجديد', href: '/teacher/subscriptions' },
           { id: 'subscriptions', label: 'إجمالي الاشتراكات', value: `${stats.totalRevenue} ج.م`, icon: '💰', color: '#10B981', sub: 'إيرادات الطلاب', href: '/teacher/subscriptions' },
-        ].filter(s => hasPermission(s.id)).map((s, i) => (
+        ].filter(s => {
+          if (s.id === 'requests') return hasPermission('subscriptions');
+          if (s.id === 'results') return hasPermission('students');
+          if (s.id === 'essays') return hasPermission('analytics');
+          return hasPermission(s.id);
+        }).map((s, i) => (
           <Link href={s.href} key={i} className="stat-card hover:-translate-y-1 hover:shadow-lg transition-all duration-300 block cursor-pointer">
             <div className="flex items-start justify-between">
               <div>

@@ -2,6 +2,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Upload, FileText, Image as ImageIcon, Eye, X, CheckCircle2 } from 'lucide-react';
 import { useFilePreview } from './FilePreviewModal';
+import ImageCropperModal from './ImageCropperModal';
 
 interface GlobalFileUploadProps {
   id?: string;
@@ -16,13 +17,18 @@ interface GlobalFileUploadProps {
   uploadProgress?: number;
   variant?: 'normal' | 'compact';
   onDelete?: () => void;
+  needCrop?: boolean;
+  cropAspect?: number;
+  circularCrop?: boolean;
 }
 
 export function GlobalFileUpload({ 
-  id, accept, onChange, disabled, className, label, uploadedUrl, currentFile, isUploading, uploadProgress, variant = 'normal', onDelete
+  id, accept, onChange, disabled, className, label, uploadedUrl, currentFile, isUploading, uploadProgress, variant = 'normal', onDelete,
+  needCrop = false, cropAspect = 1, circularCrop = false
 }: GlobalFileUploadProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [internalFile, setInternalFile] = useState<File | null>(null);
+  const [croppingImage, setCroppingImage] = useState<{ src: string, file: File } | null>(null);
   const { openPreview, PreviewModal } = useFilePreview();
 
   // Sync with controlled currentFile
@@ -35,11 +41,42 @@ export function GlobalFileUpload({
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      setInternalFile(file);
+      if (needCrop && file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onload = () => {
+          setCroppingImage({ src: reader.result as string, file });
+        };
+        reader.readAsDataURL(file);
+      } else {
+        setInternalFile(file);
+        onChange(e);
+      }
     } else {
       setInternalFile(null);
+      onChange(e);
     }
-    onChange(e);
+  };
+
+  const handleCropComplete = (croppedBlob: Blob) => {
+    if (!croppingImage) return;
+    
+    // Create new file from blob
+    const croppedFile = new File([croppedBlob], croppingImage.file.name, {
+      type: 'image/jpeg',
+      lastModified: Date.now(),
+    });
+
+    setInternalFile(croppedFile);
+    setCroppingImage(null);
+
+    // Mock an event for the parent's onChange if they expect one
+    const mockEvent = {
+      target: {
+        files: [croppedFile]
+      }
+    } as any;
+    
+    onChange(mockEvent);
   };
 
   const handleClear = (e: React.MouseEvent) => {
@@ -164,6 +201,19 @@ export function GlobalFileUpload({
       )}
       
       {PreviewModal}
+      
+      {croppingImage && (
+        <ImageCropperModal
+          image={croppingImage.src}
+          aspect={cropAspect}
+          circular={circularCrop}
+          onCropComplete={handleCropComplete}
+          onCancel={() => {
+            setCroppingImage(null);
+            if (fileInputRef.current) fileInputRef.current.value = '';
+          }}
+        />
+      )}
     </div>
   );
 }

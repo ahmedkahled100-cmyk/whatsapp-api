@@ -6,9 +6,10 @@ import { FileProcessor } from '@/lib/file-processor';
 import { useFileProcessingStore } from '@/lib/store';
 import type { Settings, TeacherUser } from '@/types';
 import { showToast } from '@/lib/toast';
-import { GraduationCap, ShieldCheck, Mail, Phone, Calculator, CheckCircle2, User, FileText, Upload, Image as ImageIcon, Loader2, BookOpen, Sparkles, CreditCard } from 'lucide-react';
+import { GraduationCap, ShieldCheck, Mail, Phone, Calculator, CheckCircle2, User, FileText, Upload, Image as ImageIcon, Loader2, BookOpen, Sparkles, CreditCard, X } from 'lucide-react';
 import { GlobalFileUpload } from '@/components/GlobalFileUpload';
 import { PDFCompressionModal } from '@/components/PDFCompressionModal';
+import ImageCropperModal from '@/components/ImageCropperModal';
 
 export default function TeacherRegisterPage() {
   const { queue } = useFileProcessingStore();
@@ -25,8 +26,8 @@ export default function TeacherRegisterPage() {
   const [form, setForm] = useState({
     name: '',
     phone: '',
-    parentPhone: '', // Not used for teachers but keeping compatible with type
-    grade: '', // Not used for teachers but keeping compatible with type
+    parentPhone: '', 
+    grade: '', 
     subject: '',
     subType: 'monthly' as 'monthly' | 'yearly',
     paymentRef: '',
@@ -41,6 +42,10 @@ export default function TeacherRegisterPage() {
     file: File | null;
     onComplete?: (blob: Blob, url: string, stats: { originalSize: number; compressedSize: number }) => void;
   }>({ isOpen: false, file: null });
+  
+  // Image Cropper state
+  const [cropperImage, setCropperImage] = useState<string | null>(null);
+  const [showCropper, setShowCropper] = useState(false);
 
   useEffect(() => {
     getSuperAdmin().then(admin => {
@@ -58,7 +63,7 @@ export default function TeacherRegisterPage() {
 
   useEffect(() => {
     const handleUploaded = (e: any) => {
-      const { url, path, fileName } = e.detail;
+      const { url, path } = e.detail;
       if (path.startsWith('receipts/')) {
         setForm(f => ({ ...f, receiptUrl: url }));
         setUploadProgress(0);
@@ -95,9 +100,9 @@ export default function TeacherRegisterPage() {
         await dispatchNotification({
           teacherId: superAdmin.id,
           msg: `طلب انضمام معلم جديد: ${form.name} (${form.subject})`,
-          targetRoles: ['admin'],
+          targetRoles: ['super_admin'],
           channels: { inApp: true, whatsapp: false },
-          actionPath: '/admin'
+          actionPath: '/admin/teachers'
         });
       } catch (e) { console.error(e); }
 
@@ -106,6 +111,39 @@ export default function TeacherRegisterPage() {
       showToast('حدث خطأ أثناء إرسال الطلب');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        showToast('حجم الصورة كبير جداً (الحد الأقصى 5 ميجابايت)');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => {
+        setCropperImage(reader.result as string);
+        setShowCropper(true);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleCropComplete = async (croppedBlob: Blob) => {
+    setShowCropper(false);
+    const file = new File([croppedBlob], 'profile.jpg', { type: 'image/jpeg' });
+    setTeacherImageFile(file);
+    
+    setImageUploadProgress(10);
+    try {
+      const url = await uploadFileToStorage(file, `teachers/${Date.now()}_cropped.jpg`);
+      setForm(f => ({ ...f, imageUrl: url }));
+      setImageUploadProgress(100);
+      showToast('تم رفع الصورة الشخصية بنجاح');
+    } catch (e) {
+      setImageUploadProgress(0);
+      showToast('فشل رفع الصورة');
     }
   };
 
@@ -178,21 +216,21 @@ export default function TeacherRegisterPage() {
                 <label className="text-xs text-gray-400 px-1">الاسم الكامل</label>
                 <div className="relative">
                   <User size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500" />
-                  <input type="text" placeholder="أدخل اسمك الثلاثي أو الرباعي" className="input-base pr-12 w-full" value={form.name} onChange={e => setForm({...form, name: e.target.value})} required/>
+                  <input type="text" placeholder="أدخل اسمك الثلاثي أو الرباعي" className="input-base has-icon-right w-full" value={form.name} onChange={e => setForm({...form, name: e.target.value})} required/>
                 </div>
               </div>
               <div className="space-y-1">
                 <label className="text-xs text-gray-400 px-1">رقم الهاتف (واتساب)</label>
                 <div className="relative">
                   <Phone size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500" />
-                  <input type="tel" placeholder="01XXXXXXXXX" className="input-base pr-12 w-full" value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} required/>
+                  <input type="tel" placeholder="01XXXXXXXXX" className="input-base has-icon-right w-full" value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} required/>
                 </div>
               </div>
               <div className="space-y-1 sm:col-span-2">
                 <label className="text-xs text-gray-400 px-1">المادة الدراسية</label>
                 <div className="relative">
                   <BookOpen size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500" />
-                  <input type="text" placeholder="مثال: لغة عربية، رياضيات، فيزياء..." className="input-base pr-12 w-full" value={form.subject} onChange={e => setForm({...form, subject: e.target.value})} required/>
+                  <input type="text" placeholder="مثال: لغة عربية، رياضيات، فيزياء..." className="input-base has-icon-right w-full" value={form.subject} onChange={e => setForm({...form, subject: e.target.value})} required/>
                 </div>
               </div>
             </div>
@@ -213,45 +251,44 @@ export default function TeacherRegisterPage() {
               </div>
             </div>
 
-            <div className="space-y-4">
-              {/* Profile Image Upload */}
-              <div className="relative">
-                <label className="text-xs text-gray-400 px-1">صورة شخصية للمعلم (اختياري)</label>
-                <div className="mt-2 mb-4">
-                  <GlobalFileUpload 
-                    accept="image/*"
-                    onChange={async (e) => {
-                      const file = e.target.files?.[0];
-                      if (file) {
-                        setTeacherImageFile(file);
-                        setImageUploadProgress(10);
-                        const path = `teachers/profile_${Date.now()}_${file.name}`;
-                        try {
-                          await FileProcessor.queueFile(file, path);
-                          showToast('جاري رفع الصورة...');
-                        } catch (err) {
-                          setImageUploadProgress(0);
-                        }
-                      }
-                    }}
-                    disabled={submitting || queue.some(f => f.status !== 'completed' && f.status !== 'failed' && f.path.startsWith('teachers/'))}
-                    currentFile={teacherImageFile}
-                    uploadedUrl={form.imageUrl}
-                    isUploading={imageUploadProgress > 0 && imageUploadProgress < 100}
-                    uploadProgress={imageUploadProgress}
-                    label="ارفع صورة شخصية لعرضها في حسابك"
-                  />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
+              {/* Profile Image with Cropper */}
+              <div className="space-y-3">
+                <label className="text-sm font-bold text-gray-300 flex items-center gap-2">
+                  <ImageIcon size={18} className="text-purple-400" /> الصورة الشخصية
+                </label>
+                <div className="p-6 rounded-2xl bg-white/5 border border-white/10 flex flex-col items-center gap-4 group hover:border-purple-500/30 transition-all duration-300">
+                  {form.imageUrl ? (
+                    <div className="relative">
+                       <img src={form.imageUrl} alt="Profile" className="w-24 h-24 rounded-full object-cover border-2 border-purple-500 shadow-lg shadow-purple-500/20" />
+                       <button onClick={() => setForm(f => ({ ...f, imageUrl: '' }))} className="absolute -top-1 -right-1 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center shadow-lg"><X size={14} /></button>
+                    </div>
+                  ) : (
+                    <label className="cursor-pointer flex flex-col items-center gap-3 py-2">
+                       <div className="w-16 h-16 rounded-full bg-purple-500/10 flex items-center justify-center border border-dashed border-purple-500/30 group-hover:scale-110 transition-transform">
+                          <Upload size={24} className="text-purple-400" />
+                       </div>
+                       <div className="text-center">
+                          <div className="text-xs font-bold text-gray-300">ارفع صورتك الشخصية</div>
+                          <div className="text-[10px] text-gray-500 mt-1 italic">سيتم فتح أداة القص تلقائياً</div>
+                       </div>
+                       <input type="file" className="hidden" accept="image/*" onChange={handleImageSelect} />
+                    </label>
+                  )}
+                  {imageUploadProgress > 0 && imageUploadProgress < 100 && (
+                     <div className="w-full bg-white/5 h-1 rounded-full overflow-hidden">
+                        <div className="bg-purple-500 h-full animate-pulse" style={{ width: `${imageUploadProgress}%` }} />
+                     </div>
+                  )}
                 </div>
               </div>
 
-              <div className="relative">
-                <label className="text-xs text-gray-400 px-1">رقم التحويل أو تفاصيل الدفع</label>
-                <textarea placeholder="أدخل كود التحويل أو أي ملاحظات حول الدفع..." className="input-base w-full min-h-[80px]" value={form.paymentRef} onChange={e => setForm({...form, paymentRef: e.target.value})} />
-              </div>
-
-              <div className="relative">
-                <label className="text-xs text-gray-400 px-1">صورة الإيصال (اختياري)</label>
-                <div className="mt-2">
+              {/* Receipt Upload */}
+              <div className="space-y-3">
+                <label className="text-sm font-bold text-gray-300 flex items-center gap-2">
+                  <FileText size={18} className="text-blue-400" /> إيصال الدفع (اختياري)
+                </label>
+                <div className="p-1 rounded-2xl">
                   <GlobalFileUpload 
                     accept="image/*"
                     onChange={async (e) => {
@@ -266,10 +303,15 @@ export default function TeacherRegisterPage() {
                     disabled={submitting || queue.some(f => f.status !== 'completed' && f.status !== 'failed' && f.path.startsWith('receipts/'))}
                     currentFile={receiptFile}
                     uploadedUrl={form.receiptUrl}
-                    label="ارفع صورة الإيصال لتسريع عملية التفعيل"
+                    label="ارفع صورة الإيصال"
                   />
                 </div>
               </div>
+            </div>
+
+            <div className="relative pt-2">
+              <label className="text-xs text-gray-400 px-1 font-bold">رقم التحويل أو تفاصيل الدفع</label>
+              <textarea placeholder="أدخل كود التحويل أو أي ملاحظات حول الدفع لمساعدة الإدارة في التحقق..." className="input-base w-full min-h-[100px] mt-1" value={form.paymentRef} onChange={e => setForm({...form, paymentRef: e.target.value})} />
             </div>
 
             <button type="submit" disabled={submitting || queue.some(f => f.status !== 'completed' && f.status !== 'failed' && (f.path.startsWith('receipts/') || f.path.startsWith('teachers/')))} className="btn-gold w-full py-4 text-lg font-black bg-purple-600 shadow-xl shadow-purple-500/20 active:scale-95 transition-all">
@@ -277,6 +319,24 @@ export default function TeacherRegisterPage() {
             </button>
           </form>
         </div>
+
+        {compressionModal.isOpen && compressionModal.file && (
+          <PDFCompressionModal 
+            file={compressionModal.file}
+            onClose={() => setCompressionModal({ isOpen: false, file: null })}
+            onComplete={compressionModal.onComplete!}
+            onCancel={() => setCompressionModal({ isOpen: false, file: null })}
+          />
+        )}
+
+        {showCropper && cropperImage && (
+          <ImageCropperModal 
+            image={cropperImage}
+            onCropComplete={handleCropComplete}
+            onCancel={() => setShowCropper(false)}
+            circular={true}
+          />
+        )}
       </div>
     </div>
   );

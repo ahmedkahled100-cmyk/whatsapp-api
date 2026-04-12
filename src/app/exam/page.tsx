@@ -2,7 +2,7 @@
 import { useEffect, useState, useCallback, useRef, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useStudentStore } from '@/lib/store';
-import { getExam, getStudentByCode, saveAttempt, getAttemptsByStudent, uploadFileToStorage, dispatchNotification } from '@/lib/db';
+import { getExam, getStudentByCode, saveAttempt, getAttemptsByStudent, uploadFileToStorage, dispatchNotification, saveStudent } from '@/lib/db';
 import { shuffleArray, generateId, formatTime, gradeColor, scoreLabel, getViewerUrl } from '@/lib/utils';
 import { showToast } from '@/lib/toast';
 import imageCompression from 'browser-image-compression';
@@ -95,8 +95,11 @@ const ExamContent = () => {
   const handleLogin = async () => {
     if (!studentCode.trim()) { setCodeError('أدخل كودك أولاً'); return; }
     try {
-      const s = await getStudentByCode(studentCode);
-      if (!s) { setCodeError('❌ الكود غير صحيح'); return; }
+      const studentsFound = await getStudentByCode(studentCode);
+      if (!studentsFound || studentsFound.length === 0) { setCodeError('❌ الكود غير صحيح'); return; }
+
+      const s = studentsFound.find(st => st.teacherId === exam?.teacherId);
+      if (!s) { setCodeError('❌ الطالب غير مسجل مع هذا المعلم'); return; }
 
       // Check attempts
       if (exam && !exam.allowRetake) {
@@ -183,7 +186,25 @@ const ExamContent = () => {
 
     try {
       const id = await saveAttempt(attempt);
-      
+
+      // --- Gamification Points Calculation ---
+      // We reward points based on the score + base of 10 points for finishing the exam.
+      if (student) {
+        const pointsEarned = Math.round((mcqScore / 10)) + 10;
+        const newTotalPoints = (student.points || 0) + pointsEarned;
+        const newLevel = Math.floor(newTotalPoints / 1000) + 1;
+
+        const updatedStudentInfo = { ...student, points: newTotalPoints, level: newLevel };
+        try {
+          await saveStudent(updatedStudentInfo);
+          setStudent(updatedStudentInfo);
+          showToast(`🌟 حصلت على ${pointsEarned} نقطة! إجمالي نقاطك الآن ${newTotalPoints}`);
+        } catch (e) {
+          console.error("Gamification save error:", e);
+        }
+      }
+      // ---------------------------------------
+
       // Notification logic
       await dispatchNotification({
         teacherId: exam.teacherId,
