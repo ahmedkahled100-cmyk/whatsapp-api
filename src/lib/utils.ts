@@ -112,6 +112,7 @@ export function getDownloadUrl(url: string | undefined, fileName?: string): stri
 
 // Get Dynamic API Base URL (Fixes Vercel 404s on Static APKs)
 export function getApiBase() {
+  if (process.env.NEXT_PUBLIC_API_URL) return process.env.NEXT_PUBLIC_API_URL;
   if (typeof window === 'undefined') return '';
   if (window.location.hostname.includes('vercel.app')) return '';
   // Default to Vercel production
@@ -167,3 +168,177 @@ export function normalizePhone(phone: string | undefined | null): string {
 
   return d;
 }
+
+/**
+ * Robust printing function that avoids Next.js/Tailwind layout bugs and popups.
+ * It injects a print container into the current page, hides everything else during print, and prints.
+ * @param htmlContent The HTML string to print
+ * @param title The title of the printed document (optional)
+ * @param isReceipt If true, formats for 80mm thermal receipt printer
+ */
+export function printHtml(htmlContent: string, title: string = 'طباعة', isReceipt: boolean = false) {
+  // Save original title
+  const originalTitle = document.title;
+  if (title) document.title = title;
+
+  // Create print container
+  const printContainer = document.createElement('div');
+  printContainer.id = 'an-academy-print-container';
+  
+  // Receipt styling (80mm width) or standard styling
+  const pageStyle = isReceipt 
+    ? `@page { margin: 0; size: 80mm auto; } #an-academy-print-container { width: 80mm; margin: 0 auto; padding: 10px; background: white; color: black; }` 
+    : `@page { margin: 0.5cm; } #an-academy-print-container { padding: 20px; background: white; color: black; }`;
+
+  printContainer.innerHTML = `
+    <style>
+      ${pageStyle}
+      @media print {
+        body > *:not(#an-academy-print-container) {
+          display: none !important;
+        }
+        body {
+          background: white !important;
+          color: black !important;
+          overflow: visible !important;
+          margin: 0 !important;
+          padding: 0 !important;
+        }
+        #an-academy-print-container {
+          display: block !important;
+          position: absolute;
+          left: 0;
+          top: 0;
+          width: 100%;
+        }
+        /* CRITICAL: Overrides any global body * { visibility: hidden; } styles */
+        #an-academy-print-container, #an-academy-print-container * {
+          visibility: visible !important;
+        }
+        /* Ensure Tailwind hidden classes work in print if needed */
+        .print\\:hidden { display: none !important; }
+        .print\\:block { display: block !important; }
+      }
+    </style>
+    <div dir="rtl" style="font-family: inherit;">
+      ${htmlContent}
+    </div>
+  `;
+
+  document.body.appendChild(printContainer);
+
+  // Trigger print
+  setTimeout(() => {
+    window.print();
+    // Cleanup after printing
+    setTimeout(() => {
+      document.body.removeChild(printContainer);
+      document.title = originalTitle;
+    }, 500);
+  }, 100);
+}
+
+/**
+ * Open a clean, standalone student card page for printing/PDF export.
+ * Uses a dedicated page (/student-card) to avoid layout conflicts.
+ * The page auto-triggers print dialog and has Tailwind-free styling.
+ * 
+ * @param student The student object
+ * @param teacherName The teacher's name for the card header
+ */
+export function openStudentCardForPrint(student: {
+  name: string;
+  code: string;
+  grade?: string;
+  imageUrl?: string;
+}, teacherName: string = 'المنصة التعليمية') {
+  if (typeof window === 'undefined') return;
+
+  const params = new URLSearchParams({
+    name: student.name,
+    code: student.code,
+    grade: student.grade || '',
+    imageUrl: student.imageUrl || '',
+    teacherName,
+  });
+
+  const url = `/student-card?${params.toString()}`;
+  const win = window.open(url, '_blank', 'width=400,height=320,toolbar=no,menubar=no,scrollbars=no,resizable=yes');
+  if (win) win.focus();
+}
+
+/**
+ * Export an HTML element as a PDF using html2pdf.js
+ * @param elementId The DOM element ID to capture (must be visible in DOM)
+ * @param filename The name of the downloaded file
+ */
+export async function exportToPdf(elementId: string, filename: string) {
+  if (typeof window === 'undefined') return;
+
+  const element = document.getElementById(elementId);
+  if (!element) {
+    console.error(`Element with id ${elementId} not found`);
+    return;
+  }
+
+  try {
+    const html2pdf = (await import('html2pdf.js')).default;
+    const opt = {
+      margin: 5,
+      filename: filename,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: {
+        scale: 3,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff',
+        allowTaint: true,
+      },
+      jsPDF: { unit: 'mm', format: 'a6', orientation: 'portrait' }
+    };
+
+    await html2pdf().from(element).set(opt).save();
+  } catch (error) {
+    console.error('Error exporting to PDF:', error);
+    throw error;
+  }
+}
+
+/**
+ * Export multiple elements as a single multi-page PDF using html2pdf.js
+ * @param elementId The DOM element ID containing the elements to capture
+ * @param filename The name of the downloaded file
+ */
+export async function exportBulkToPdf(elementId: string, filename: string) {
+  if (typeof window === 'undefined') return;
+
+  const element = document.getElementById(elementId);
+  if (!element) {
+    console.error(`Element with id ${elementId} not found`);
+    return;
+  }
+
+  try {
+    const html2pdf = (await import('html2pdf.js')).default;
+    const opt = {
+      margin: 0,
+      filename: filename,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff',
+        allowTaint: true,
+      },
+      jsPDF: { unit: 'mm', format: 'a6', orientation: 'portrait' },
+      pagebreak: { mode: ['css', 'legacy'] }
+    };
+
+    await html2pdf().from(element).set(opt).save();
+  } catch (error) {
+    console.error('Error exporting bulk to PDF:', error);
+    throw error;
+  }
+}
+

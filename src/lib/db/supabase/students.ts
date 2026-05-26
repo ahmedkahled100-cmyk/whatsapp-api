@@ -62,12 +62,31 @@ export const getStudents = async (teacherId: string): Promise<Student[]> => {
         if (imgMatch) student.imageUrl = imgMatch[1];
       }
 
+      const qrMatch = student.notes.match(/\[QR:(.*?)\]/);
+      if (qrMatch) student.qrCodeId = qrMatch[1];
+
+      const bnMatch = student.notes.match(/\[BN:(.*?)\]/);
+      if (bnMatch) {
+        try { student.behavioralNotes = decode(bnMatch[1]); } catch { student.behavioralNotes = bnMatch[1]; }
+      }
+
       // Extract cancelReason from notes if not in dedicated column
       if (!student.cancelReason) {
         const crMatch = student.notes.match(/\[CR:(.*?)\]/);
         if (crMatch) {
           try { student.cancelReason = decode(crMatch[1]); } catch { student.cancelReason = crMatch[1]; }
         }
+      }
+
+      const ptsMatch = student.notes.match(/\[PTS:(\d+)\]/);
+      if (ptsMatch) student.points = parseInt(ptsMatch[1]);
+
+      const lvlMatch = student.notes.match(/\[LVL:(\d+)\]/);
+      if (lvlMatch) student.level = parseInt(lvlMatch[1]);
+
+      const bdgMatch = student.notes.match(/\[BDG:(.*?)\]/);
+      if (bdgMatch) {
+         try { student.badges = JSON.parse(decode(bdgMatch[1])); } catch {}
       }
   
       // CLEAN the notes field for the UI
@@ -78,6 +97,11 @@ export const getStudents = async (teacherId: string): Promise<Student[]> => {
         .replace(/\[PRC:\d+\]/g, '')
         .replace(/\[HIST:.*?\]/g, '')
         .replace(/\[CR:.*?\]/g, '')
+        .replace(/\[QR:.*?\]/g, '')
+        .replace(/\[BN:.*?\]/g, '')
+        .replace(/\[PTS:\d+\]/g, '')
+        .replace(/\[LVL:\d+\]/g, '')
+        .replace(/\[BDG:.*?\]/g, '')
         .trim();
     }
     return student;
@@ -108,12 +132,36 @@ export const getAllStudents = async (): Promise<Student[]> => {
         if (imgMatch) student.imageUrl = imgMatch[1];
       }
 
+      const qrMatch = student.notes.match(/\[QR:(.*?)\]/);
+      if (qrMatch) student.qrCodeId = qrMatch[1];
+
+      const bnMatch = student.notes.match(/\[BN:(.*?)\]/);
+      if (bnMatch) {
+        try { student.behavioralNotes = decode(bnMatch[1]); } catch { student.behavioralNotes = bnMatch[1]; }
+      }
+
+      const ptsMatch = student.notes.match(/\[PTS:(\d+)\]/);
+      if (ptsMatch) student.points = parseInt(ptsMatch[1]);
+
+      const lvlMatch = student.notes.match(/\[LVL:(\d+)\]/);
+      if (lvlMatch) student.level = parseInt(lvlMatch[1]);
+
+      const bdgMatch = student.notes.match(/\[BDG:(.*?)\]/);
+      if (bdgMatch) {
+         try { student.badges = JSON.parse(decode(bdgMatch[1])); } catch {}
+      }
+
       student.notes = student.notes
         .replace(/\[ST:\d+\]/g, '')
         .replace(/\[IMG:.*?\]/g, '')
         .replace(/\[TP:\d+\]/g, '')
         .replace(/\[PRC:\d+\]/g, '')
         .replace(/\[HIST:.*?\]/g, '')
+        .replace(/\[QR:.*?\]/g, '')
+        .replace(/\[BN:.*?\]/g, '')
+        .replace(/\[PTS:\d+\]/g, '')
+        .replace(/\[LVL:\d+\]/g, '')
+        .replace(/\[BDG:.*?\]/g, '')
         .trim();
     }
     return student;
@@ -189,10 +237,18 @@ export const getStudentByParentPhone = async (parentPhone: string): Promise<Stud
     .eq('parent_phone', parentPhone.trim())
     .maybeSingle();
   if (error) throw error;
-  return data ? fromDB<Student>(data) : null;
+  if (!data) return null;
+  const student = fromDB<Student>(data);
+  if (student.notes && !student.imageUrl) {
+    const imgMatch = student.notes.match(/\[IMG:(.*?)\]/);
+    if (imgMatch) student.imageUrl = imgMatch[1];
+  }
+  if (student.code) {
+    student.code = student.code.replace(/-T[a-zA-Z0-9]+$/, '');
+  }
+  return student;
 };
 
-/** البحث عن طالب في أي مكان بالمنصة بواسطة رقم الهاتف */
 export const getStudentByPhoneAnywhere = async (phone: string): Promise<Student | null> => {
   if (!phone) return null;
   const normalized = normalizePhone(phone);
@@ -203,7 +259,17 @@ export const getStudentByPhoneAnywhere = async (phone: string): Promise<Student 
     .limit(1)
     .maybeSingle();
   if (error) throw error;
-  return data ? fromDB<Student>(data) : null;
+  if (!data) return null;
+  
+  const student = fromDB<Student>(data);
+  if (student.notes && !student.imageUrl) {
+    const imgMatch = student.notes.match(/\[IMG:(.*?)\]/);
+    if (imgMatch) student.imageUrl = imgMatch[1];
+  }
+  if (student.code) {
+    student.code = student.code.replace(/-T[a-zA-Z0-9]+$/, '');
+  }
+  return student;
 };
 
 /** البحث عن كافة طلبات التسجيل (الحالية والسابقة) لرقم هاتف */
@@ -226,6 +292,10 @@ export const getEnrollmentsByParentPhone = async (parentPhone: string): Promise<
     .eq('parent_phone', parentPhone.trim());
   if (error) throw error;
   return manyFromDB<Student>(data).map(s => {
+    if (s.notes && !s.imageUrl) {
+      const imgMatch = s.notes.match(/\[IMG:(.*?)\]/);
+      if (imgMatch) s.imageUrl = imgMatch[1];
+    }
     // UI CLEANING: Strip shadow sub-codes (-T...)
     if (s.code) s.code = s.code.replace(/-T[a-zA-Z0-9]+$/, '');
     return s;
@@ -244,6 +314,21 @@ export const getEnrollmentsByPhone = async (phone: string): Promise<Student[]> =
     // UI CLEANING: Strip shadow sub-codes (-T...)
     if (student.code) student.code = student.code.replace(/-T[a-zA-Z0-9]+$/, '');
 
+    if (student.notes && !student.imageUrl) {
+      const imgMatch = student.notes.match(/\[IMG:(.*?)\]/);
+      if (imgMatch) student.imageUrl = imgMatch[1];
+    }
+    
+    if (student.notes) {
+      const qrMatch = student.notes.match(/\[QR:(.*?)\]/);
+      if (qrMatch) student.qrCodeId = qrMatch[1];
+
+      const bnMatch = student.notes.match(/\[BN:(.*?)\]/);
+      if (bnMatch) {
+        try { student.behavioralNotes = decode(bnMatch[1]); } catch { student.behavioralNotes = bnMatch[1]; }
+      }
+    }
+
     if (student.notes) {
       const stMatch = student.notes.match(/\[ST:(\d+)\]/);
       if (stMatch) student.subStart = parseInt(stMatch[1]);
@@ -254,11 +339,27 @@ export const getEnrollmentsByPhone = async (phone: string): Promise<Student[]> =
       const prcMatch = student.notes.match(/\[PRC:(\d+)\]/);
       if (prcMatch) student.subPrice = parseInt(prcMatch[1]);
 
+      const ptsMatch = student.notes.match(/\[PTS:(\d+)\]/);
+      if (ptsMatch) student.points = parseInt(ptsMatch[1]);
+
+      const lvlMatch = student.notes.match(/\[LVL:(\d+)\]/);
+      if (lvlMatch) student.level = parseInt(lvlMatch[1]);
+
+      const bdgMatch = student.notes.match(/\[BDG:(.*?)\]/);
+      if (bdgMatch) {
+         try { student.badges = JSON.parse(decode(bdgMatch[1])); } catch {}
+      }
+
       student.notes = student.notes
         .replace(/\[ST:\d+\]/g, '')
         .replace(/\[IMG:.*?\]/g, '')
         .replace(/\[TP:\d+\]/g, '')
         .replace(/\[PRC:\d+\]/g, '')
+        .replace(/\[QR:.*?\]/g, '')
+        .replace(/\[BN:.*?\]/g, '')
+        .replace(/\[PTS:\d+\]/g, '')
+        .replace(/\[LVL:\d+\]/g, '')
+        .replace(/\[BDG:.*?\]/g, '')
         .trim();
     }
     return student;
@@ -280,6 +381,11 @@ export const saveStudent = async (student: Omit<Student, 'id'> & { id?: string }
     .replace(/\[TP:\d+\]/g, '')
     .replace(/\[PRC:\d+\]/g, '')
     .replace(/\[HIST:.*?\]/g, '')
+    .replace(/\[QR:.*?\]/g, '')
+    .replace(/\[BN:.*?\]/g, '')
+    .replace(/\[PTS:\d+\]/g, '')
+    .replace(/\[LVL:\d+\]/g, '')
+    .replace(/\[BDG:.*?\]/g, '')
     .trim();
   
   if (payload.sub_start !== undefined) {
@@ -332,6 +438,36 @@ export const saveStudent = async (student: Omit<Student, 'id'> & { id?: string }
       // Using base64 encoding to handle Arabic text and special characters safely
       cleanNotes = `${cleanNotes} [CR:${encode(cancelReason)}]`.trim();
     }
+  }
+
+  const qrCodeId = (student as any).qrCodeId;
+  if (qrCodeId !== undefined) {
+    cleanNotes = cleanNotes.replace(/\[QR:.*?\]/g, '').trim();
+    if (qrCodeId) {
+      cleanNotes = `${cleanNotes} [QR:${qrCodeId}]`.trim();
+    }
+  }
+
+  const behavioralNotes = (student as any).behavioralNotes;
+  if (behavioralNotes !== undefined) {
+    cleanNotes = cleanNotes.replace(/\[BN:.*?\]/g, '').trim();
+    if (behavioralNotes) {
+      cleanNotes = `${cleanNotes} [BN:${encode(behavioralNotes)}]`.trim();
+    }
+  }
+
+  if (payload.points !== undefined) {
+    cleanNotes = `${cleanNotes} [PTS:${payload.points}]`.trim();
+    delete payload.points;
+  }
+  if (payload.level !== undefined) {
+    cleanNotes = `${cleanNotes} [LVL:${payload.level}]`.trim();
+    delete payload.level;
+  }
+  if (payload.badges !== undefined) {
+    const bdgStr = encode(JSON.stringify(payload.badges || []));
+    cleanNotes = `${cleanNotes} [BDG:${bdgStr}]`.trim();
+    delete payload.badges;
   }
 
   payload.notes = cleanNotes || undefined;
@@ -431,33 +567,51 @@ export const subscribeToStudents = (teacherId: string, callback: (students: Stud
     callback([]);
     return () => {};
   }
+  
+  // Cache of current students for instant patching
+  let currentStudents: Student[] = [];
+  
   const channel = supabase
     .channel(`students:${teacherId}`)
     .on(
       'postgres_changes',
       { event: '*', schema: 'public', table: STUDENTS, filter: `teacher_id=eq.${teacherId}` },
       async (payload) => {
-        // Only re-fetch if it's an insert/delete or more than a presence update
-        if (payload.eventType === 'INSERT' || payload.eventType === 'DELETE') {
+        if (payload.eventType === 'INSERT') {
+          // Full re-fetch for inserts (need full deserialization)
           const students = await getStudents(teacherId);
+          currentStudents = students;
           callback(students);
+        } else if (payload.eventType === 'DELETE') {
+          // Instant local removal, then confirm with re-fetch
+          const deletedId = (payload.old as any).id;
+          const instant = currentStudents.filter(s => s.id !== deletedId);
+          currentStudents = instant;
+          callback(instant);
+          // Background confirm
+          getStudents(teacherId).then(fresh => { currentStudents = fresh; callback(fresh); }).catch(() => {});
         } else if (payload.eventType === 'UPDATE') {
-          // Trigger re-fetch on any subscription-related or key field change
           const n = payload.new as any;
           const o = payload.old as any;
-          // check notes instead of cancel_reason since cancel_reason is not a DB column anymore
           const subChanged = n.sub_type !== o.sub_type || n.sub_expiry !== o.sub_expiry || n.notes !== o.notes;
           const profileChanged = n.name !== o.name || n.grade !== o.grade || n.code !== o.code || n.phone !== o.phone;
           if (subChanged || profileChanged) {
-             const students = await getStudents(teacherId);
-             callback(students);
+            // \u26a1 Instant patch: apply raw payload immediately so UI doesn't wait for re-fetch
+            const patchedStudent = fromDB<Student>(n);
+            // Strip shadow code from instant patch too
+            if (patchedStudent.code) patchedStudent.code = patchedStudent.code.replace(/-T[a-zA-Z0-9]+$/, '');
+            const instant = currentStudents.map(s => s.id === patchedStudent.id ? { ...s, ...patchedStudent } : s);
+            currentStudents = instant;
+            callback(instant);
+            // Background full re-fetch for correct notes deserialization
+            getStudents(teacherId).then(fresh => { currentStudents = fresh; callback(fresh); }).catch(() => {});
           }
         }
       }
     )
     .subscribe();
 
-  getStudents(teacherId).then(callback);
+  getStudents(teacherId).then(data => { currentStudents = data; callback(data); });
   return () => supabase.removeChannel(channel);
 };
 
@@ -632,3 +786,76 @@ export const subscribeToRegistrationRequests = (teacherId: string, callback: (re
   getRegistrationRequests(teacherId).then(callback);
   return () => supabase.removeChannel(channel);
 };
+
+/**
+ * \u2693 Subscribe to new student records by phone number.
+ * Fires whenever a teacher approves a new student with this phone \u2014 new enrollment detected instantly.
+ */
+export const subscribeToStudentByPhone = (
+  phone: string,
+  onNewEnrollment: (students: Student[]) => void
+) => {
+  if (!phone) return () => {};
+  const normalized = normalizePhone(phone);
+  const channel = supabase
+    .channel(`student_phone:${normalized}`)
+    .on(
+      'postgres_changes',
+      { event: 'INSERT', schema: 'public', table: STUDENTS },
+      async (payload) => {
+        const newRow = payload.new as any;
+        const rowPhone = newRow.phone ? normalizePhone(newRow.phone) : '';
+        if (rowPhone === normalized) {
+          // New enrollment detected \u2014 fetch all enrollments for this phone
+          try {
+            const all = await getEnrollmentsByPhone(normalized);
+            onNewEnrollment(all);
+          } catch (e) {
+            console.warn('subscribeToStudentByPhone fetch failed:', e);
+          }
+        }
+      }
+    )
+    .subscribe();
+  return () => supabase.removeChannel(channel);
+};
+
+/**
+ * Subscribe to registration requests for a phone number.
+ * Fires when a pending request gets approved or deleted (rejected).
+ */
+export const subscribeToRegistrationRequestByPhone = (
+  phone: string,
+  onUpdate: (requests: RegistrationRequest[]) => void
+) => {
+  if (!phone) return () => {};
+  const normalized = normalizePhone(phone);
+  const channel = supabase
+    .channel(`reg_req_phone:${normalized}`)
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: REG_REQUESTS },
+      async (payload) => {
+        const row = (payload.new as any) || (payload.old as any);
+        const rowPhone = row?.phone ? normalizePhone(row.phone) : '';
+        if (rowPhone === normalized) {
+          const reqs = await getRegistrationRequestsByPhone(normalized);
+          onUpdate(reqs);
+        }
+      }
+    )
+    .subscribe();
+  return () => supabase.removeChannel(channel);
+};
+
+export const getTopStudents = async (teacherId: string, limit: number = 10): Promise<Student[]> => {
+  if (!teacherId || teacherId === 'unknown_teacher') return [];
+  try {
+    const students = await getStudents(teacherId);
+    return students.sort((a, b) => (b.points || 0) - (a.points || 0)).slice(0, limit);
+  } catch (error) {
+    console.error('Error fetching top students:', error);
+    return [];
+  }
+};
+

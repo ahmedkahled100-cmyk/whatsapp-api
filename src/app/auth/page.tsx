@@ -5,13 +5,13 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTeacherStore } from '@/lib/store';
-import { getTeacherByUsername, getTeachers, saveTeacher, getSettings, getTeacherByCode, getTeacherByPhone, updateSuperAdminCredentials } from '@/lib/db';
+import { getTeacherByUsername, getTeachers, saveTeacher, getSettings, getTeacherByCode, getTeacherByPhone, updateSuperAdminCredentials, getAssistantProfileByUsername, getAssistantProfileByCode, getTeachersForAssistant } from '@/lib/db';
 import { Eye, EyeOff, Lock, User, GraduationCap, AlertCircle, KeySquare } from 'lucide-react';
 import type { TeacherUser } from '@/types';
 
 export default function AuthPage() {
   const router = useRouter();
-  const { user, setUser, setSettings } = useTeacherStore();
+  const { user, setUser, setSettings, setActiveTeacherId } = useTeacherStore();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [code, setCode] = useState('');
@@ -29,6 +29,7 @@ export default function AuthPage() {
     setMounted(true);
     if (user) {
       if (user.role === 'super_admin') router.replace('/admin');
+      else if (user.role === 'assistant') router.replace('/assistant/dashboard');
       else router.replace('/teacher/dashboard');
     }
   }, [user, router]);
@@ -88,6 +89,29 @@ export default function AuthPage() {
         }
 
         if (!teacherToAuth) {
+          const assist = await getAssistantProfileByUsername(username);
+          if (assist) {
+            if (assist.status !== 'approved') {
+              setError('❌ هذا الحساب بانتظار موافقة الإدارة');
+              setLoading(false);
+              return;
+            }
+            teacherToAuth = {
+              id: assist.id,
+              name: assist.name,
+              username: assist.username,
+              password: assist.password,
+              role: 'assistant',
+              isActive: true,
+              imageUrl: assist.imageUrl,
+              code: assist.code,
+              subject: assist.roleTitle,
+              createdAt: assist.createdAt
+            };
+          }
+        }
+
+        if (!teacherToAuth) {
           setError('❌ المستخدم غير موجود');
         } else if (!teacherToAuth.isActive) {
           setError('❌ هذا الحساب غير مفعل');
@@ -115,6 +139,28 @@ export default function AuthPage() {
           return; 
         }
         teacherToAuth = await getTeacherByCode(code.trim());
+        if (!teacherToAuth && code.trim().toUpperCase().startsWith('AST-')) {
+          const assist = await getAssistantProfileByCode(code.trim());
+          if (assist) {
+            if (assist.status !== 'approved') {
+              setError('❌ هذا الحساب بانتظار موافقة الإدارة');
+              setLoading(false);
+              return;
+            }
+            teacherToAuth = {
+              id: assist.id,
+              name: assist.name,
+              username: assist.username,
+              password: assist.password,
+              role: 'assistant',
+              isActive: true,
+              imageUrl: assist.imageUrl,
+              code: assist.code,
+              subject: assist.roleTitle,
+              createdAt: assist.createdAt
+            };
+          }
+        }
         if (!teacherToAuth) {
           setError('❌ الكود غير صحيح');
         } else if (!teacherToAuth.isActive) {
@@ -136,7 +182,11 @@ export default function AuthPage() {
           setSettings(null);
         }
         
-        if (teacherToAuth.role === 'super_admin') {
+        if (teacherToAuth.role === 'assistant') {
+          setActiveTeacherId(null);
+          setSettings(null);
+          window.location.href = '/assistant/dashboard';
+        } else if (teacherToAuth.role === 'super_admin') {
           router.replace('/admin');
         } else {
           router.replace('/teacher/dashboard');
@@ -192,7 +242,7 @@ export default function AuthPage() {
               <img src="/logo.png" alt="A-N Academy" className="relative z-10 w-12 h-12 sm:w-14 sm:h-14 object-contain rounded-full" />
             </div>
             <h1 className="text-xl sm:text-2xl font-cairo font-black gold-text text-center">أكاديمية A-N</h1>
-            <p className="text-[10px] sm:text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>تسجيل الدخول للإدارة والمعلمين</p>
+            <p className="text-[10px] sm:text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>تسجيل الدخول للإدارة، المعلمين والمساعدين</p>
           </div>
 
           {/* Method Toggle */}
@@ -311,6 +361,9 @@ export default function AuthPage() {
             </button>
             <a href="/student" className="text-sm block w-full hover:underline font-bold" style={{ color: 'var(--gold)' }}>
               👤 أنت طالب؟ اضغط هنا للدخول بالكود
+            </a>
+            <a href="/assistant-register" className="text-xs block w-full hover:underline font-medium" style={{ color: 'var(--accent)' }}>
+              🤝 هل أنت مساعد مادة؟ اضغط هنا للتسجيل في المنصة
             </a>
           </div>
 

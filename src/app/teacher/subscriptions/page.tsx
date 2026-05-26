@@ -33,7 +33,7 @@ const totalPaidOf = (s: Student) => {
 type SubType = 'monthly' | 'halfYearly' | 'yearly' | 'course' | 'session' | 'none' | 'free';
 
 export default function SubscriptionsPage() {
-  const { students, groups, registrationRequests } = useTeacherStore();
+  const { students, groups, registrationRequests, setRegistrationRequests } = useTeacherStore();
   const user = useTeacherStore(state => state.user);
   const [activeTab, setActiveTab] = useState<'current' | 'pending' | 'expiring' | 'renewals' | 'financials'>('current');
   const [search, setSearch] = useState('');
@@ -136,16 +136,20 @@ export default function SubscriptionsPage() {
         subStart = null;
       }
  
-      const subPrice = parseFloat(editForm.subPrice) || 0;
  
-      await saveStudent({ 
+      const newStudentObj = { 
         ...editingStudent, 
         subType: editForm.subType, 
         subStart, 
         subExpiry, 
         subPrice,
         cancelReason: editForm.cancelReason
-      });
+      };
+
+      // Optimistic Update
+      useTeacherStore.getState().setStudents(students.map(s => s.id === editingStudent.id ? newStudentObj as Student : s));
+
+      await saveStudent(newStudentObj);
       showToast('✅ تم تحديث بيانات الاشتراك دون تسجيل دفعة جديدة');
       setEditingStudent(null);
     } catch {
@@ -193,8 +197,11 @@ export default function SubscriptionsPage() {
         paymentHistory: history,
         cancelReason: editForm.cancelReason
       };
+
+      // Optimistic update
+      useTeacherStore.getState().setStudents(students.map(s => s.id === editingStudent.id ? updated as Student : s));
+
       await saveStudent(updated);
-      setEditingStudent(updated);
       showToast('✅ تم تسجيل الدفعة بنجاح وتحديث الاشتراك');
       setEditingStudent(null);
     } catch {
@@ -278,6 +285,13 @@ export default function SubscriptionsPage() {
         }
     }
 
+    if (!code) {
+        const localExisting = students.find(s => s.id === req.studentId || normalizePhone(s.phone) === normalizePhone(req.phone));
+        if (localExisting && localExisting.code) {
+            code = localExisting.code;
+        }
+    }
+
     if (type === 'new' && !code) {
         // Only generate if absolutely no record exists anywhere
         code = generateCode();
@@ -301,10 +315,14 @@ export default function SubscriptionsPage() {
     try {
       const subStart = new Date(approvalForm.subStart).getTime();
       const subExpiry = new Date(approvalForm.subExpiry).getTime();
-      const code = approvalForm.code || req.existingCode || generateCode();
+      
+      let finalStudentObj: any = null;
 
       if (type === 'new') {
-        await saveStudent({
+        const existingStudent = students.find(s => normalizePhone(s.phone) === normalizePhone(req.phone));
+        const code = existingStudent ? existingStudent.code : (approvalForm.code || req.existingCode || generateCode());
+        
+        finalStudentObj = {
           name: req.name, phone: req.phone, parentPhone: req.parentPhone,
           grade: req.grade, code, subType: req.subType, subExpiry, subStart,
           subPrice: req.subPrice || 0, imageUrl: req.imageUrl || '',
@@ -312,7 +330,21 @@ export default function SubscriptionsPage() {
           email: '', groupIds: [],
           notes: `تم طلب التسجيل إلكترونياً. مرجع: ${req.paymentRef || 'لا يوجد'}`,
           registeredAt: new Date().toISOString(), createdAt: Date.now()
-        });
+        };
+        
+        if (existingStudent) {
+            finalStudentObj = { ...existingStudent, ...finalStudentObj, id: existingStudent.id };
+        } else {
+            finalStudentObj.id = 'temp-' + Date.now();
+        }
+
+        // Optimistic UI state
+        useTeacherStore.getState().setStudents(
+            existingStudent ? students.map(s => s.id === existingStudent.id ? finalStudentObj as Student : s) : [...students, finalStudentObj as Student]
+        );
+        useTeacherStore.getState().setRegistrationRequests(registrationRequests.filter(r => r.id !== req.id));
+
+        await saveStudent(finalStudentObj);
       } else {
         const existingStudent = students.find(s => s.id === req.studentId || normalizePhone(s.phone) === normalizePhone(req.phone));
         if (!existingStudent) throw new Error('Student not found');
@@ -322,7 +354,7 @@ export default function SubscriptionsPage() {
         const history = [...(existingStudent.paymentHistory || []), { date: Date.now(), amount: price, type: req.subType }];
         const totalPaid = (existingStudent.totalPaid || 0) + price;
 
-        await saveStudent({
+        finalStudentObj = {
           ...existingStudent,
           subType: req.subType,
           subStart,
@@ -330,7 +362,13 @@ export default function SubscriptionsPage() {
           subPrice: price,
           totalPaid,
           paymentHistory: history
-        });
+        };
+
+        // Optimistic UI state
+        useTeacherStore.getState().setStudents(students.map(s => s.id === existingStudent.id ? finalStudentObj as Student : s));
+        useTeacherStore.getState().setRegistrationRequests(registrationRequests.filter(r => r.id !== req.id));
+
+        await saveStudent(finalStudentObj);
       }
 
       const subTypeMap: Record<string, string> = {
@@ -367,7 +405,7 @@ export default function SubscriptionsPage() {
       }
 
       await deleteRegistrationRequest(req.id);
-      showToast(`✅ تم ${type === 'new' ? 'تفعيل الطالب' : 'تجديد الاشتراك'} بنجاح! ${type === 'new' ? `كود: ${code}` : ''}`);
+      showToast(`✅ تم ${type === 'new' ? 'تفعيل الطالب' : 'تجديد الاشتراك'} بنجاح! ${type === 'new' ? `كود: ${finalStudentObj.code}` : ''}`);
       setPendingApproval(null);
     } catch (e: any) {
       showToast('❌ فشل الحفظ: ' + e.message);
@@ -533,7 +571,7 @@ export default function SubscriptionsPage() {
                   <div className="flex justify-between items-start mb-4">
                     <div className="flex-1 min-w-0">
                       <h3 className="font-bold text-lg truncate">{student.name}</h3>
-                      <div className="text-xs text-gray-400 font-mono">{student.code}</div>
+                      <div className="text-xs text-gray-400 font-mono">{student.code.replace(/-T[A-Z0-9]+$/i, '')}</div>
                       {student.phone && <div className="text-xs text-gray-500 mt-0.5" dir="ltr">{student.phone}</div>}
                     </div>
                     <button onClick={() => openEdit(student)} className="p-2 hover:bg-white/10 rounded-lg transition-colors text-gray-400 hover:text-white">
@@ -646,7 +684,7 @@ export default function SubscriptionsPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <h3 className="font-bold text-lg">{student.name}</h3>
-                  <div className="text-xs text-gray-400">{student.code} | {translateSubType(student.subType)} | {(student.subPrice || 0)} ج.م</div>
+                  <div className="text-xs text-gray-400">{student.code.replace(/-T[A-Z0-9]+$/i, '')} | {translateSubType(student.subType)} | {(student.subPrice || 0)} ج.م</div>
                   <div className="text-xs text-gray-500 mt-0.5">ينتهي: {student.subExpiry ? new Date(student.subExpiry).toLocaleDateString('ar-EG') : '—'}</div>
                 </div>
                 <div className="flex gap-2 flex-shrink-0">
@@ -697,7 +735,12 @@ export default function SubscriptionsPage() {
                   <button onClick={() => openApproveModal(req, 'new')} className="flex-1 bg-green-500/20 text-green-400 hover:bg-green-500/30 py-2.5 rounded-lg font-bold text-sm flex justify-center items-center gap-2 border border-green-500/20 transition-colors">
                     <CheckCircle size={16} /> مراجعة وتفعيل
                   </button>
-                  <button onClick={async () => { if (!confirm('رفض هذا الطلب؟')) return; await deleteRegistrationRequest(req.id); }} className="p-2.5 bg-red-500/10 text-red-400 hover:bg-red-500/20 rounded-lg border border-red-500/10 transition-colors">
+                  <button onClick={async () => {
+                    if (!confirm('رفض هذا الطلب؟')) return;
+                    setRegistrationRequests(registrationRequests.filter(r => r.id !== req.id));
+                    try { await deleteRegistrationRequest(req.id); showToast('✅ تم رفض الطلب'); }
+                    catch { showToast('❌ فشل الرفض'); }
+                  }} className="p-2.5 bg-red-500/10 text-red-400 hover:bg-red-500/20 rounded-lg border border-red-500/10 transition-colors">
                     <XCircle size={18} />
                   </button>
                 </div>
@@ -788,7 +831,12 @@ export default function SubscriptionsPage() {
                       <Phone size={16} />
                     </button>
                     <button
-                      onClick={async () => { if (!confirm('رفض طلب التجديد؟')) return; await deleteRegistrationRequest(req.id); showToast('تم رفض الطلب'); }}
+                      onClick={async () => {
+                        if (!confirm('رفض طلب التجديد؟')) return;
+                        setRegistrationRequests(registrationRequests.filter(r => r.id !== req.id));
+                        try { await deleteRegistrationRequest(req.id); showToast('✅ تم رفض طلب التجديد'); }
+                        catch { showToast('❌ فشل الرفض'); }
+                      }}
                       className="p-2.5 bg-red-500/10 text-red-400 hover:bg-red-500/20 rounded-lg border border-red-500/10 transition-colors"
                     >
                       <XCircle size={18} />
@@ -995,7 +1043,12 @@ export default function SubscriptionsPage() {
                     {pendingApproval.type === 'new' && (
                       <div className="flex justify-between items-center text-xs">
                         <span className="text-gray-400 font-bold uppercase tracking-wider">كود الطالب الموحد</span>
-                        <span className="font-mono font-black text-gold bg-black/30 px-2 py-0.5 rounded border border-white/5">{approvalForm.code}</span>
+                        <input
+                            type="text"
+                            value={approvalForm.code}
+                            onChange={(e) => setApprovalForm({ ...approvalForm, code: e.target.value })}
+                            className="input-base text-xs font-mono font-black text-gold bg-black/30 px-2 py-1 rounded border border-white/5 w-32 text-center"
+                        />
                       </div>
                     )}
                 </div>

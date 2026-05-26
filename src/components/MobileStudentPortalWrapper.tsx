@@ -73,6 +73,7 @@ export function MobileStudentPortalWrapper({
         else onTabChange(tab);
       }}
       notifCount={unreadNotifCount}
+      notifications={notifications}
       msgCount={unreadMsgCount}
       onNotifClick={onNotifClick}
       onLogout={onLogout}

@@ -132,8 +132,8 @@ export default function DashboardPage() {
           { id: 'subscriptions', label: 'إجمالي الاشتراكات', value: `${stats.totalRevenue} ج.م`, icon: '💰', color: '#10B981', sub: 'إيرادات الطلاب', href: '/teacher/subscriptions' },
         ].filter(s => {
           if (s.id === 'requests') return hasPermission('subscriptions');
-          if (s.id === 'results') return hasPermission('students');
-          if (s.id === 'essays') return hasPermission('analytics');
+          if (s.id === 'results') return hasPermission('results');
+          if (s.id === 'essays') return hasPermission('essays');
           return hasPermission(s.id);
         }).map((s, i) => (
           <Link href={s.href} key={i} className="stat-card hover:-translate-y-1 hover:shadow-lg transition-all duration-300 block cursor-pointer">

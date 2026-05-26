@@ -20,9 +20,11 @@ export {
   getStudents, getAllStudents, getStudentByCode, getStudentByParentPhone, 
   getEnrollmentsByParentPhone, getEnrollmentsByPhone, getStudentByPhoneAnywhere,
   getRegistrationRequestsByPhone, saveStudent, deleteStudent, 
-  subscribeToStudents, subscribeToAllStudents, subscribeToStudent, getGroups, 
-  saveGroup, deleteGroup, subscribeToGroups, getRegistrationRequests, 
-  saveRegistrationRequest, deleteRegistrationRequest, subscribeToRegistrationRequests 
+  subscribeToStudents, subscribeToAllStudents, subscribeToStudent,
+  subscribeToStudentByPhone, subscribeToRegistrationRequestByPhone,
+  getGroups, saveGroup, deleteGroup, subscribeToGroups, getRegistrationRequests, 
+  saveRegistrationRequest, deleteRegistrationRequest, subscribeToRegistrationRequests,
+  getTopStudents
 } from './supabase/students';
 
 export { 
@@ -49,7 +51,9 @@ export { getCalendarEvents, saveCalendarEvent, deleteCalendarEvent } from './sup
 
 export { 
   sendMessage, subscribeToConversations, subscribeToMessages, 
-  markMessagesAsRead, setUserOnlineStatus, subscribeToUserOnlineStatus 
+  markMessagesAsRead, setUserOnlineStatus, subscribeToUserOnlineStatus,
+  heartbeatUserOnlineStatus, loadOlderMessages,
+  broadcastTyping, subscribeToTyping
 } from './supabase/messages';
 
 export { 
@@ -62,3 +66,24 @@ export {
 } from './app-settings';
 
 export { wipeAllData, wipeStudentInteraction } from './admin';
+
+export {
+  getAttendanceSessions, createAttendanceSession, updateAttendanceSessionStatus,
+  getAttendanceRecords, saveAttendanceRecord, getStudentAttendanceHistory
+} from './supabase/attendance';
+
+export {
+  getTransactions, saveTransaction, deleteTransaction
+} from './supabase/finances';
+
+export {
+  getAssistants, saveAssistant, deleteAssistant,
+  updateAssistantLinkStatus,
+  saveAssistantLink, deleteAssistantLink, saveAssistantProfile,
+  getAssistantProfileByCode, getAssistantProfileByUsername,
+  getAllAssistantProfiles, getTeachersForAssistant,
+  saveAssistantJob, getAssistantJobs, getJobsByTeacher, 
+  saveJobApplication, getApplicationsForJob, getApplicationsForAssistant,
+  deleteAssistantJob,
+  updateApplicationStatus, updateAssistantProfile
+} from './supabase/hr';

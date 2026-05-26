@@ -21,7 +21,7 @@ export default function NotificationsAdmin() {
 
   // Compose State
   const [msg, setMsg] = useState('');
-  const [targetType, setTargetType] = useState<'all' | 'group' | 'student'>('all');
+  const [targetType, setTargetType] = useState<'all' | 'group' | 'student' | 'assistant'>('all');
   const [selectedGroup, setSelectedGroup] = useState('');
   const [selectedStudent, setSelectedStudent] = useState('');
   const [channels, setChannels] = useState({ inApp: true, whatsapp: false });
@@ -68,6 +68,10 @@ export default function NotificationsAdmin() {
         targetUsers = groupStudents.map(s => s.id);
         whatsappNumbers = groupStudents.filter(s => s.phone).map(s => s.phone as string);
         summaryText = groups.find(g => g.id === selectedGroup)?.name || 'مجموعة';
+      } else if (targetType === 'assistant') {
+        // target all assistants
+        targetUsers = []; // empty means global for in-app
+        summaryText = 'جميع المساعدين';
       } else {
         // all
         targetUsers = []; // empty means global for in-app
@@ -77,7 +81,7 @@ export default function NotificationsAdmin() {
       await dispatchNotification({
         teacherId: user.id,
         msg,
-        targetRoles: targetType === 'all' ? ['student'] : [], // if all, target all students
+        targetRoles: targetType === 'all' ? ['student'] : targetType === 'assistant' ? ['assistant'] : [], // if all, target all students
         targetUsers: targetUsers.length > 0 ? targetUsers : undefined,
         channels: { inApp: channels.inApp, whatsapp: channels.whatsapp },
         whatsappNumbers: channels.whatsapp ? whatsappNumbers : []
@@ -201,7 +205,8 @@ export default function NotificationsAdmin() {
                     onChange={(e: any) => setTargetType(e.target.value)}
                   >
                     <option value="all">جميع الطلاب مسجلون</option>
-                    <option value="group">مجموعة محددة</option>
+                    <option value="assistant">جميع المساعدين</option>
+                    <option value="group">مجموعة محددة (طلاب)</option>
                     <option value="student">طالب محدد</option>
                   </select>
 

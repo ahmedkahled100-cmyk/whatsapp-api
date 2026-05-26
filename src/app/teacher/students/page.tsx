@@ -6,12 +6,14 @@ import { useSearchParams } from 'next/navigation';
 import { useTeacherStore } from '@/lib/store';
 import { showToast } from '@/lib/toast';
 import { saveStudent, deleteStudent, uploadFileToStorage, deleteRegistrationRequest, getSettings, wipeStudentInteraction } from '@/lib/db';
-import { generateCode, formatDateAr } from '@/lib/utils';
+import { generateCode, formatDateAr, printHtml, openStudentCardForPrint } from '@/lib/utils';
 import type { Student } from '@/types';
-import { UserPlus, Search, Trash2, Copy, Users, Phone, Upload, Loader2, FileSpreadsheet, Download, Edit, Eye, Printer, Calendar, Clock, Award, CheckCircle2, XCircle, RotateCcw, ImageIcon, X } from 'lucide-react';
+import { UserPlus, Search, Trash2, Copy, Users, Phone, Upload, Loader2, FileSpreadsheet, Edit, Eye, Printer, Calendar, Clock, Award, CheckCircle2, XCircle, RotateCcw, ImageIcon, X, QrCode, Download } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import { GlobalFileUpload } from '@/components/GlobalFileUpload';
 import { ImageModal } from '@/components/ImageModal';
 import { FinancialReports } from '@/components/FinancialReports';
+import Image from 'next/image';
 
 const EMPTY_STUDENT: Omit<Student, 'id'> = {
   name: '', code: '', email: '', phone: '', parentPhone: '',
@@ -34,6 +36,12 @@ function StudentsPageContent() {
   
   // Image Modal state
   const [selectedImg, setSelectedImg] = useState<{ src: string, alt: string } | null>(null);
+
+  // Selection state for bulk barcode printing
+  const [selectedStudents, setSelectedStudents] = useState<Set<string>>(new Set());
+  const [printingBarcodes, setPrintingBarcodes] = useState(false);
+  const [exportingStudent, setExportingStudent] = useState<Student | null>(null);
+  const [exportingBulk, setExportingBulk] = useState(false);
 
   useEffect(() => {
     if (user?.id) {
@@ -242,7 +250,7 @@ function StudentsPageContent() {
     const headers = ['الاسم', 'الكود', 'الهاتف', 'هاتف ولي الأمر', 'الصف الدراسي', 'نوع الاشتراك', 'تاريخ التسجيل'];
     const rows = filtered.map(s => [
       `"${s.name}"`, `"${s.code}"`, `"${s.phone || ''}"`, `"${s.parentPhone || ''}"`, `"${s.grade || ''}"`, 
-      `"${s.subType}"`, `"${s.registeredAt}"`
+      `"${s.subType}"`, `"${s.registeredAt ? (s.registeredAt.includes('T') ? s.registeredAt.split('T')[0] : s.registeredAt) : ''}"`
     ]);
     const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
     const link = document.createElement('a');
@@ -305,7 +313,7 @@ function StudentsPageContent() {
       ``,
       `👤 *بيانات الطالب:*`,
       `• الاسم: ${student.name}`,
-      `• الكود: ${student.code}`,
+      `• الكود: ${student.code.replace(/-T[A-Z0-9]+$/i, '')}`,
       `• الصف: ${student.grade || 'غير محدد'}`,
       ``,
       `🏆 *التميز والتفاعل:*`,
@@ -313,6 +321,11 @@ function StudentsPageContent() {
       `• إجمالي النقاط: 🌟 ${student.points || 0} نقطة`,
       ...(student.badges && student.badges.length > 0 ? [`• الأوسمة المكتسبة: 🏅 ${student.badges.length} وسام`] : []),
       ``,
+      ...((student as any).behavioralNotes ? [
+        `📝 *الملاحظات السلوكية:*`,
+        `${(student as any).behavioralNotes}`,
+        ``
+      ] : []),
       `📋 *حالة الاشتراك:*`,
       `• النوع: ${subTypeMap[student.subType] || student.subType}`,
       `• الحالة: ${subStatus}`,
@@ -354,6 +367,23 @@ function StudentsPageContent() {
     }
   };
 
+  const handleExportStudentCard = (student: Student) => {
+    openStudentCardForPrint(student, user?.name || 'المنصة التعليمية');
+    showToast('✅ تم فتح بطاقة الطالب - اختر "حفظ كـ PDF" من قائمة الطباعة');
+  };
+
+  const handleExportBulkCards = async () => {
+    setExportingBulk(true);
+    try {
+      await exportBulkToPdf('bulk-print-container', `بطاقات_الطلاب_${new Date().toISOString().split('T')[0]}.pdf`);
+      showToast('✅ تم تصدير كافة بطاقات الطلاب كـ PDF بنجاح');
+    } catch (err) {
+      showToast('❌ فشل تصدير ملف PDF المجمع', 'error');
+    } finally {
+      setExportingBulk(false);
+    }
+  };
+
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -371,10 +401,32 @@ function StudentsPageContent() {
         </div>
       </div>
 
+      {selectedStudents.size > 0 && (
+        <div className="flex items-center justify-between p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl animate-fade-in">
+          <div className="text-amber-400 font-bold text-sm">تم تحديد {selectedStudents.size} طالب</div>
+          <div className="flex gap-2">
+            <button onClick={() => setPrintingBarcodes(true)} className="btn-gold text-black px-4 py-1.5 rounded-lg text-sm flex items-center gap-2">
+              <QrCode size={16} /> طباعة الباركود للطلاب المحددين
+            </button>
+            <button onClick={() => setSelectedStudents(new Set())} className="px-3 py-1.5 text-gray-400 hover:text-white transition">إلغاء التحديد</button>
+          </div>
+        </div>
+      )}
 
           <div className="relative">
             <Search size={15} className="absolute top-1/2 -translate-y-1/2 right-3 opacity-50" />
-            <input type="text" placeholder="ابحث بالاسم أو الكود أو الصف..." value={search} onChange={e => setSearch(e.target.value)} className="input-base has-icon-right text-sm w-full" />
+            <input 
+              type="text" 
+              placeholder="ابحث بالاسم أو الكود أو الصف (امسح الباركود واضغط Enter)..." 
+              value={search} 
+              onChange={e => setSearch(e.target.value)} 
+              onKeyDown={e => {
+                if (e.key === 'Enter' && filtered.length === 1) {
+                  setViewStudent(filtered[0]);
+                }
+              }}
+              className="input-base has-icon-right text-sm w-full" 
+            />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -401,6 +453,17 @@ function StudentsPageContent() {
                 <table className="w-full text-right">
                   <thead>
                     <tr className="bg-white/5 text-[11px] uppercase text-text-muted">
+                      <th className="px-4 py-3 w-10">
+                        <input 
+                          type="checkbox" 
+                          className="accent-amber-500" 
+                          checked={filtered.length > 0 && selectedStudents.size === filtered.length}
+                          onChange={e => {
+                            if (e.target.checked) setSelectedStudents(new Set(filtered.map(s => s.id)));
+                            else setSelectedStudents(new Set());
+                          }}
+                        />
+                      </th>
                       <th className="px-4 py-3">الاسم</th>
                       <th className="px-4 py-3">الكود</th>
                       <th className="px-4 py-3">الصف</th>
@@ -418,12 +481,27 @@ function StudentsPageContent() {
                       return (
                         <tr key={student.id} className="hover:bg-white/5 transition-colors">
                           <td className="px-4 py-3">
+                            <input 
+                              type="checkbox" 
+                              className="accent-amber-500"
+                              checked={selectedStudents.has(student.id)}
+                              onChange={e => {
+                                const newSet = new Set(selectedStudents);
+                                if (e.target.checked) newSet.add(student.id);
+                                else newSet.delete(student.id);
+                                setSelectedStudents(newSet);
+                              }}
+                            />
+                          </td>
+                          <td className="px-4 py-3">
                             <div className="flex items-center gap-2">
                               {student.imageUrl ? (
-                                <img 
+                                <Image 
                                   src={student.imageUrl} 
                                   className="w-10 h-10 rounded-full border border-white/10 object-cover cursor-pointer hover:scale-110 hover:border-gold transition-all" 
                                   alt={student.name}
+                                  width={40}
+                                  height={40}
                                   onClick={() => setSelectedImg({ src: student.imageUrl!, alt: student.name })}
                                 />
                               ) : (
@@ -447,13 +525,14 @@ function StudentsPageContent() {
                               </div>
                             </div>
                           </td>
-                          <td className="px-4 py-3"><code className="bg-gold/10 text-gold px-2 py-0.5 rounded text-xs">{student.code}</code></td>
+                          <td className="px-4 py-3"><code className="bg-gold/10 text-gold px-2 py-0.5 rounded text-xs">{student.code.replace(/-T[A-Z0-9]+$/i, '')}</code></td>
                           <td className="px-4 py-3 text-sm">{student.grade || '—'}</td>
                           <td className="px-4 py-3 text-sm text-text-muted">{studentAttempts.length} محاولة</td>
                           <td className="px-4 py-3">
                             <div className="flex gap-2 justify-end">
                               <button onClick={() => handleWhatsAppReport(student)} className="text-emerald-400 hover:text-emerald-300 p-1 bg-white/5 rounded" title="إرسال تقرير واتساب"><Phone size={16} /></button>
                               <button onClick={() => handleResetInteraction(student.id, student.name)} className="text-orange-400 hover:text-orange-300 p-1 bg-white/5 rounded" title="تصفير التفاعل"><RotateCcw size={16} /></button>
+                              <button onClick={() => handleExportStudentCard(student)} className="text-amber-400 hover:text-amber-300 p-1 bg-white/5 rounded" title="تصدير بطاقة الطالب PDF"><Download size={16} /></button>
                               <button onClick={() => setViewStudent(student)} className="text-green-400 hover:text-green-300 p-1 bg-white/5 rounded" title="تفاصيل الطالب"><Eye size={16} /></button>
                               <button onClick={() => openEdit(student)} className="text-blue-400 hover:text-blue-300 p-1 bg-white/5 rounded"><Edit size={16} /></button>
                               <button onClick={() => handleDelete(student.id, student.name)} className="text-red-400 hover:text-red-300 p-1 bg-white/5 rounded"><Trash2 size={16} /></button>
@@ -474,10 +553,12 @@ function StudentsPageContent() {
                   <div key={student.id} className="card-base p-4 flex items-center justify-between border border-white/5 hover-premium">
                     <div className="flex items-center gap-3">
                       {student.imageUrl ? (
-                        <img 
+                        <Image 
                           src={student.imageUrl} 
                           className="w-10 h-10 rounded-full border border-white/10 object-cover" 
                           alt={student.name}
+                          width={40}
+                          height={40}
                         />
                       ) : (
                         <div className="w-10 h-10 rounded-full bg-gold/20 flex items-center justify-center text-gold text-xs font-bold">
@@ -489,7 +570,7 @@ function StudentsPageContent() {
                         <div className="text-[10px] text-text-muted mt-0.5 flex items-center gap-1">
                           <span>{student.grade}</span>
                           <span>|</span>
-                          <code className="text-gold">{student.code}</code>
+                          <code className="text-gold">{student.code.replace(/-T[A-Z0-9]+$/i, '')}</code>
                           {isCancelledByTeacher ? (
                             <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/10 text-red-400 border border-red-500/20 font-bold">⛔ ملغى</span>
                           ) : isFreeStudent ? (
@@ -504,6 +585,7 @@ function StudentsPageContent() {
                     </div>
                     <div className="flex gap-2">
                       <button onClick={() => handleWhatsAppReport(student)} className="p-2 bg-white/5 rounded-lg text-emerald-400"><Phone size={14} /></button>
+                      <button onClick={() => handleExportStudentCard(student)} className="p-2 bg-white/5 rounded-lg text-amber-400" title="تصدير بطاقة الطالب PDF"><Download size={14} /></button>
                       <button onClick={() => setViewStudent(student)} className="p-2 bg-white/5 rounded-lg text-green-400"><Eye size={14} /></button>
                       <button onClick={() => openEdit(student)} className="p-2 bg-white/5 rounded-lg text-blue-400"><Edit size={14} /></button>
                       <button onClick={() => handleDelete(student.id, student.name)} className="p-2 bg-white/5 rounded-lg text-red-400"><Trash2 size={14} /></button>
@@ -523,37 +605,158 @@ function StudentsPageContent() {
             <div className="sticky top-0 z-10 flex items-center justify-between p-4 bg-[#0a0f18]/90 backdrop-blur border-b border-white/5 print:hidden">
               <h3 className="font-black text-xl gold-text flex items-center gap-2"><Eye size={24} /> ملف الطالب الشامل</h3>
               <div className="flex gap-2">
-                <button onClick={() => handleWhatsAppReport(viewStudent)} className="btn-outline border-green-500/50 text-green-400 py-2 px-4 flex items-center gap-2 print:hidden"><Phone size={18} /> تقرير واتساب لولي الأمر</button>
-                <button onClick={() => window.print()} className="btn-gold py-2 px-4 flex items-center gap-2 print:hidden"><Printer size={18} /> طباعة التقرير</button>
+                <button 
+                  onClick={() => {
+                    const cleanPhone = require('@/lib/utils').cleanWhatsAppPhone(viewStudent.phone || viewStudent.parentPhone);
+                    if (cleanPhone) {
+                      const msg = `مرحباً بك في أكاديمية ${user?.name || ''} 👋\n\nكود الطالب الخاص بك هو:\n*${viewStudent.code}*\n\nيمكنك استخدام هذا الكود لتسجيل الحضور ومعرفة درجاتك.\n\nرابط الباركود:\nhttps://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${viewStudent.code}`;
+                      window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`, '_blank');
+                    } else {
+                      showToast('لا يوجد رقم هاتف صالح', 'error');
+                    }
+                  }} 
+                  className="btn-outline border-green-500/50 text-green-400 py-2 px-4 flex items-center gap-2 print:hidden"
+                  title="إرسال الباركود عبر واتساب"
+                >
+                  <QrCode size={18} /> إرسال الباركود
+                </button>
+                <button 
+                  onClick={() => openStudentCardForPrint(viewStudent, user?.name || 'المنصة التعليمية')} 
+                  className="btn-outline border-amber-500/50 text-amber-400 py-2 px-4 flex items-center gap-2 print:hidden"
+                  title="طباعة / حفظ بطاقة الطالب كـ PDF"
+                >
+                  <Printer size={18} /> بطاقة / PDF
+                </button>
+                <button onClick={() => handleWhatsAppReport(viewStudent)} className="btn-outline border-green-500/50 text-green-400 py-2 px-4 flex items-center gap-2 print:hidden"><Phone size={18} /> تقرير واتساب</button>
+                <button 
+                  onClick={() => {
+                    const studentAttempts = attempts.filter(a => a.studentId === viewStudent.id && a.completed);
+                    const statusClass = (s: string) => s === 'passed' || s === 'true' ? 'background:#dcfce7;color:#166534' : 'background:#fee2e2;color:#991b1b';
+                    const rows = studentAttempts
+                      .sort((a,b) => (b.submittedAt ? new Date(b.submittedAt).getTime() : 0) - (a.submittedAt ? new Date(a.submittedAt).getTime() : 0))
+                      .map(att => {
+                        const mcqPoints = att.mcqScore * att.mcqTotal / 100;
+                        const essayPoints = att.essayAnswers?.reduce((sum: number, ea: any) => sum + (ea.score || 0), 0) || 0;
+                        const totalPoints = att.mcqTotal + (att.essayAnswers?.reduce((sum: number, ea: any) => sum + (ea.maxScore || 0), 0) || 0);
+                        const rawScore = Math.round((mcqPoints + essayPoints) * 10) / 10;
+                        const isPending = att.essayAnswers?.some((ea: any) => ea.pending);
+                        const resultText = isPending ? 'انتظار' : att.passed ? 'ناجح ✅' : 'راسب ❌';
+                        const bgStyle = isPending ? 'background:#f3e8ff;color:#6b21a8' : att.passed ? 'background:#dcfce7;color:#166534' : 'background:#fee2e2;color:#991b1b';
+                        return `<tr style="border-bottom:1px solid #e5e7eb">
+                          <td style="padding:8px 12px;font-weight:bold">${att.examTitle}</td>
+                          <td style="padding:8px 12px;color:#6b7280;font-size:12px">${att.submittedAt ? new Date(att.submittedAt).toLocaleDateString('ar-EG') : '—'}</td>
+                          <td style="padding:8px 12px;font-family:monospace" dir="ltr">${isPending ? 'قيد التصحيح' : rawScore + ' / ' + totalPoints}</td>
+                          <td style="padding:8px 12px"><span style="padding:3px 10px;border-radius:20px;font-weight:bold;font-size:12px;${bgStyle}">${resultText}</span></td>
+                        </tr>`;
+                      }).join('');
+                    const groupNames = groups.filter(g => viewStudent.groupIds?.includes(g.id)).map(g => g.name).join(' | ') || 'غير محدد';
+                    const passCount = studentAttempts.filter(a => a.passed).length;
+                    const failCount = studentAttempts.filter(a => !a.passed && !a.essayAnswers?.some((e: any) => e.pending)).length;
+                    const html = `
+                      <html dir="rtl"><head><meta charset="utf-8"><title>تقرير الطالب - ${viewStudent.name}</title>
+                      <style>
+                        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap');
+                        * { margin:0; padding:0; box-sizing:border-box; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+                        body { font-family:'Cairo',Arial,sans-serif; direction:rtl; padding:20px; background:#fff; }
+                        @page { margin:15mm; }
+                        .header { background:linear-gradient(135deg,#1a1a2e,#0f3460); color:#fbbf24; padding:20px 24px; border-radius:14px; margin-bottom:20px; display:flex; align-items:center; gap:16px; }
+                        .avatar { width:64px; height:64px; border-radius:50%; border:3px solid #fbbf24; object-fit:cover; flex-shrink:0; }
+                        .avatar-placeholder { width:64px; height:64px; border-radius:50%; background:#fbbf24; display:flex; align-items:center; justify-content:center; font-size:28px; font-weight:900; color:#1a1a2e; flex-shrink:0; }
+                        .header-info h1 { font-size:20px; font-weight:900; }
+                        .header-info p { font-size:12px; opacity:0.8; margin-top:3px; }
+                        .stats { display:flex; gap:12px; margin-bottom:20px; }
+                        .stat { flex:1; padding:14px; border-radius:10px; text-align:center; font-weight:bold; }
+                        .stat-blue { background:#dbeafe; color:#1e40af; }
+                        .stat-green { background:#dcfce7; color:#166534; }
+                        .stat-red { background:#fee2e2; color:#991b1b; }
+                        .stat-num { font-size:26px; font-weight:900; display:block; }
+                        table { width:100%; border-collapse:collapse; font-size:13px; }
+                        thead { background:#f3f4f6; }
+                        th { padding:10px 12px; text-align:right; font-weight:700; color:#374151; border-bottom:2px solid #e5e7eb; }
+                        td { color:#374151; }
+                        tr:nth-child(even) td { background:#f9fafb; }
+                        .footer { margin-top:24px; text-align:center; font-size:11px; color:#9ca3af; border-top:1px solid #e5e7eb; padding-top:12px; }
+                      </style></head><body>
+                      <div class="header">
+                        ${viewStudent.imageUrl ? `<img src="${viewStudent.imageUrl}" class="avatar" crossorigin="anonymous" />` : `<div class="avatar-placeholder">${viewStudent.name[0]}</div>`}
+                        <div class="header-info">
+                          <h1>${viewStudent.name}</h1>
+                          <p>الصف: ${viewStudent.grade || 'غير محدد'} | المجموعة: ${groupNames} | الكود: ${viewStudent.code.replace(/-T[A-Z0-9]+$/i,'')}</p>
+                          <p>الاشتراك: ${viewStudent.subType === 'monthly' ? 'شهري' : viewStudent.subType === 'yearly' ? 'سنوي' : viewStudent.subType === 'course' ? 'كورس' : viewStudent.subType === 'session' ? 'بالحصة' : 'مجاني'} | المعلم: ${user?.name || ''}</p>
+                        </div>
+                      </div>
+                      <div class="stats">
+                        <div class="stat stat-blue"><span class="stat-num">${studentAttempts.length}</span>إجمالي الامتحانات</div>
+                        <div class="stat stat-green"><span class="stat-num">${passCount}</span>ناجح</div>
+                        <div class="stat stat-red"><span class="stat-num">${failCount}</span>راسب</div>
+                      </div>
+                      ${studentAttempts.length === 0 ? '<div style="text-align:center;padding:40px;color:#9ca3af;background:#f9fafb;border-radius:12px">لم يكمل الطالب أي امتحانات حتى الآن.</div>' :
+                        `<table><thead><tr><th>اسم الامتحان</th><th>التاريخ</th><th>الدرجة</th><th>النتيجة</th></tr></thead><tbody>${rows}</tbody></table>`
+                      }
+                      <div class="footer">تقرير مولّد بتاريخ ${new Date().toLocaleDateString('ar-EG')} - منصة AN Academy</div>
+                      </body></html>`;
+                    const win = window.open('', '_blank', 'width=850,height=680');
+                    if (win) { win.document.write(html); win.document.close(); win.focus(); setTimeout(() => win.print(), 600); }
+                  }} 
+                  className="btn-gold py-2 px-4 flex items-center gap-2 print:hidden"
+                >
+                  <Printer size={18} /> تقرير الطالب / PDF
+                </button>
                 <button onClick={() => setViewStudent(null)} className="btn-outline py-2 px-4 print:hidden">إغلاق</button>
               </div>
             </div>
 
             <div className="p-6 sm:p-8 space-y-8 print:p-0" id="printable-profile">
+              {/* Hidden Print Card for Single Barcode */}
+              <div id={`print-student-${viewStudent.id}`} className="hidden print:flex flex-col items-center text-center space-y-4">
+                <div className="font-black text-xl text-black">{user?.name ? `أكاديمية ${user.name}` : 'المنصة التعليمية'}</div>
+                
+                {viewStudent.imageUrl && (
+                  <div className="w-24 h-24 rounded-full overflow-hidden border-2 border-black/20 shadow-md">
+                    <img src={viewStudent.imageUrl} alt={viewStudent.name} className="w-full h-full object-cover" />
+                  </div>
+                )}
+
+                <div className="flex justify-center my-4">
+                  <QRCodeSVG value={viewStudent.code} size={150} level="H" includeMargin={true} />
+                </div>
+                
+                <div className="font-bold text-lg text-black">{viewStudent.name}</div>
+                <div className="font-mono bg-black/10 px-3 py-1 rounded text-sm text-black">{viewStudent.code.replace(/-T[A-Z0-9]+$/i, '')}</div>
+                <div className="text-sm text-gray-800">{viewStudent.grade || 'طالب'}</div>
+              </div>
+
               {/* Profile Header */}
-              <div className="flex flex-col sm:flex-row gap-6 items-center sm:items-start text-center sm:text-right border-b border-white/10 print:border-gray-200 pb-6">
+              <div className="flex flex-col sm:flex-row gap-6 items-center sm:items-start text-center sm:text-right border-b border-white/10 print:hidden pb-6">
                 {viewStudent.imageUrl ? (
-                  <img 
+                  <Image 
                     src={viewStudent.imageUrl} 
                     className="w-24 h-24 sm:w-32 sm:h-32 rounded-full border-4 border-gold shadow-lg object-cover cursor-pointer hover:brightness-110 active:scale-95 transition-all" 
                     alt={viewStudent.name} 
+                    width={128}
+                    height={128}
                     onClick={() => setSelectedImg({ src: viewStudent.imageUrl!, alt: viewStudent.name })}
                   />
                 ) : (
-                  <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-full border-4 border-gold bg-gold/10 flex items-center justify-center text-4xl font-black text-gold">
+                  <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-full border-4 border-gold bg-gold/10 flex items-center justify-center text-4xl font-black text-gold shrink-0">
                     {viewStudent.name[0]}
                   </div>
                 )}
                 <div className="flex-1 space-y-2">
-                  <h2 className="text-3xl font-black text-white print:text-black">{viewStudent.name}</h2>
-                  <div className="flex flex-wrap items-center justify-center sm:justify-start gap-4 text-sm text-gray-400 print:text-gray-600 font-mono">
-                    <span className="bg-white/5 print:bg-gray-100 px-3 py-1 rounded-lg">الكود: {viewStudent.code}</span>
-                    <span className="bg-white/5 print:bg-gray-100 px-3 py-1 rounded-lg">الصف: {viewStudent.grade || 'غير محدد'}</span>
+                  <h2 className="text-3xl font-black text-white">{viewStudent.name}</h2>
+                  <div className="flex flex-wrap items-center justify-center sm:justify-start gap-4 text-sm text-gray-400 font-mono">
+                    <span className="bg-white/5 px-3 py-1 rounded-lg">الكود: {viewStudent.code.replace(/-T[A-Z0-9]+$/i, '')}</span>
+                    <span className="bg-white/5 px-3 py-1 rounded-lg">الصف: {viewStudent.grade || 'غير محدد'}</span>
                   </div>
                   <div className="flex flex-wrap gap-4 mt-4 justify-center sm:justify-start print:text-black">
                     <div className="flex items-center gap-2"><Phone size={16} className="text-gold" /> {viewStudent.phone || '—'} (طالب)</div>
                     {viewStudent.parentPhone && <div className="flex items-center gap-2"><Users size={16} className="text-gold" /> {viewStudent.parentPhone} (ولي أمر)</div>}
                   </div>
+                </div>
+                {/* Barcode Display */}
+                <div className="bg-white p-3 rounded-2xl flex flex-col items-center justify-center border border-white/10 shrink-0 print:border-gray-300">
+                  <QRCodeSVG value={viewStudent.code} size={100} level="H" includeMargin={false} />
+                  <span className="text-black font-mono font-bold text-xs mt-2">{viewStudent.code.replace(/-T[A-Z0-9]+$/i, '')}</span>
                 </div>
               </div>
 
@@ -567,7 +770,9 @@ function StudentsPageContent() {
                 <div className="p-4 rounded-2xl bg-white/5 print:bg-gray-50 border border-white/5 print:border-gray-200 flex flex-col justify-center items-center text-center">
                   <Calendar size={24} className="text-gold mb-2" />
                   <span className="text-xs text-gray-400 print:text-gray-500 mb-1">تاريخ التسجيل</span>
-                  <strong className="text-lg print:text-black">{viewStudent.registeredAt}</strong>
+                  <strong className="text-lg print:text-black">
+                    {viewStudent.registeredAt ? (viewStudent.registeredAt.includes('T') ? viewStudent.registeredAt.split('T')[0] : viewStudent.registeredAt) : '—'}
+                  </strong>
                 </div>
                 <div className="p-4 rounded-2xl bg-white/5 print:bg-gray-50 border border-white/5 print:border-gray-200 flex flex-col justify-center items-center text-center">
                   <Clock size={24} className={viewStudent.subExpiry && new Date(viewStudent.subExpiry).getTime() < Date.now() ? "text-red-500 mb-2" : "text-gold mb-2"} />
@@ -642,6 +847,85 @@ function StudentsPageContent() {
         </div>
       )}
 
+      {/* Barcode Bulk Printing Modal */}
+      {printingBarcodes && (
+        <div className="modal-overlay overflow-y-auto" onClick={e => e.target === e.currentTarget && setPrintingBarcodes(false)}>
+          <div className="modal-content modal-content-xl">
+            {/* Header */}
+            <div className="sticky top-0 z-10 flex items-center justify-between p-4 bg-[#0a0f18]/90 backdrop-blur border-b border-white/5">
+              <h3 className="font-black text-xl gold-text flex items-center gap-2"><QrCode size={24} /> طباعة باركود الطلاب ({selectedStudents.size})</h3>
+              <div className="flex gap-2">
+                <button 
+                  onClick={() => {
+                    const selected = students.filter(s => selectedStudents.has(s.id));
+                    sessionStorage.setItem('bulkPrintStudents', JSON.stringify({
+                      students: selected,
+                      teacherName: user?.name || 'المنصة التعليمية'
+                    }));
+                    window.open('/bulk-print-cards', '_blank');
+                    showToast(`✅ تم فتح صفحة الطباعة المجمعة`);
+                  }} 
+                  className="btn-gold py-2 px-4 flex items-center gap-2"
+                >
+                  <Printer size={18} /> طباعة البطاقات المجمعة
+                </button>
+                <button onClick={() => setPrintingBarcodes(false)} className="btn-outline py-2 px-4">إغلاق</button>
+              </div>
+            </div>
+
+            {/* Card Previews Grid */}
+            <div className="p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {students.filter(s => selectedStudents.has(s.id)).map(student => (
+                <div
+                  key={student.id}
+                  className="bg-white rounded-2xl shadow-lg overflow-hidden border-2 border-amber-400/40 hover:border-amber-400 transition-all cursor-pointer hover:shadow-amber-500/20 hover:shadow-xl"
+                  onClick={() => openStudentCardForPrint(student, user?.name || 'المنصة التعليمية')}
+                  title="اضغط لطباعة / تصدير PDF هذه البطاقة"
+                >
+                  {/* Card Header */}
+                  <div className="bg-gradient-to-r from-[#1a1a2e] to-[#0f3460] px-4 py-2 text-center">
+                    <span className="text-amber-400 font-black text-xs">⭐ أكاديمية {user?.name || 'المنصة التعليمية'} ⭐</span>
+                  </div>
+
+                  {/* Card Body */}
+                  <div className="flex items-center gap-3 p-3">
+                    {student.imageUrl ? (
+                      <Image
+                        src={student.imageUrl}
+                        alt={student.name}
+                        width={48}
+                        height={48}
+                        className="w-12 h-12 rounded-full object-cover border-2 border-amber-400 flex-shrink-0"
+                      />
+                    ) : (
+                      <div className="w-12 h-12 rounded-full bg-amber-400 flex items-center justify-center text-white font-black text-xl flex-shrink-0">
+                        {student.name[0]}
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0 text-right">
+                      <div className="font-black text-gray-800 text-sm leading-tight truncate">{student.name}</div>
+                      {student.grade && <div className="text-xs text-gray-500 mt-0.5">📚 {student.grade}</div>}
+                      <div className="text-xs font-mono text-blue-600 bg-blue-50 px-2 py-0.5 rounded mt-1 inline-block tracking-wider">
+                        {student.code.replace(/-T[A-Z0-9]+$/i, '')}
+                      </div>
+                    </div>
+                    <div className="flex-shrink-0 border border-gray-200 rounded-lg p-1 bg-white">
+                      <QRCodeSVG value={student.code} size={52} level="H" includeMargin={false} fgColor="#0f3460" />
+                    </div>
+                  </div>
+
+                  {/* Card Footer */}
+                  <div className="bg-amber-400 px-3 py-1 flex justify-between items-center">
+                    <span className="text-xs font-bold text-[#1a1a2e]">🖨️ اضغط للطباعة</span>
+                    <span className="text-xs font-bold text-[#1a1a2e]">امسح للحضور</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {showModal && (
         <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setShowModal(false)}>
           <div className="modal-content">
@@ -676,6 +960,10 @@ function StudentsPageContent() {
                 <div>
                   <label className="block text-[11px] mb-1.5 text-text-muted font-bold uppercase tracking-wider">الكود (تلقائي)</label>
                   <input value={form.code} onChange={e => setForm(f => ({ ...f, code: e.target.value }))} className="input-base text-sm w-full py-2.5 font-mono text-gold bg-gold/5" />
+                </div>
+                <div>
+                  <label className="block text-[11px] mb-1.5 text-text-muted font-bold uppercase tracking-wider">كود QR (للحضور)</label>
+                  <input value={(form as any).qrCodeId || ''} onChange={e => setForm(f => ({ ...f, qrCodeId: e.target.value } as any))} className="input-base text-sm w-full py-2.5 font-mono text-gold bg-gold/5" placeholder="امسح الباركود..." />
                 </div>
                 <div>
                   <label className="block text-[11px] mb-1.5 text-text-muted font-bold uppercase tracking-wider">نوع الاشتراك</label>
@@ -739,7 +1027,7 @@ function StudentsPageContent() {
                     </div>
                     {form.imageUrl ? (
                       <div className="relative group">
-                        <img src={form.imageUrl} className="w-14 h-14 rounded-full object-cover border-2 border-gold shadow-lg" alt="" />
+                        <Image src={form.imageUrl} className="w-14 h-14 rounded-full object-cover border-2 border-gold shadow-lg" alt="" width={56} height={56} />
                         <button onClick={() => setForm(f => ({ ...f, imageUrl: '' }))} className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white scale-0 group-hover:scale-100 transition-transform">
                           <X size={12} />
                         </button>
@@ -773,9 +1061,19 @@ function StudentsPageContent() {
                   <textarea 
                     value={form.notes || ''} 
                     onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} 
-                    rows={3} 
+                    rows={2} 
                     className="input-base text-sm resize-none py-3" 
                     placeholder="أي ملاحظات تخص الطالب (ستكون مخفية عن الطالب)..."
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="block text-[11px] mb-1.5 text-text-muted font-bold uppercase tracking-wider">الملاحظات السلوكية (سجل الطالب)</label>
+                  <textarea 
+                    value={(form as any).behavioralNotes || ''} 
+                    onChange={e => setForm(f => ({ ...f, behavioralNotes: e.target.value } as any))} 
+                    rows={2} 
+                    className="input-base text-sm resize-none py-3" 
+                    placeholder="تسجيل غياب متكرر، سلوك الطالب، تنبيهات..."
                   />
                 </div>
               </div>
@@ -810,23 +1108,6 @@ function StudentsPageContent() {
         />
       )}
 
-      <style jsx global>{`
-        @media print {
-          body * {
-            visibility: hidden;
-          }
-          #printable-profile, #printable-profile * {
-            visibility: visible;
-          }
-          #printable-profile {
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 100%;
-            padding: 20px;
-          }
-        }
-      `}</style>
     </div>
   );
 }

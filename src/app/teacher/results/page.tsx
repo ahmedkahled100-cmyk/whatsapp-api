@@ -10,7 +10,7 @@ import { showToast } from '@/lib/toast';
 import html2canvas from 'html2canvas';
 
 export default function ResultsPage() {
-  const { attempts, exams, students, settings } = useTeacherStore();
+  const { attempts, exams, students, settings, setAttempts } = useTeacherStore();
   const [search, setSearch] = useState('');
   const [examFilter, setExamFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'pass' | 'fail'>('all');
@@ -461,7 +461,10 @@ export default function ResultsPage() {
                       <button 
                           onClick={async () => {
                               if (!confirm('سيتم مسح هذه النتيجة والسماح للطالب بإعادة المحاولة. هل أنت متأكد؟')) return;
-                              await deleteAttempt(att.id);
+                              const prev = [...attempts];
+                              setAttempts(attempts.filter(a => a.id !== att.id));
+                              try { await deleteAttempt(att.id); showToast('✅ تم حذف النتيجة'); }
+                              catch { setAttempts(prev); showToast('❌ فشل الحذف'); }
                           }}
                           className="w-12 h-12 rounded-xl bg-red-500/10 text-red-400 border border-red-500/10 flex items-center justify-center active:scale-95 hover:bg-red-500/20 transition-all shrink-0"
                           title="حذف النتيجة"
@@ -565,7 +568,10 @@ export default function ResultsPage() {
                               <button 
                                   onClick={async () => {
                                     if (!confirm('سيتم مسح هذه النتيجة والسماح للطالب بإعادة المحاولة. هل أنت متأكد؟')) return;
-                                    await deleteAttempt(att.id);
+                                    const prev = [...attempts];
+                                    setAttempts(attempts.filter(a => a.id !== att.id));
+                                    try { await deleteAttempt(att.id); showToast('✅ تم حذف النتيجة'); }
+                                    catch { setAttempts(prev); showToast('❌ فشل الحذف'); }
                                   }}
                                   className="p-2.5 rounded-xl bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white shadow-sm hover:shadow-red-500/20 border border-red-500/10 transition-all active:scale-90"
                                   title="حذف النتيجة"

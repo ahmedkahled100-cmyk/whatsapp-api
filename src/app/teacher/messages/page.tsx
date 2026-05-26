@@ -1,27 +1,29 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTeacherStore } from '@/lib/store';
 import { 
   sendMessage, subscribeToMessages, markMessagesAsRead,
-  getSuperAdmin, setUserOnlineStatus, subscribeToUserOnlineStatus, uploadFileToStorage
+  getSuperAdmin, setUserOnlineStatus, subscribeToUserOnlineStatus, uploadFileToStorage,
+  heartbeatUserOnlineStatus, broadcastTyping, subscribeToTyping, loadOlderMessages
 } from '@/lib/db';
 import { Message, Conversation, Student, TeacherUser } from '@/types';
 import { 
-  Search, Send, User, Clock, Check, CheckCheck, Users,
-  MessageSquare, Plus, X, Loader2, Phone, GraduationCap,
-  ShieldCheck, MoreVertical, Image as ImageIcon, Paperclip, FileText, Trash2
+  Search, Send, Check, CheckCheck, Users,
+  MessageSquare, Plus, X, Loader2,
+  ShieldCheck, Image as ImageIcon, Paperclip, FileText, Trash2, ChevronUp
 } from 'lucide-react';
 import { showToast } from '@/lib/toast';
 import { useFilePreview } from '@/components/FilePreviewModal';
 import { usePDFCompression } from '@/components/PDFCompressionModal';
-import { FileProcessor } from '@/lib/file-processor';
 import { useSearchParams } from 'next/navigation';
 import { formatRelativeLastSeenAr } from '@/lib/utils';
 
 export default function TeacherMessagesPage() {
   const searchParams = useSearchParams();
   const studentId = searchParams.get('studentId');
+  const userId = searchParams.get('userId');
+  const userName = searchParams.get('userName');
   const { user, students, conversations } = useTeacherStore();
   const [selectedConv, setSelectedConv] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -33,6 +35,9 @@ export default function TeacherMessagesPage() {
   const [superAdmin, setSuperAdmin] = useState<TeacherUser | null>(null);
   const [otherUserOnline, setOtherUserOnline] = useState(false);
   const [otherUserLastActive, setOtherUserLastActive] = useState<number | undefined>();
+  const [typingName, setTypingName] = useState<string | null>(null);
+  const [hasOlderMessages, setHasOlderMessages] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
 
   const [uploadingFile, setUploadingFile] = useState(false);
   const [attachmentUrl, setAttachmentUrl] = useState('');
@@ -47,29 +52,42 @@ export default function TeacherMessagesPage() {
   const { openCompression, CompressionModal } = usePDFCompression({ showSelection: true });
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Track teacher's own presence
+  // ── Teacher Presence: online status + heartbeat ──────────────────────────
   useEffect(() => {
-    if (user) {
-      setUserOnlineStatus(user.id, 'teachers', true);
-      
-      const handleUnload = () => {
-        setUserOnlineStatus(user.id, 'teachers', false);
-      };
-      window.addEventListener('beforeunload', handleUnload);
-      
-      return () => {
-        window.removeEventListener('beforeunload', handleUnload);
-        setUserOnlineStatus(user.id, 'teachers', false);
-      };
-    }
-  }, [user]);
+    if (!user) return;
+    setUserOnlineStatus(user.id, 'teachers', true);
+
+    const beat = setInterval(() => {
+      heartbeatUserOnlineStatus(user.id, 'teachers');
+    }, 25000);
+
+    const onActivity = () => heartbeatUserOnlineStatus(user.id, 'teachers');
+    window.addEventListener('mousemove', onActivity, { passive: true });
+    window.addEventListener('keydown', onActivity, { passive: true });
+
+    const handleUnload = () => setUserOnlineStatus(user.id, 'teachers', false);
+    window.addEventListener('beforeunload', handleUnload);
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) setUserOnlineStatus(user.id, 'teachers', false);
+      else heartbeatUserOnlineStatus(user.id, 'teachers');
+    });
+
+    return () => {
+      clearInterval(beat);
+      window.removeEventListener('mousemove', onActivity);
+      window.removeEventListener('keydown', onActivity);
+      window.removeEventListener('beforeunload', handleUnload);
+      setUserOnlineStatus(user.id, 'teachers', false);
+    };
+  }, [user?.id]);
 
   useEffect(() => {
     getSuperAdmin().then(setSuperAdmin);
   }, []);
 
-  // Handle studentId from URL for automatic redirect
+  // Handle studentId or userId from URL for automatic redirect
   useEffect(() => {
     if (studentId && students.length > 0 && user) {
       const student = students.find(s => s.id === studentId);
@@ -88,40 +106,69 @@ export default function TeacherMessagesPage() {
           });
         }
       }
+    } else if (userId && user) {
+      const targetName = userName || 'مساعد';
+      const convId = [user.id, userId].sort().join('_');
+      const existing = conversations.find(c => c.id === convId);
+      
+      if (existing) {
+        setSelectedConv(existing);
+      } else {
+        setSelectedConv({
+          id: convId,
+          participants: [user.id, userId],
+          participantNames: [user.name, targetName],
+          updatedAt: Date.now()
+        });
+      }
     }
-  }, [studentId, students, user, conversations]);
+  }, [studentId, userId, userName, students, user, conversations]);
 
   useEffect(() => {
-    if (selectedConv && user) {
-      setLoadingMessages(true);
-      const unsubMsgs = subscribeToMessages(selectedConv.id, (msgs: Message[]) => {
-        setMessages(msgs);
-        setLoadingMessages(false);
-        markMessagesAsRead(selectedConv.id, user.id);
-      });
-
-      const otherParticipantId = selectedConv.participants.find(p => p !== user.id);
-      let unsubPresence = () => {};
-      
-      if (otherParticipantId) {
-        const isStudent = students.some(s => s.id === otherParticipantId);
-        unsubPresence = subscribeToUserOnlineStatus(
-          otherParticipantId, 
-          isStudent ? 'student' : 'teachers', 
-          (isOnline, lastActive) => {
-            setOtherUserOnline(isOnline);
-            setOtherUserLastActive(lastActive);
-          }
-        );
-      }
-
-      return () => {
-        unsubMsgs();
-        unsubPresence();
-      };
-    } else {
+    if (!selectedConv || !user) {
       setMessages([]);
+      setHasOlderMessages(false);
+      return;
     }
+
+    setLoadingMessages(true);
+    setHasOlderMessages(false);
+    setTypingName(null);
+
+    // Messages — call markRead once on open, not inside subscription callback
+    markMessagesAsRead(selectedConv.id, user.id);
+
+    const unsubMsgs = subscribeToMessages(selectedConv.id, (msgs: Message[]) => {
+      setMessages(msgs);
+      setLoadingMessages(false);
+      setHasOlderMessages(msgs.length >= 100);
+      // Mark any newly-arrived messages as read
+      markMessagesAsRead(selectedConv.id, user.id);
+    });
+
+    // Presence
+    const otherParticipantId = selectedConv.participants.find(p => p !== user.id);
+    let unsubPresence = () => {};
+    if (otherParticipantId) {
+      const isStudent = students.some(s => s.id === otherParticipantId);
+      unsubPresence = subscribeToUserOnlineStatus(
+        otherParticipantId,
+        isStudent ? 'student' : 'teachers',
+        (isOnline, lastActive) => {
+          setOtherUserOnline(isOnline);
+          setOtherUserLastActive(lastActive);
+        }
+      );
+    }
+
+    // Typing indicator
+    const unsubTyping = subscribeToTyping(selectedConv.id, user.id, setTypingName);
+
+    return () => {
+      unsubMsgs();
+      unsubPresence();
+      unsubTyping();
+    };
   }, [selectedConv?.id, user?.id]);
 
   useEffect(() => {
@@ -131,34 +178,78 @@ export default function TeacherMessagesPage() {
     return () => cancelAnimationFrame(id);
   }, [messages]);
 
+  const handleLoadOlder = async () => {
+    if (!selectedConv || messages.length === 0) return;
+    setLoadingOlder(true);
+    try {
+      const older = await loadOlderMessages(selectedConv.id, messages[0].timestamp);
+      if (older.length === 0) {
+        setHasOlderMessages(false);
+      } else {
+        setMessages(prev => [...older, ...prev]);
+        setHasOlderMessages(older.length >= 100);
+      }
+    } finally {
+      setLoadingOlder(false);
+    }
+  };
+
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if ((!newMessage.trim() && !attachmentUrl) || !selectedConv || !user) return;
+    if ((!newMessage.trim() && !attachmentUrl) || !selectedConv || !user || sending) return;
 
+    const msgContent = newMessage.trim();
+    const attachUrl = attachmentUrl;
+    const attachType = attachmentType;
+    const receiverId = selectedConv.participants.find(p => p !== user.id)!;
+    const receiverName = selectedConv.participantNames[selectedConv.participants.indexOf(receiverId)] || 'المستخدم';
+
+    // ── Optimistic UI ──
+    const tempId = `temp_${Date.now()}`;
+    const optimisticMsg: Message = {
+      id: tempId,
+      senderId: user.id,
+      senderName: user.name,
+      receiverId,
+      receiverName,
+      content: msgContent,
+      timestamp: Date.now(),
+      isRead: false,
+      teacherId: user.id,
+      type: attachUrl ? attachType : 'text',
+      fileUrl: attachUrl || undefined,
+    };
+
+    setMessages(prev => [...prev, optimisticMsg]);
+    setNewMessage('');
+    setAttachmentUrl('');
+    setAttachmentType('text');
     setSending(true);
-    try {
-      const receiverId = selectedConv.participants.find(p => p !== user.id)!;
-      const receiverName = selectedConv.participantNames[selectedConv.participants.indexOf(receiverId)] || 'المستخدم';
 
-      await sendMessage({
+    // Reset textarea
+    if (textareaRef.current) {
+      textareaRef.current.style.height = '48px';
+      textareaRef.current.focus();
+    }
+
+    try {
+      const realId = await sendMessage({
         senderId: user.id,
         senderName: user.name,
         receiverId,
         receiverName,
-        content: newMessage.trim(),
+        content: msgContent,
         teacherId: user.id,
-        type: attachmentUrl ? attachmentType : 'text',
-        ...(attachmentUrl ? { fileUrl: attachmentUrl } : {})
+        type: attachUrl ? attachType : 'text',
+        ...(attachUrl ? { fileUrl: attachUrl } : {})
       });
-      setNewMessage('');
-      setAttachmentUrl('');
-      setAttachmentType('text');
-      // Reset textarea height after sending
-      const textarea = document.querySelector('textarea') as HTMLTextAreaElement;
-      if (textarea) textarea.style.height = '48px';
+      setMessages(prev => prev.map(m => m.id === tempId ? { ...m, id: realId } : m));
     } catch (err: any) {
       console.error('Send Error:', err);
       showToast('فشل إرسال الرسالة');
+      setMessages(prev => prev.filter(m => m.id !== tempId));
+      setNewMessage(msgContent);
+      if (attachUrl) { setAttachmentUrl(attachUrl); setAttachmentType(attachType); }
     } finally {
       setSending(false);
     }
@@ -369,6 +460,19 @@ export default function TeacherMessagesPage() {
 
             {/* Messages Area */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')]">
+              {/* Load older messages */}
+              {hasOlderMessages && (
+                <div className="flex justify-center">
+                  <button
+                    onClick={handleLoadOlder}
+                    disabled={loadingOlder}
+                    className="flex items-center gap-1.5 text-[10px] text-gray-400 hover:text-gold transition-colors bg-white/5 px-3 py-1.5 rounded-full border border-white/10"
+                  >
+                    {loadingOlder ? <Loader2 size={10} className="animate-spin" /> : <ChevronUp size={10} />}
+                    تحميل رسائل أقدم
+                  </button>
+                </div>
+              )}
               {loadingMessages ? (
                 <div className="flex items-center justify-center h-full"><Loader2 className="animate-spin text-gold" size={32} /></div>
               ) : messages.length === 0 ? (
@@ -379,6 +483,7 @@ export default function TeacherMessagesPage() {
               ) : (
                 messages.map((msg, i) => {
                   const isMine = msg.senderId === user.id;
+                  const isOptimistic = msg.id.startsWith('temp_');
                   const showTime = i === 0 || Math.abs(msg.timestamp - messages[i-1].timestamp) > 300000;
 
                   return (
@@ -388,9 +493,9 @@ export default function TeacherMessagesPage() {
                           {new Date(msg.timestamp).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}
                         </span>
                       )}
-                      <div className={`max-w-[80%] p-3 rounded-2xl shadow-lg relative group ${
-                        isMine ? 'bg-gold text-black rounded-tr-none' : 'bg-white/10 text-white rounded-tl-none border border-white/5'
-                      }`}>
+                      <div className={`max-w-[80%] p-3 rounded-2xl shadow-lg relative group transition-opacity ${
+                        isMine ? 'bg-gradient-to-br from-gold to-amber-500 text-black rounded-tr-none' : 'bg-white/10 text-white rounded-tl-none border border-white/5'
+                      } ${isOptimistic ? 'opacity-60' : 'opacity-100'}`}>
                          {msg.type === 'image' && msg.fileUrl && (
                            <div className="mb-2 rounded-xl overflow-hidden cursor-pointer bg-black/10" onClick={() => openPreview(msg.fileUrl!, 'مرفق صورة')}>
                              <img src={msg.fileUrl} alt="Attachment" className="max-w-full h-auto max-h-60 object-contain hover:opacity-90 transition-opacity" />
@@ -411,13 +516,28 @@ export default function TeacherMessagesPage() {
                          <div className={`flex items-center gap-1 mt-1 justify-end opacity-60`}>
                             <span className="text-[9px]">{new Date(msg.timestamp).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}</span>
                             {isMine && (
-                              msg.isRead ? <CheckCheck size={12} className="text-blue-600" /> : <Check size={12} />
+                              isOptimistic
+                                ? <Loader2 size={10} className="animate-spin" />
+                                : msg.isRead ? <CheckCheck size={12} className="text-blue-600" /> : <Check size={12} />
                             )}
                          </div>
                       </div>
                     </div>
                   );
                 })
+              )}
+              {/* Typing indicator */}
+              {typingName && (
+                <div className="flex items-start animate-fade-in">
+                  <div className="bg-white/10 border border-white/5 text-white px-4 py-2.5 rounded-2xl rounded-tl-none text-xs flex items-center gap-2 shadow">
+                    <span className="text-gray-400">{typingName} يكتب</span>
+                    <span className="flex gap-0.5">
+                      <span className="w-1.5 h-1.5 bg-gold rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                      <span className="w-1.5 h-1.5 bg-gold rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                      <span className="w-1.5 h-1.5 bg-gold rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                    </span>
+                  </div>
+                </div>
               )}
               <div ref={messagesEndRef} />
             </div>
@@ -464,6 +584,7 @@ export default function TeacherMessagesPage() {
                  </div>
                  <div className="flex-1 relative">
                     <textarea 
+                      ref={textareaRef}
                       rows={1}
                       placeholder="اكتب رسالتك هنا..." 
                       className="input-base w-full pr-4 py-3 min-h-[48px] max-h-32 resize-none overflow-y-auto"
@@ -472,6 +593,10 @@ export default function TeacherMessagesPage() {
                         setNewMessage(e.target.value);
                         e.target.style.height = 'auto';
                         e.target.style.height = `${e.target.scrollHeight}px`;
+                        // Broadcast typing indicator
+                        if (selectedConv && e.target.value.trim() && user) {
+                          broadcastTyping(selectedConv.id, user.id, user.name);
+                        }
                       }}
                       onKeyDown={e => {
                         if (e.key === 'Enter' && !e.shiftKey) {

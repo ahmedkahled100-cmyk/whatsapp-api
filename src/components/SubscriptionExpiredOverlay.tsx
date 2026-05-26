@@ -307,7 +307,9 @@ export function SubscriptionExpiredOverlay(props: SubscriptionExpiredOverlayProp
               </h1>
               <p className="text-gray-400 text-xs sm:text-sm leading-relaxed px-2">
                 {isCancelled
-                  ? `أهلاً ${name}، نأسف لإبلاغك بأن اشتراكك متوقف حالياً بناءً على تعليمات المعلم.`
+                  ? (isStudent 
+                      ? `أهلاً ${name}، نأسف لإبلاغك بأن اشتراكك متوقف حالياً بناءً على تعليمات المعلم.`
+                      : `أهلاً أستاذ ${name}، نأسف لإبلاغك بأن حسابك متوقف حالياً بناءً على تعليمات الإدارة.`)
                   : isStudent
                     ? `أهلاً ${name}، يؤسفنا إبلاغك بانتهاء فترة اشتراكك الحالية بالمنصة.`
                     : `أهلاً أستاذ ${name}، نود تذكيرك بانتهاء اشتراك المنصة الخاص بك.`}

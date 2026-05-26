@@ -28,7 +28,7 @@ export interface DispatchOptions {
   msg: string;
   type?: Notification['type'];
   targetUsers?: string[];
-  targetRoles?: ('admin' | 'super_admin' | 'teacher' | 'student')[];
+  targetRoles?: ('admin' | 'super_admin' | 'teacher' | 'student' | 'assistant')[];
   targetGroups?: string[];
   channels: { inApp: boolean; whatsapp: boolean };
   whatsappNumbers?: string[];

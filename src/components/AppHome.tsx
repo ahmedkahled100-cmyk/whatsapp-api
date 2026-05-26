@@ -6,6 +6,7 @@ import { useState, useEffect, useRef } from 'react';
 import { ChevronLeft, ChevronRight, Gift, Zap, Star } from 'lucide-react';
 import type { AppHomeSettings, CategoryItem } from '@/lib/db/app-settings';
 import Link from 'next/link';
+import Image from 'next/image';
 
 interface Props {
   settings: AppHomeSettings;
@@ -54,10 +55,11 @@ export function AppHome({ settings, onCategoryClick, examsCount = 0, coursesCoun
               style={{ opacity: i === currentSlide ? 1 : 0 }}
             >
               {slide.imageUrl ? (
-                <img
+                <Image
                   src={slide.imageUrl}
                   alt={slide.title || ''}
                   className="w-full h-full object-cover"
+                  fill
                 />
               ) : (
                 <div

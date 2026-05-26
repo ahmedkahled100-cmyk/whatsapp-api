@@ -174,7 +174,8 @@ export const useILovePDFStore = create<ILovePDFStore>()(
           'watermark': 'إضافة علامة مائية', 'pagenumber': 'ترقيم الصفحات',
           'ocr': 'التعرف الضوئي (OCR)', 'rotate': 'تدوير الصفحات',
           'protect': 'حماية بكلمة مرور', 'unlock': 'فك التشفير',
-          'organize': 'تنظيم الصفحات', 'editpdf': 'تعديل PDF'
+          'organize': 'تنظيم الصفحات', 'editpdf': 'تعديل PDF',
+          'pdfoffice': 'التحويل لـ Word'
         };
         const label = toolLabels[tool] || 'المعالجة';
         const totalSize = files.reduce((sum, f) => sum + f.size, 0);

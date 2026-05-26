@@ -2,14 +2,16 @@
 // src/app/admin/teachers/page.tsx
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { getTeachers, saveTeacher, deleteTeacher, updateSuperAdminCredentials, getSuperAdmin, getSettings, deleteRegistrationRequest, dispatchNotification } from '@/lib/db';
-import { TeacherUser, Settings as PlatformSettings } from '@/types';
+import { getTeachers, saveTeacher, deleteTeacher, updateSuperAdminCredentials, getSuperAdmin, getSettings, deleteRegistrationRequest, dispatchNotification, getAllAssistantProfiles, saveAssistantProfile } from '@/lib/db';
+import { TeacherUser, Settings as PlatformSettings, AssistantProfile } from '@/types';
 import { showToast } from '@/lib/toast';
 import { UserPlus, Shield, User, Clock, Edit2, Trash2, X, Save, Lock, LayoutDashboard, Bell, FileText, Users, CreditCard, BookMarked, ClipboardList, Calendar, Bot, BarChart2, Check, ExternalLink, CheckCircle2, XCircle, Printer, Send, TrendingUp, DollarSign, UserX, ArrowRight, RefreshCw } from 'lucide-react';
 import { useTeacherStore } from '@/lib/store';
 import { ImageModal } from '@/components/ImageModal';
 import { cleanWhatsAppPhone } from '@/lib/utils';
 import { FinancialReports } from '@/components/FinancialReports';
+import { supabase } from '@/lib/supabase';
+import { ASSISTANTS_PROFILES } from '@/lib/db/supabase/hr';
 
 const AVAILABLE_PERMISSIONS = [
   { id: 'dashboard', label: 'الرئيسية', icon: LayoutDashboard },
@@ -27,8 +29,9 @@ const AVAILABLE_PERMISSIONS = [
 export default function ManageTeachersPage() {
   const { user: currentUser, teacherJoinRequests } = useTeacherStore();
   const [teachers, setTeachers] = useState<TeacherUser[]>([]);
+  const [assistants, setAssistants] = useState<AssistantProfile[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'current' | 'pending' | 'expiring' | 'financials'>('current');
+  const [activeTab, setActiveTab] = useState<'current' | 'pending' | 'expiring' | 'assistants' | 'financials'>('current');
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingTeacher, setEditingTeacher] = useState<TeacherUser | null>(null);
   const [platformSettings, setPlatformSettings] = useState<PlatformSettings | null>(null);
@@ -71,8 +74,13 @@ export default function ManageTeachersPage() {
   const loadData = useCallback(async (showFullLoader = true) => {
     if (showFullLoader) setLoading(true);
     try {
-      const [teachersList, admin] = await Promise.all([getTeachers(), getSuperAdmin()]);
+      const [teachersList, admin, assistantsList] = await Promise.all([
+        getTeachers(), 
+        getSuperAdmin(),
+        getAllAssistantProfiles()
+      ]);
       setTeachers(teachersList);
+      setAssistants(assistantsList);
 
       if (admin) {
         const s = await getSettings(admin.id);
@@ -153,8 +161,14 @@ export default function ManageTeachersPage() {
         ? { ...editingTeacher, ...form, id: editingTeacher.id }
         : { ...form, isActive: true, createdAt: Date.now() };
 
-      await saveTeacher(data as any);
-      showToast(editingTeacher ? 'تم تحديث الحساب' : 'تمت إضافة الحساب بنجاح');
+      // Optimistic update for immediate UI response
+      setTeachers(prev => {
+        if (editingTeacher) {
+          return prev.map(t => t.id === editingTeacher.id ? data as TeacherUser : t);
+        } else {
+          return [...prev, { ...data, id: 'temp-' + Date.now() } as TeacherUser];
+        }
+      });
       setShowAddForm(false);
       setEditingTeacher(null);
       setForm({
@@ -162,7 +176,11 @@ export default function ManageTeachersPage() {
         permissions: AVAILABLE_PERMISSIONS.map(p => p.id),
         subType: 'free', subExpiry: null, subLink: '', subPrice: 0, imageUrl: '', subject: ''
       });
+
+      await saveTeacher(data as any);
+      showToast(editingTeacher ? 'تم تحديث الحساب' : 'تمت إضافة الحساب بنجاح');
       void loadData(false);
+
     } catch (err) {
       showToast('حدث خطأ');
     } finally {
@@ -187,6 +205,11 @@ export default function ManageTeachersPage() {
             imageUrl: req.imageUrl || '',
             subject: req.subject || ''
         };
+
+        // Optimistic update for immediate UI response
+        setTeachers(prev => [...prev, { ...newTeacher, id: 'temp-' + Date.now() } as TeacherUser]);
+        useTeacherStore.getState().setTeacherJoinRequests(useTeacherStore.getState().teacherJoinRequests.filter(r => r.id !== req.id));
+
         await saveTeacher(newTeacher as any);
         await deleteRegistrationRequest(req.id);
         showToast('✅ تم تفعيل حساب المعلم بنجاح');
@@ -295,7 +318,7 @@ export default function ManageTeachersPage() {
       </div>
 
       <div className="flex items-center gap-2 bg-white/5 p-1 rounded-xl w-fit flex-wrap">
-        {(['current', 'expiring', 'pending', 'financials'] as const).map(tab => (
+        {(['current', 'expiring', 'pending', 'assistants', 'financials'] as const).map(tab => (
           <button key={tab} onClick={() => setActiveTab(tab)}
             className={`px-4 py-2 rounded-lg text-sm font-bold transition-all relative ${
               activeTab === tab ? 'bg-purple-500 text-white' : 'text-gray-400 hover:text-white'
@@ -304,6 +327,7 @@ export default function ManageTeachersPage() {
             {tab === 'current' && `المعلمون (${teachers.length})`}
             {tab === 'expiring' && `قريباً ${stats.expiringCount > 0 ? `(${stats.expiringCount})` : ''}`}
             {tab === 'pending' && `الطلبات ${teacherJoinRequests.length > 0 ? `(${teacherJoinRequests.length})` : ''}`}
+            {tab === 'assistants' && `المساعدون (${assistants.length})`}
             {tab === 'financials' && `التقارير`}
            </button>
          ))}
@@ -344,6 +368,135 @@ export default function ManageTeachersPage() {
                 ))
               )}
              </div>
+        </div>
+      )}
+
+      {activeTab === 'assistants' && (
+        <div className="animate-fade-in space-y-6">
+          {/* Pending Assistants Section */}
+          <div className="space-y-3">
+            <h3 className="text-base font-black text-amber-400 flex items-center gap-2">
+              <Clock size={18} /> طلبات انضمام المساعدين المعلقة
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {assistants.filter(a => a.status === 'pending').length === 0 ? (
+                <p className="col-span-3 text-center py-6 text-gray-500 text-sm">لا توجد طلبات معلقة لمساعدين حالياً</p>
+              ) : (
+                assistants.filter(a => a.status === 'pending').map((ast) => (
+                  <div key={ast.id} className="card-base p-5 border border-amber-500/20 bg-amber-500/5 relative group overflow-hidden">
+                    <div className="absolute top-0 right-0 w-1 h-full bg-amber-500" />
+                    <div className="flex justify-between items-start mb-4">
+                      <div className="flex items-center gap-3">
+                        {ast.imageUrl ? (
+                          <img src={ast.imageUrl} alt={ast.name} className="w-12 h-12 rounded-2xl object-cover" />
+                        ) : (
+                          <div className="w-12 h-12 rounded-2xl bg-amber-500/20 flex items-center justify-center text-lg font-bold text-amber-400">{ast.name[0]}</div>
+                        )}
+                        <div>
+                          <h3 className="font-bold text-white truncate max-w-[140px]">{ast.name}</h3>
+                          <div className="text-[10px] text-gray-400 font-mono">{ast.phone}</div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="space-y-1 text-xs mb-4">
+                      <div className="flex justify-between opacity-60"><span>التخصص:</span> <span className="text-white font-bold">{ast.roleTitle || 'مساعد مادة'}</span></div>
+                      <div className="flex justify-between opacity-60"><span>اسم المستخدم:</span> <span className="font-mono text-white">@{ast.username}</span></div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button 
+                        onClick={async () => {
+                          if (!confirm(`هل توافق على تفعيل حساب المساعد ${ast.name}؟`)) return;
+                          setSaving(true);
+                          try {
+                            await saveAssistantProfile({ ...ast, status: 'approved' });
+                            showToast('✅ تم تفعيل حساب المساعد');
+                            void loadData(false);
+                          } catch (e) { showToast('فشل تفعيل الحساب'); }
+                          finally { setSaving(false); }
+                        }} 
+                        disabled={saving} 
+                        className="flex-1 py-2 rounded-xl bg-amber-500 text-black text-xs font-black hover:bg-amber-600 transition disabled:opacity-50"
+                      >
+                        تفعيل
+                      </button>
+                      <button 
+                        onClick={async () => {
+                          if (!confirm(`هل أنت متأكد من رفض وحذف طلب المساعد ${ast.name}؟`)) return;
+                          setSaving(true);
+                          try {
+                            const { error } = await supabase.from(ASSISTANTS_PROFILES).delete().eq('id', ast.id);
+                            if (error) throw error;
+                            showToast('✅ تم حذف الطلب بنجاح');
+                            void loadData(false);
+                          } catch (e) { showToast('فشل رفض الطلب'); }
+                          finally { setSaving(false); }
+                        }} 
+                        disabled={saving}
+                        className="w-10 h-10 rounded-xl bg-red-500/10 text-red-500 border border-red-500/20 flex items-center justify-center hover:bg-red-500 hover:text-white transition"
+                      >
+                        <X size={18} />
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Approved Assistants Section */}
+          <div className="space-y-3 pt-4 border-t border-white/5">
+            <h3 className="text-base font-black text-green-400 flex items-center gap-2">
+              <Users size={18} /> المساعدون المعتمدون في المنصة
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {assistants.filter(a => a.status === 'approved').length === 0 ? (
+                <p className="col-span-3 text-center py-6 text-gray-500 text-sm">لا يوجد مساعدون معتمدون حالياً</p>
+              ) : (
+                assistants.filter(a => a.status === 'approved').map((ast) => (
+                  <div key={ast.id} className="card-base p-5 border border-white/5 bg-white/5 relative group overflow-hidden">
+                    <div className="flex justify-between items-start mb-4">
+                      <div className="flex items-center gap-3">
+                        {ast.imageUrl ? (
+                          <img src={ast.imageUrl} alt={ast.name} className="w-12 h-12 rounded-2xl object-cover" />
+                        ) : (
+                          <div className="w-12 h-12 rounded-2xl bg-amber-500/10 flex items-center justify-center text-lg font-bold text-amber-400">{ast.name[0]}</div>
+                        )}
+                        <div>
+                          <h3 className="font-bold text-white truncate max-w-[140px]">{ast.name}</h3>
+                          <div className="text-[10px] text-gray-500 font-mono">{ast.phone}</div>
+                        </div>
+                      </div>
+                      <span className="px-2 py-1 rounded-lg bg-green-500/20 text-green-400 text-[10px] font-black">{ast.code}</span>
+                    </div>
+                    <div className="space-y-1 text-xs mb-4">
+                      <div className="flex justify-between opacity-60"><span>التخصص:</span> <span className="text-white font-bold">{ast.roleTitle || 'مساعد مادة'}</span></div>
+                      <div className="flex justify-between opacity-60"><span>اسم المستخدم:</span> <span className="font-mono text-white">@{ast.username}</span></div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button 
+                        onClick={async () => {
+                          if (!confirm(`هل أنت متأكد من حذف حساب المساعد ${ast.name} نهائياً؟ سيتم إلغاء تعاقداته مع جميع المعلمين.`)) return;
+                          setSaving(true);
+                          try {
+                            await supabase.from('teacher_assistant_links').delete().eq('assistant_id', ast.id);
+                            const { error } = await supabase.from(ASSISTANTS_PROFILES).delete().eq('id', ast.id);
+                            if (error) throw error;
+                            showToast('✅ تم حذف المساعد بنجاح');
+                            void loadData(false);
+                          } catch (e) { showToast('فشل حذف حساب المساعد'); }
+                          finally { setSaving(false); }
+                        }} 
+                        disabled={saving}
+                        className="flex-1 py-1.5 rounded-lg bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white transition text-xs font-bold flex items-center justify-center gap-1"
+                      >
+                        <Trash2 size={14} /> حذف المساعد نهائياً
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
         </div>
       )}
 
@@ -429,93 +582,156 @@ export default function ManageTeachersPage() {
 
       {/* Add/Edit Form Overlay */}
       {(showAddForm || editingTeacher) && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in" onClick={(e) => { if(e.target === e.currentTarget) { setShowAddForm(false); setEditingTeacher(null); } }}>
-           <form onSubmit={handleSubmit} className="card-base w-full max-w-2xl max-h-[90vh] overflow-y-auto border-purple-500/30 animate-scale-in" onClick={e => e.stopPropagation()}>
-              <div className="sticky top-0 z-10 bg-black/90 p-6 border-b border-white/5 flex items-center justify-between">
-                 <h2 className="text-xl font-bold font-cairo flex items-center gap-2">
-                    {editingTeacher ? <Edit2 className="text-purple-400" /> : <UserPlus className="text-purple-400" />}
-                    {editingTeacher ? 'تعديل بيانات المعلم' : 'إضافة حساب معلم جديد'}
-                 </h2>
-                 <button type="button" onClick={() => { setShowAddForm(false); setEditingTeacher(null); }} className="p-2 hover:bg-white/10 rounded-xl transition"><X size={24}/></button>
+        <div className="modal-overlay" onClick={() => { setShowAddForm(false); setEditingTeacher(null); }}>
+           <form 
+              onSubmit={handleSubmit} 
+              className="modal-content modal-content-lg border-purple-500/30" 
+              onClick={e => e.stopPropagation()}
+           >
+              {/* Header */}
+              <div className="modal-header bg-gradient-to-r from-purple-500/10 to-transparent">
+                 <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center text-purple-400">
+                       {editingTeacher ? <Edit2 size={20} /> : <UserPlus size={20} />}
+                    </div>
+                    <div>
+                       <h2 className="text-xl font-bold font-cairo text-white">
+                          {editingTeacher ? 'تعديل بيانات المعلم' : 'إضافة حساب معلم جديد'}
+                       </h2>
+                       <p className="text-[11px] text-gray-500 mt-0.5">يرجى ملء البيانات بدقة لضمان عمل الحساب بشكل صحيح.</p>
+                    </div>
+                 </div>
+                 <button type="button" onClick={() => { setShowAddForm(false); setEditingTeacher(null); }} className="p-2 hover:bg-white/10 rounded-xl transition text-gray-400 hover:text-white"><X size={24}/></button>
               </div>
-              <div className="p-6 space-y-6">
-                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-1">
-                       <label className="text-xs text-gray-500 font-bold px-1">الاسم الكامل</label>
-                       <input type="text" className="input-base w-full" value={form.name} onChange={e => setForm({...form, name: e.target.value})} required/>
+
+              {/* Body */}
+              <div className="modal-body space-y-8 scrollbar-thin">
+                 {/* Basic Info Section */}
+                 <div className="space-y-4">
+                    <div className="flex items-center gap-2 pb-2 border-b border-white/5">
+                       <User size={16} className="text-purple-400" />
+                       <h3 className="text-sm font-bold text-gray-300">البيانات الأساسية</h3>
                     </div>
-                    <div className="space-y-1">
-                       <label className="text-xs text-gray-500 font-bold px-1">المادة</label>
-                       <input type="text" className="input-base w-full" value={form.subject} onChange={e => setForm({...form, subject: e.target.value})}/>
-                    </div>
-                    <div className="space-y-1">
-                       <label className="text-xs text-gray-500 font-bold px-1">اسم المستخدم</label>
-                       <input type="text" className="input-base w-full" value={form.username} onChange={e => setForm({...form, username: e.target.value})} required/>
-                    </div>
-                    <div className="space-y-1">
-                       <label className="text-xs text-gray-500 font-bold px-1">كلمة المرور {editingTeacher && '(فارغ للحفاظ على الحالية)'}</label>
-                       <input type="text" className="input-base w-full" value={form.password} onChange={e => setForm({...form, password: e.target.value})} required={!editingTeacher}/>
-                    </div>
-                    <div className="space-y-1">
-                       <label className="text-xs text-gray-500 font-bold px-1">كود المعلم</label>
-                       <input type="text" className="input-base w-full" value={form.code} onChange={e => setForm({...form, code: e.target.value.toUpperCase()})}/>
-                    </div>
-                    <div className="space-y-1">
-                       <label className="text-xs text-gray-500 font-bold px-1">نوع الكيان</label>
-                       <select className="input-base w-full" value={form.role} onChange={e => setForm({...form, role: e.target.value as any})}>
-                          <option value="teacher">معلم</option>
-                          <option value="super_admin">أدمن المنصة (صلاحية كاملة)</option>
-                       </select>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                       <div className="space-y-1.5">
+                          <label className="text-[11px] text-gray-400 font-bold px-1">الاسم الكامل</label>
+                          <input type="text" className="input-base" value={form.name} onChange={e => setForm({...form, name: e.target.value})} required placeholder="أدخل اسم المعلم الثلاثي..."/>
+                       </div>
+                       <div className="space-y-1.5">
+                          <label className="text-[11px] text-gray-400 font-bold px-1">المادة الدراسية</label>
+                          <input type="text" className="input-base" value={form.subject} onChange={e => setForm({...form, subject: e.target.value})} placeholder="مثال: اللغة العربية"/>
+                       </div>
+                       <div className="space-y-1.5">
+                          <label className="text-[11px] text-gray-400 font-bold px-1">كود المعلم (اختياري)</label>
+                          <input type="text" className="input-base" value={form.code} onChange={e => setForm({...form, code: e.target.value.toUpperCase()})} placeholder="كود تعريفي خاص..."/>
+                       </div>
+                       <div className="space-y-1.5">
+                          <label className="text-[11px] text-gray-400 font-bold px-1">نوع الكيان</label>
+                          <select className="input-base" value={form.role} onChange={e => setForm({...form, role: e.target.value as any})}>
+                             <option value="teacher">معلم</option>
+                             <option value="super_admin">أدمن المنصة (صلاحية كاملة)</option>
+                          </select>
+                       </div>
                     </div>
                  </div>
 
+                 {/* Account Section */}
+                 <div className="space-y-4">
+                    <div className="flex items-center gap-2 pb-2 border-b border-white/5">
+                       <Lock size={16} className="text-purple-400" />
+                       <h3 className="text-sm font-bold text-gray-300">بيانات الحساب والدخول</h3>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                       <div className="space-y-1.5">
+                          <label className="text-[11px] text-gray-400 font-bold px-1">اسم المستخدم (رقم الموبايل)</label>
+                          <input type="text" className="input-base" value={form.username} onChange={e => setForm({...form, username: e.target.value})} required placeholder="01xxxxxxxxx"/>
+                       </div>
+                       <div className="space-y-1.5">
+                          <label className="text-[11px] text-gray-400 font-bold px-1">
+                             كلمة المرور {editingTeacher && <span className="text-orange-400 font-bold">(اتركه فارغاً للحفاظ على الحالية)</span>}
+                          </label>
+                          <input type="text" className="input-base" value={form.password} onChange={e => setForm({...form, password: e.target.value})} required={!editingTeacher} placeholder="كلمة مرور قوية..."/>
+                       </div>
+                    </div>
+                 </div>
+
+                 {/* Subscription Section */}
                  {form.role === 'teacher' && (
-                    <div className="bg-purple-500/5 p-4 rounded-2xl border border-purple-500/10 space-y-4">
-                       <h3 className="text-sm font-bold text-purple-400">بيانات الاشتراك المالي</h3>
-                       <div className="grid grid-cols-2 gap-4">
-                          <div className="space-y-1">
-                             <label className="text-[10px] text-gray-500">الباقة</label>
-                             <select className="input-base w-full" value={form.subType} onChange={e => setForm({...form, subType: e.target.value as any})}>
-                                <option value="free">مجاني</option>
-                                <option value="monthly">شهري</option>
-                                <option value="yearly">سنوي</option>
+                    <div className="space-y-4 bg-purple-500/5 p-5 rounded-2xl border border-purple-500/10">
+                       <div className="flex items-center gap-2 pb-2 border-b border-purple-500/10">
+                          <CreditCard size={16} className="text-purple-400" />
+                          <h3 className="text-sm font-bold text-purple-400">إدارة الاشتراك المالي</h3>
+                       </div>
+                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="space-y-1.5">
+                             <label className="text-[11px] text-gray-400 font-bold">باقة الاشتراك</label>
+                             <select className="input-base" value={form.subType} onChange={e => setForm({...form, subType: e.target.value as any})}>
+                                <option value="free">باقة مجانية (Free)</option>
+                                <option value="monthly">اشتراك شهري</option>
+                                <option value="yearly">اشتراك سنوي</option>
                              </select>
                           </div>
-                          <div className="space-y-1">
-                             <label className="text-[10px] text-gray-500">تاريخ الانتهاء</label>
-                             <input type="date" className="input-base w-full" value={form.subExpiry ? new Date(form.subExpiry).toISOString().split('T')[0] : ''} onChange={e => setForm({...form, subExpiry: e.target.value ? new Date(e.target.value).getTime() : null})} />
+                          <div className="space-y-1.5">
+                             <label className="text-[11px] text-gray-400 font-bold">تاريخ انتهاء الاشتراك</label>
+                             <input type="date" className="input-base" value={form.subExpiry ? new Date(form.subExpiry).toISOString().split('T')[0] : ''} onChange={e => setForm({...form, subExpiry: e.target.value ? new Date(e.target.value).getTime() : null})} />
                           </div>
-                          <div className="col-span-2 space-y-1">
-                             <label className="text-[10px] text-gray-500">رابط الدفع الخاص به</label>
-                             <input type="text" className="input-base w-full" value={form.subLink} onChange={e => setForm({...form, subLink: e.target.value})} placeholder="https://..." />
+                          <div className="space-y-1.5 md:col-span-2">
+                             <label className="text-[11px] text-gray-400 font-bold">رابط الدفع المخصص (لتحصيل الاشتراكات من طلابه)</label>
+                             <input type="text" className="input-base" value={form.subLink} onChange={e => setForm({...form, subLink: e.target.value})} placeholder="https://..." />
                           </div>
-                          <div className="col-span-1 space-y-1">
-                             <label className="text-[10px] text-gray-500">تكلفة الباقة (ج.م)</label>
-                             <input type="number" className="input-base w-full" value={form.subPrice} onChange={e => setForm({...form, subPrice: parseFloat(e.target.value) || 0})} />
+                          <div className="space-y-1.5">
+                             <label className="text-[11px] text-gray-400 font-bold">تكلفة الباقة (ج.م)</label>
+                             <input type="number" className="input-base" value={form.subPrice} onChange={e => setForm({...form, subPrice: parseFloat(e.target.value) || 0})} />
                           </div>
                        </div>
                     </div>
                  )}
 
-                 <div className="space-y-3">
-                    <label className="text-xs text-gray-500 font-bold px-1">الصلاحيات الممنوحة</label>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                 {/* Permissions Section */}
+                 <div className="space-y-4">
+                    <div className="flex items-center gap-2 pb-2 border-b border-white/5">
+                       <Shield size={16} className="text-purple-400" />
+                       <h3 className="text-sm font-bold text-gray-300">الصلاحيات الممنوحة للمعلم</h3>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
                        {AVAILABLE_PERMISSIONS.map(p => (
-                          <button key={p.id} type="button" onClick={() => togglePermission(p.id)} className={`p-2 rounded-xl border text-[10px] font-bold flex items-center gap-2 transition ${form.permissions.includes(p.id) ? 'bg-purple-500/20 border-purple-500/40 text-purple-300' : 'bg-white/5 border-white/5 text-gray-600'}`}>
-                             <p.icon size={12} /> {p.label}
+                          <button key={p.id} type="button" onClick={() => togglePermission(p.id)} 
+                             className={`p-2.5 rounded-xl border text-[11px] font-bold flex items-center gap-2 transition-all ${
+                                form.permissions.includes(p.id) 
+                                ? 'bg-purple-500/20 border-purple-500/40 text-purple-300 shadow-lg shadow-purple-500/5' 
+                                : 'bg-white/5 border-transparent text-gray-500 hover:bg-white/10'
+                             }`}>
+                             <p.icon size={14} className={form.permissions.includes(p.id) ? 'text-purple-400' : 'text-gray-600'} /> 
+                             {p.label}
                           </button>
                        ))}
                     </div>
                  </div>
+              </div>
 
-                 <div className="flex gap-3 pt-4 sticky bottom-0 bg-black/90 py-4 border-t border-white/5">
-                    <button type="submit" disabled={submitting} className="flex-[2] btn-gold bg-purple-600 hover:bg-purple-700 py-3 text-lg">{submitting ? 'جاري الحفظ...' : 'حفظ البيانات'}</button>
-                    <button type="button" onClick={() => { setShowAddForm(false); setEditingTeacher(null); }} className="flex-1 btn-outline border-white/10 hover:bg-white/5">إلغاء</button>
-                 </div>
+              {/* Footer */}
+              <div className="modal-footer bg-black/40 backdrop-blur-md">
+                 <button type="button" onClick={() => { setShowAddForm(false); setEditingTeacher(null); }} 
+                    className="flex-1 btn-outline h-12 justify-center">إلغاء</button>
+                 <button type="submit" disabled={submitting} 
+                    className="flex-[2] btn-gold bg-purple-600 hover:bg-purple-700 h-12 justify-center text-lg relative overflow-hidden group">
+                    {submitting ? (
+                       <div className="flex items-center gap-2">
+                          <RefreshCw size={18} className="animate-spin" />
+                          <span>جاري الحفظ...</span>
+                       </div>
+                    ) : (
+                       <div className="flex items-center gap-2">
+                          <CheckCircle2 size={18} />
+                          <span>حفظ البيانات</span>
+                       </div>
+                    )}
+                 </button>
               </div>
            </form>
         </div>
-      )}
+      )
+}
 
       {/* Receipt Generator Section */}
       <div className="card-base p-6 bg-blue-500/5 border border-blue-500/20">

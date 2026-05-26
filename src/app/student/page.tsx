@@ -34,7 +34,11 @@ import {
   subscribeToUserOnlineStatus, 
   markNotificationRead,
   saveStudent,
-  subscribeToStudent
+  subscribeToStudent,
+  subscribeToStudentByPhone,
+  subscribeToRegistrationRequestByPhone,
+  getRegistrationRequestsByPhone,
+  getTopStudents
 } from '@/lib/db';
 import { FileProcessor } from '@/lib/file-processor';
 import { showToast } from '@/lib/toast';
@@ -52,10 +56,12 @@ import { TeacherDiscovery } from '@/components/TeacherDiscovery';
 import { SubscriptionExpiredOverlay } from '@/components/SubscriptionExpiredOverlay';
 import type { EducationalGame } from '@/types';
 
-const GamePortal = dynamic(() => import('@/components/games/GamePortal').then((m) => m.GamePortal), {
-  ssr: false,
-  loading: () => null,
-});
+// استيراد المكونات الفرعية الجديدة للطالب
+import { StudentLeaderboard } from '@/components/student/StudentLeaderboard';
+import { StudentGames } from '@/components/student/StudentGames';
+import { StudentSchedule } from '@/components/student/StudentSchedule';
+import { StudentChat } from '@/components/student/StudentChat';
+import { GlobalChatWidget } from '@/components/shared/GlobalChatWidget';
 
 export default function StudentPortal() {
   const student = useStudentStore(state => state.student);
@@ -70,8 +76,6 @@ export default function StudentPortal() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [exams, setExams] = useState<Exam[]>([]);
-  const [allTeacherEvents, setAllTeacherEvents] = useState<CalendarEvent[]>([]);
-  const [loadingSchedule, setLoadingSchedule] = useState(false);
   const [attempts, setAttempts] = useState<Attempt[]>([]);
   const [materials, setMaterials] = useState<CourseMaterial[]>([]);
   
@@ -84,9 +88,9 @@ export default function StudentPortal() {
   const [submittingAssignId, setSubmittingAssignId] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
 
-  const [activeTab, setActiveTab] = useState<'home' | 'exams' | 'courses' | 'assignments' | 'results' | 'messages' | 'settings' | 'profile' | 'discover' | 'link' | 'games' | 'schedule'>('home');
+  const [activeTab, setActiveTab] = useState<'home' | 'exams' | 'courses' | 'assignments' | 'results' | 'messages' | 'settings' | 'profile' | 'discover' | 'link' | 'games' | 'schedule' | 'leaderboard'>('home');
   const [games, setGames] = useState<EducationalGame[]>([]);
-  const [selectedGame, setSelectedGame] = useState<EducationalGame | null>(null);
+  const [leaderboardStudents, setLeaderboardStudents] = useState<Student[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [teacherInfo, setTeacherInfo] = useState<any>(null);
   const [showNotifs, setShowNotifs] = useState(false);
@@ -98,6 +102,7 @@ export default function StudentPortal() {
   const [findingCode, setFindingCode] = useState(false);
   const [teacherPermissions, setTeacherPermissions] = useState<string[] | null>(null);
   const [hasMounted, setHasMounted] = useState(false);
+  const [pendingEnrollmentNotif, setPendingEnrollmentNotif] = useState<{teacherName: string, subject?: string} | null>(null);
   const [mounted, setMounted] = useState(false);
   const certRef = useRef<HTMLDivElement>(null);
 
@@ -105,23 +110,7 @@ export default function StudentPortal() {
   const { openPreview, PreviewModal } = useFilePreview();
   const { openCompression, CompressionModal } = usePDFCompression({ showSelection: true });
 
-  // Chat State
-  const [selectedConv, setSelectedConv] = useState<Conversation | null>(null);
-  const [chatMessages, setChatMessages] = useState<Message[]>([]);
-  const [newMsg, setNewMsg] = useState('');
-  const [loadingChat, setLoadingChat] = useState(false);
-  const [otherUserOnline, setOtherUserOnline] = useState(false);
-  const [otherUserLastActive, setOtherUserLastActive] = useState<number | undefined>();
-  const [chatUploadingFile, setChatUploadingFile] = useState(false);
-  const [chatAttachmentUrl, setChatAttachmentUrl] = useState('');
-  const [chatAttachmentType, setChatAttachmentType] = useState<'text' | 'image' | 'file'>('text');
-  
-  // ILovePDF Compression States
-  const [isCompressing, setIsCompressing] = useState(false);
-  const [compressionProgress, setCompressionProgress] = useState(0);
-  const [compressionMessage, setCompressionMessage] = useState('');
   const [showAcademySwitcher, setShowAcademySwitcher] = useState(false);
-  const chatEndRef = useRef<HTMLDivElement>(null);
 
   // AI Feedback State
   const [expandedAttemptId, setExpandedAttemptId] = useState<string | null>(null);
@@ -159,74 +148,7 @@ export default function StudentPortal() {
     }
   };
 
-  const handleChatAttachment = async (e: React.ChangeEvent<HTMLInputElement>, _type: 'image' | 'file') => {
-    const file = e.target.files?.[0];
-    if (!file) return;
 
-    // Auto-detect actual file type from MIME
-    const isImage = file.type.startsWith('image/');
-    const detectedType: 'image' | 'file' = isImage ? 'image' : 'file';
-
-    if (file.size > 25 * 1024 * 1024) {
-      showToast('حجم الملف كبير جداً (الأقصى 25 ميجابايت)');
-      e.target.value = '';
-      return;
-    }
-
-    const uploadFile = async (fileToUpload: File | Blob) => {
-      setChatUploadingFile(true);
-      try {
-        const path = `chat-attachments/${Date.now()}_${file.name}`;
-        const url = await uploadFileToStorage(fileToUpload, path);
-        setChatAttachmentUrl(url);
-        setChatAttachmentType(detectedType);
-        showToast('✅ تم إرفاق الملف بنجاح');
-      } catch (err: any) {
-        console.error('Chat file upload error:', err);
-        showToast('❌ فشل رفع الملف: ' + (err?.message || 'تحقق من الاتصال'));
-      } finally {
-        setChatUploadingFile(false);
-        e.target.value = '';
-      }
-    };
-
-    // Large PDF → compress via iLovePDF Client
-    if (!isImage && file.type === 'application/pdf' && file.size > 10 * 1024 * 1024) {
-      setIsCompressing(true);
-      setCompressionProgress(0);
-      setCompressionMessage('جاري التحضير للضغط عبر سيرفرات iLovePDF...');
-      try {
-        const { compressWithILovePDF } = await import('@/lib/ilovepdf-client');
-        const compressedFile = await compressWithILovePDF(file, (progress, message) => {
-          setCompressionProgress(progress);
-          setCompressionMessage(message);
-        });
-        await uploadFile(compressedFile);
-      } catch (err: any) {
-        showToast(err.message || 'فشل الضغط الذكي، جاري الرفع بالحجم الأصلي...');
-        await uploadFile(file);
-      } finally {
-        setIsCompressing(false);
-      }
-      return;
-    }
-
-    // Large image → compress locally
-    if (isImage && file.size > 4 * 1024 * 1024) {
-      showToast('صورة كبيرة، جاري الضغط...');
-      setChatUploadingFile(true);
-      try {
-        const imageCompression = (await import('browser-image-compression')).default;
-        const compressed = await imageCompression(file, { maxSizeMB: 2, maxWidthOrHeight: 1920, useWebWorker: true });
-        await uploadFile(compressed);
-      } catch {
-        await uploadFile(file);
-      }
-      return;
-    }
-
-    await uploadFile(file);
-  };
 
   useEffect(() => { setHasMounted(true); setMounted(true); }, []);
 
@@ -264,13 +186,14 @@ export default function StudentPortal() {
         return;
       }
 
-      const [allExams, myAtts, allMaterials, allAssignments, mySubs, allGames] = await Promise.all([
+      const [allExams, myAtts, allMaterials, allAssignments, mySubs, allGames, topStudentsList] = await Promise.all([
         getPublishedExams(tId).catch((e: any) => { console.error('Failed to load exams:', e); return [] as Exam[]; }),
         getAttemptsByStudent(sId).catch((e: any) => { console.error('Failed to load attempts:', e); return [] as Attempt[]; }),
         getMaterials(tId).catch((e: any) => { console.error('Failed to load materials:', e); return [] as CourseMaterial[]; }),
         getAssignments(tId).catch((e: any) => { console.error('Failed to load assignments:', e); return [] as Assignment[]; }),
         getStudentSubmissions(sId).catch((e: any) => { console.error('Failed to load submissions:', e); return [] as AssignmentSubmission[]; }),
         getGamesForStudent(tId, student.groupIds?.[0]).catch((e: any) => { console.error('Failed to load games:', e); return [] as EducationalGame[]; }),
+        getTopStudents(tId, 20).catch((e: any) => { console.error('Failed to load top students:', e); return [] as Student[]; })
       ]);
 
       // Filter exams for this student's group
@@ -282,6 +205,7 @@ export default function StudentPortal() {
       setExams(filteredExams);
       setAttempts(myAtts.filter((a: Attempt) => a.completed));
       setGames(allGames);
+      setLeaderboardStudents(topStudentsList);
       
       // Fetch teacher name if missing
       if (!student.teacherName && tId !== 'unknown_teacher') {
@@ -336,19 +260,47 @@ export default function StudentPortal() {
       });
     }
     void loadStudentData();
-    let unsubNotifs = () => {};
     let unsubConvs = () => {};
     if (student.teacherId && student.teacherId !== 'unknown_teacher') {
-      unsubNotifs = subscribeToNotifications(student.teacherId, (allNotifs) => {
-        setNotifications(filterNotificationsForStudent(allNotifs, student));
-      });
       unsubConvs = subscribeToConversations(student.id, setConversations);
     }
+
+    // Subscribe only to notifications from the active teacher
+    const teacherIds = student.teacherId && student.teacherId !== 'unknown_teacher' 
+      ? [student.teacherId] 
+      : [];
+
+    let knownNotifIds = new Set<string>();
+    const unsubNotifsList: (() => void)[] = [];
+
+    teacherIds.forEach(tId => {
+      const unsub = subscribeToNotifications(tId, (allNotifs) => {
+        const studentNotifs = filterNotificationsForStudent(allNotifs, student);
+        setNotifications(prev => {
+          // Merge: keep previous notifs from other teachers, replace this teacher's notifs
+          const otherTeacherNotifs = prev.filter(n => (n as any).teacherId !== tId);
+          const merged = [...studentNotifs, ...otherTeacherNotifs];
+          // Deduplicate by id
+          const seen = new Set<string>();
+          return merged.filter(n => { if (seen.has(n.id)) return false; seen.add(n.id); return true; });
+        });
+
+        // Toast for truly new unread notifications
+        const newUnread = studentNotifs.filter(n => !n.read && !knownNotifIds.has(n.id));
+        newUnread.forEach(n => {
+          const msg = (n as any).msg || (n as any).message || 'إشعار جديد من المعلم';
+          showToast(`🔔 ${msg.slice(0, 80)}`);
+        });
+        studentNotifs.forEach(n => knownNotifIds.add(n.id));
+      });
+      unsubNotifsList.push(unsub);
+    });
+
     return () => {
-      unsubNotifs();
+      unsubNotifsList.forEach(u => u());
       unsubConvs();
     };
-  }, [student, loadStudentData, setConversations]);
+  }, [student, loadStudentData, setConversations, allEnrollments]);
 
   // ⚡ Real-time Status Sync via Supabase Realtime
   // When the teacher changes sub_type, sub_expiry, or cancel_reason in DB,
@@ -370,31 +322,76 @@ export default function StudentPortal() {
     return unsub;
   }, [student?.id, student?.teacherId]);
 
-  // Handle Chat and Other User Presence
+  // 🔔 Real-time: detect new teacher approvals (new enrollment with same phone)
   useEffect(() => {
-    if (!selectedConv || !student) return;
+    const phone = student?.phone;
+    if (!phone) return;
 
-    setLoadingChat(true);
-    const unsub = subscribeToMessages(selectedConv.id, (msgs: Message[]) => {
-      setChatMessages(msgs);
-      setLoadingChat(false);
-      markMessagesAsRead(selectedConv.id, student!.id);
+    // Subscribe to new student records with this phone — fires when teacher approves registration
+    const unsubEnroll = subscribeToStudentByPhone(phone, async (freshEnrollments) => {
+      const currentEnrollments = useStudentStore.getState().allEnrollments;
+      // Check if there are genuinely NEW enrollments (by teacherId)
+      const existingTeacherIds = new Set(currentEnrollments.map(e => e.teacherId));
+      const newOnes = freshEnrollments.filter(e => !existingTeacherIds.has(e.teacherId));
+
+      if (newOnes.length > 0) {
+        // Enrich teacher info for new enrollments
+        const enriched = await Promise.all(freshEnrollments.map(async (en) => {
+          if (!en.teacherName && en.teacherId) {
+            try {
+              const t = await getTeacherById(en.teacherId);
+              return { ...en, teacherName: t?.name || 'معلم', teacherImage: t?.imageUrl, teacherSubject: t?.subject };
+            } catch { return en; }
+          }
+          return en;
+        }));
+
+        // Share image across enrollments
+        const sharedImg = enriched.find(e => e.imageUrl)?.imageUrl;
+        if (sharedImg) enriched.forEach(e => { if (!e.imageUrl) e.imageUrl = sharedImg; });
+
+        useStudentStore.getState().setAllEnrollments(enriched);
+
+        // Show notification banner for each new enrollment
+        for (const newEnroll of newOnes) {
+          const teacherName = enriched.find(e => e.teacherId === newEnroll.teacherId)?.teacherName || 'معلم';
+          const subject = enriched.find(e => e.teacherId === newEnroll.teacherId)?.teacherSubject;
+          setPendingEnrollmentNotif({ teacherName, subject });
+          showToast(`🎉 تم قبولك في أكاديمية أ. ${teacherName}! يمكنك التبديل الآن`);
+
+          // Add an in-app notification for the student
+          setNotifications(prev => [{
+            id: `enrollment_${newEnroll.teacherId}_${Date.now()}`,
+            teacherId: newEnroll.teacherId,
+            msg: `🎉 تم قبولك في أكاديمية أ. ${teacherName}${subject ? ` (مادة ${subject})` : ''}! يمكنك الآن الدخول فوراً.`,
+            type: 'success',
+            read: false,
+            time: new Date().toISOString(),
+            createdAt: Date.now(),
+          } as any, ...prev]);
+        }
+      }
     });
 
-    const otherParticipantId = selectedConv.participants.find((p: string) => p !== student!.id);
-    let unsubPresence = () => {};
-    if (otherParticipantId) {
-      unsubPresence = subscribeToUserOnlineStatus(otherParticipantId, 'teachers', (isOnline, lastActive) => {
-        setOtherUserOnline(isOnline);
-        setOtherUserLastActive(lastActive);
-      });
-    }
+    // Subscribe to pending registration request status changes
+    const unsubReq = subscribeToRegistrationRequestByPhone(phone, (reqs) => {
+      // If all pending requests are now gone — they were either approved or rejected
+      const pendingReqs = reqs.filter(r => r.status === 'pending');
+      if (pendingReqs.length === 0 && reqs.length > 0) {
+        const lastReq = reqs[reqs.length - 1];
+        if (lastReq.status === 'rejected') {
+          showToast('❌ تم رفض طلب تسجيلك. تواصل مع المعلم للمزيد');
+        }
+      }
+    });
 
     return () => {
-      unsub();
-      unsubPresence();
+      unsubEnroll();
+      unsubReq();
     };
-  }, [selectedConv, student]);
+  }, [student?.phone]);
+
+
 
   // Listen for background upload completion
   useEffect(() => {
@@ -415,70 +412,7 @@ export default function StudentPortal() {
     return () => window.removeEventListener('fileUploaded', handleUploaded);
   }, []);
 
-  const loadGlobalSchedule = useCallback(async () => {
-    if (!student || student.id === 'unknown_student') return;
-    setLoadingSchedule(true);
-    try {
-      const allEvents: CalendarEvent[] = [];
-      
-      // Load events for each enrollment
-      for (const enrollment of allEnrollments) {
-        if (!enrollment.teacherId) continue;
-        
-        // Fetch manual events
-        const manual = await getCalendarEvents(enrollment.teacherId);
-        
-        // Fetch exams and assignments to include them in schedule
-        const teacherExams = await getExams(enrollment.teacherId);
-        const teacherAssigns = await getAssignments(enrollment.teacherId);
-        
-        const examEvents = teacherExams
-          .filter((e: Exam) => e.startTime)
-          .map((e: Exam) => ({
-            id: `exam-${e.id}`,
-            title: `امتحان: ${e.title}`,
-            date: e.startTime!,
-            type: 'exam' as const,
-            teacherId: e.teacherId,
-            teacherName: (e as any).teacherName || (enrollment as any).teacherName || 'المعلم',
-            createdAt: e.createdAt || new Date().toISOString()
-          }));
-          
-        const assignEvents = teacherAssigns
-          .filter((a: Assignment) => a.dueDate)
-          .map((a: Assignment) => ({
-            id: `assign-${a.id}`,
-            title: `واجب: ${a.title}`,
-            date: a.dueDate,
-            type: 'assignment' as const,
-            teacherId: enrollment.teacherId,
-            teacherName: (enrollment as any).teacherName || 'المعلم',
-            createdAt: a.createdAt || new Date().toISOString()
-          }));
 
-        // Tag manual events with teacher name
-        const taggedManual = manual.map((m: CalendarEvent) => ({
-          ...m,
-          teacherName: (enrollment as any).teacherName || 'المعلم'
-        }));
-
-        allEvents.push(...examEvents, ...assignEvents, ...taggedManual);
-      }
-      
-      // Sort by date/time
-      setAllTeacherEvents(allEvents.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()));
-    } catch (err) {
-      console.error('Failed to load global schedule:', err);
-    } finally {
-      setLoadingSchedule(false);
-    }
-  }, [student, allEnrollments]);
-
-  useEffect(() => {
-    if (activeTab === 'schedule') {
-      void loadGlobalSchedule();
-    }
-  }, [activeTab, loadGlobalSchedule]);
 
   const handleLogin = async () => {
     if (!code.trim()) { setError('أدخل كودك أولاً'); return; }
@@ -594,6 +528,12 @@ export default function StudentPortal() {
         submittedAt: new Date().toISOString()
       };
 
+      const assign = assignments.find(a => a.id === assignId);
+
+      // Optimistic update: show submission instantly
+      const optimisticSub = { ...sub, id: `temp-${Date.now()}` } as AssignmentSubmission;
+      setMySubmissions(prev => [...prev, optimisticSub]);
+
       await submitAssignment(sub);
       
       // --- Gamification Logic: Award 5 points for submitting an assignment ---
@@ -613,7 +553,6 @@ export default function StudentPortal() {
       // ---------------------------------------------------------------------
 
       try {
-        const assign = assignments.find(a => a.id === assignId);
         await dispatchNotification({
           teacherId: student!.teacherId,
           msg: `قام الطالب ${student!.name} بتسليم واجب: ${assign?.title || 'غير معروف'}`,
@@ -628,8 +567,10 @@ export default function StudentPortal() {
       setSubmitText('');
       setSubmitFile(null);
       setUploadedFileUrl('');
-      showToast('تم تقديم الواجب بنجاح');
-      loadStudentData(); // Refresh submissions list
+      showToast('✅ تم تقديم الواجب بنجاح');
+      
+      // Background confirm
+      loadStudentData().catch(() => {});
     } catch (e) {
       console.error(e);
       showToast('حدث خطأ أثناء تقديم الواجب');
@@ -961,6 +902,43 @@ export default function StudentPortal() {
             />
           )}
 
+          {/* 🎉 NEW ENROLLMENT BANNER — appears instantly when teacher approves */}
+          {pendingEnrollmentNotif && (
+            <div
+              className="relative overflow-hidden rounded-2xl p-4 flex items-center justify-between gap-3"
+              style={{
+                background: 'linear-gradient(135deg, rgba(16,185,129,0.15) 0%, rgba(5,150,105,0.1) 100%)',
+                border: '1px solid rgba(16,185,129,0.35)',
+                boxShadow: '0 0 30px rgba(16,185,129,0.1)',
+              }}
+            >
+              <div className="absolute inset-0 pointer-events-none" style={{ background: 'radial-gradient(ellipse at top right, rgba(16,185,129,0.1) 0%, transparent 60%)' }} />
+              <div className="flex items-center gap-3 relative z-10">
+                <span className="text-2xl">🎉</span>
+                <div>
+                  <div className="font-black text-green-400 text-sm leading-tight">تم قبولك في أكاديمية أ. {pendingEnrollmentNotif.teacherName}!</div>
+                  {pendingEnrollmentNotif.subject && (
+                    <div className="text-xs text-green-300/70 mt-0.5">مادة: {pendingEnrollmentNotif.subject}</div>
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center gap-2 relative z-10 shrink-0">
+                <button
+                  onClick={() => setStudent(null)}
+                  className="px-3 py-1.5 rounded-lg font-bold text-xs text-white transition-all active:scale-95"
+                  style={{ background: 'linear-gradient(135deg, #10b981, #059669)', boxShadow: '0 4px 12px rgba(16,185,129,0.35)' }}
+                >
+                  تبديل الآن ←
+                </button>
+                <button onClick={() => setPendingEnrollmentNotif(null)}
+                  className="w-7 h-7 rounded-lg flex items-center justify-center text-green-400/50 hover:text-green-400 transition-colors"
+                  style={{ background: 'rgba(255,255,255,0.05)' }}>
+                  <X size={13} />
+                </button>
+              </div>
+            </div>
+          )}
+
           {student.subType === 'none' && !!(student as any).cancelReason && activeTab !== 'discover' ? (
              <div className="card-base p-12 text-center border-red-500/30 bg-red-500/5 my-8 animate-fade-in shadow-xl shadow-red-500/10">
                <div className="w-24 h-24 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-6">
@@ -995,6 +973,10 @@ export default function StudentPortal() {
              </div>
           ) : (
             <div className="contents animate-fade-in">
+              {activeTab === 'leaderboard' && (
+                <StudentLeaderboard leaderboardStudents={leaderboardStudents} currentStudentId={student.id} />
+              )}
+
               {/* Exams Tab */}
               {activeTab === 'exams' && (
             <div className="space-y-3 animate-slide-up">
@@ -1201,165 +1183,7 @@ export default function StudentPortal() {
 
           {/* Messages Tab */}
           {activeTab === 'messages' && (
-            <div className="flex flex-col h-[500px] card-base overflow-hidden animate-slide-up bg-[#0d121f]">
-              {!selectedConv ? (
-                <div className="flex-1 flex flex-col items-center justify-center p-6 text-center space-y-4">
-                  <div className="w-16 h-16 bg-gold/5 rounded-full flex items-center justify-center border border-gold/10">
-                    <MessageSquare size={32} className="text-gold/20" />
-                  </div>
-                  <button 
-                    onClick={() => {
-                      const convId = [student.id, student.teacherId].sort().join('_');
-                      const existing = conversations.find(c => c.id === convId);
-                      setSelectedConv(existing || {
-                        id: convId,
-                        participants: [student.id, student.teacherId],
-                        participantNames: [student.name, student.teacherName || 'المعلم'],
-                        updatedAt: Date.now()
-                      } as Conversation);
-                    }}
-                    className="w-full p-4 rounded-2xl bg-gold/5 border border-gold/10 flex items-center gap-3 hover:bg-gold/10 transition-all text-right"
-                  >
-                    <div className="w-10 h-10 rounded-xl bg-gold flex items-center justify-center text-black font-black">
-                       {(student.teacherName || 'م')[0]}
-                    </div>
-                    <div className="flex-1">
-                       <p className="font-bold text-sm text-gold">المعلم: {student.teacherName || 'غير معروف'}</p>
-                       <p className="text-[10px] text-gray-500">تواصل مباشر مع معلمك</p>
-                    </div>
-                  </button>
-                </div>
-              ) : (
-                <>
-                  <div className="p-3 border-b border-white/5 bg-white/5 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <button onClick={() => setSelectedConv(null)} className="text-gray-400 p-1"><X size={18}/></button>
-                      <div className="flex flex-col">
-                        <div className="text-xs font-bold">{selectedConv.participantNames.find(n => n !== student.name)}</div>
-                        <div className={`text-[9px] flex items-center gap-1 ${otherUserOnline ? 'text-emerald-400' : 'text-gray-400'}`}>
-                          <span className={`w-1 h-1 rounded-full shrink-0 ${otherUserOnline ? 'bg-emerald-400' : 'bg-gray-500'}`} />
-                          {otherUserOnline
-                            ? 'متصل الآن'
-                            : otherUserLastActive
-                              ? `آخر نشاط: ${formatRelativeLastSeenAr(otherUserLastActive)}`
-                              : 'خارج الخط'}
-                        </div>
-                      </div>
-                    </div>
-                    {siteSettings?.whatsappEnabled && siteSettings?.whatsappNumber && (
-                      <a 
-                        href={`https://wa.me/${siteSettings.whatsappNumber.startsWith('2') ? siteSettings.whatsappNumber : '2' + siteSettings.whatsappNumber}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="flex items-center gap-1.5 bg-[#25D366]/10 text-[#25D366] px-3 py-1.5 rounded-xl border border-[#25D366]/20 hover:bg-[#25D366]/20 transition-all text-[10px] font-bold"
-                      >
-                        <MessageCircle size={14} />
-                        تواصل عبر واتساب
-                      </a>
-                    )}
-                  </div>
-                  <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-black/20">
-                    {chatMessages.map((msg) => (
-                      <div key={msg.id} className={`flex ${msg.senderId === student.id ? 'justify-end' : 'justify-start'}`}>
-                        <div className={`max-w-[85%] p-2.5 rounded-2xl text-xs shadow-lg ${
-                          msg.senderId === student.id ? 'bg-gold text-black rounded-tr-none' : 'bg-white/10 text-white rounded-tl-none border border-white/5'
-                        }`}>
-                           {msg.type === 'image' && msg.fileUrl && (
-                             <img src={msg.fileUrl} alt="Attachment" className="max-w-full h-auto rounded-lg mb-2" onClick={() => openPreview(msg.fileUrl!, 'صورة')} />
-                           )}
-                           {msg.type === 'file' && msg.fileUrl && (
-                             <div className="flex items-center gap-2 mb-2 p-2 bg-black/20 rounded-lg cursor-pointer" onClick={() => openPreview(msg.fileUrl!, 'ملف')}>
-                               <FileText size={16} /> <span className="text-[10px] truncate">ملف مرفق</span>
-                             </div>
-                           )}
-                           {msg.content && <p className="leading-relaxed whitespace-pre-wrap">{msg.content}</p>}
-                           <div className="text-[8px] opacity-50 mt-1 text-left">
-                             {new Date(msg.timestamp).toLocaleTimeString('ar-EG', {hour:'2-digit', minute:'2-digit'})}
-                           </div>
-                        </div>
-                      </div>
-                    ))}
-                    <div ref={chatEndRef} />
-                  </div>
-                  <div className="p-3 bg-white/5 flex flex-col gap-2 relative">
-                    
-                    {/* Inline ILovePDF Compression Progress UI */}
-                    {isCompressing && (
-                      <div className="flex items-center gap-4 bg-gold/10 border border-gold/20 p-3 rounded-xl mb-1 animate-fade-in shadow-glow">
-                        <div className="w-8 h-8 rounded-full border-2 border-gold/30 border-t-gold animate-spin shrink-0 shadow-[0_0_10px_var(--gold)]" />
-                        <div className="flex-1">
-                          <div className="flex justify-between items-center mb-1">
-                            <span className="text-xs font-bold text-gold">{compressionMessage}</span>
-                            <span className="text-[10px] text-gold font-black bg-gold/10 px-2 py-0.5 rounded-md">{compressionProgress}%</span>
-                          </div>
-                          <div className="h-1.5 w-full bg-black/40 rounded-full overflow-hidden">
-                            <div className="h-full bg-gold transition-all duration-300 shadow-[0_0_8px_var(--gold)]" style={{ width: `${compressionProgress}%` }} />
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {chatAttachmentUrl && (
-                      <div className="flex items-center justify-between p-2 bg-gold/10 rounded-lg border border-gold/20">
-                        <span className="text-[9px] text-gold font-bold flex items-center gap-1">
-                          {chatAttachmentType === 'image' ? <ImageIcon size={12}/> : <FileText size={12}/>} ملف مرفق جاهز
-                        </span>
-                        <button onClick={() => setChatAttachmentUrl('')} className="text-red-400"><X size={14}/></button>
-                      </div>
-                    )}
-                    <form onSubmit={async (e) => {
-                      e.preventDefault();
-                      if ((!newMsg.trim() && !chatAttachmentUrl) || !selectedConv) return;
-                      const recId = selectedConv.participants.find(p => p !== student.id);
-                      if (!recId) { showToast('خطأ: لا يمكن تحديد المستلم'); return; }
-                      const recName = selectedConv.participantNames[selectedConv.participants.indexOf(recId)] || 'المعلم';
-                      const msgContent = newMsg.trim();
-                      setNewMsg('');
-                      const attachUrl = chatAttachmentUrl;
-                      const attachType = chatAttachmentType;
-                      setChatAttachmentUrl('');
-                      setChatAttachmentType('text');
-                      try {
-                        await sendMessage({
-                          senderId: student.id,
-                          senderName: student.name,
-                          receiverId: recId,
-                          receiverName: recName,
-                          content: msgContent,
-                          teacherId: student.teacherId || recId,
-                          type: attachUrl ? attachType : 'text',
-                          ...(attachUrl ? { fileUrl: attachUrl } : {})
-                        });
-
-                        // Notify the teacher about the new message
-                        await dispatchNotification({
-                          teacherId: student.teacherId || recId,
-                          msg: `رسالة جديدة من الطالب ${student.name}`,
-                          channels: { inApp: true, whatsapp: false },
-                          actionPath: `/teacher/messages?studentId=${student.id}`
-                        });
-                      } catch (err: any) {
-                        showToast('فشل الإرسال: ' + (err?.message || 'خطأ غير معروف'));
-                        setNewMsg(msgContent); // restore message
-                      }
-                    }} className="flex gap-2">
-                      <div className="flex gap-1">
-                        <label className={`w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center cursor-pointer hover:bg-white/10 transition-colors ${chatUploadingFile ? 'opacity-50 pointer-events-none' : ''}`}>
-                          {chatUploadingFile ? (
-                            <Loader2 size={18} className="text-gold animate-spin" />
-                          ) : (
-                            <Paperclip size={18} className="text-gray-400" />
-                          )}
-                          <input type="file" className="hidden" disabled={chatUploadingFile} onChange={(e) => handleChatAttachment(e, 'file')} accept="image/*,application/pdf,.doc,.docx,.txt" />
-                        </label>
-                      </div>
-                      <input type="text" placeholder="اكتب رسالتك..." className="input-base flex-1 h-10 text-xs px-3" value={newMsg} onChange={e => setNewMsg(e.target.value)} />
-                      <button type="submit" disabled={isCompressing || chatUploadingFile} className="w-10 h-10 rounded-xl bg-gold text-black flex items-center justify-center shadow-lg active:scale-95 transition-transform disabled:opacity-50"><Send size={18}/></button>
-                    </form>
-                  </div>
-                </>
-              )}
-            </div>
+            <StudentChat student={student} conversations={conversations} siteSettings={siteSettings} />
           )}
 
           {/* Results Tab */}
@@ -1484,54 +1308,7 @@ export default function StudentPortal() {
 
           {/* Games Tab */}
           {activeTab === 'games' && (
-            <div className="space-y-4 animate-slide-up pb-20">
-              <div className="flex items-center justify-between">
-                <h3 className="text-xl font-black text-white flex items-center gap-2">
-                  <Gamepad2 size={24} className="text-gold" /> الألعاب التعليمية
-                </h3>
-                <span className="text-[10px] bg-gold/10 text-gold px-2 py-0.5 rounded-md font-bold uppercase tracking-widest">مهمات ذكية</span>
-              </div>
-
-              {games.length === 0 ? (
-                <div className="card-base p-16 text-center space-y-4 border-dashed border-white/10">
-                  <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mx-auto text-white/20">
-                    <Gamepad2 size={32} />
-                  </div>
-                  <p className="text-xs text-text-muted">لا توجد ألعاب تعليمية مفعلة لك حالياً.</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 gap-3">
-                  {games.map(game => (
-                    <button 
-                      key={game.id}
-                      onClick={() => setSelectedGame(game)}
-                      className="card-base p-4 text-right flex items-center gap-4 group active:scale-95 transition-all bg-gradient-to-l from-white/5 to-transparent border-white/10 hover:border-gold/30 relative z-10 cursor-pointer"
-                    >
-                      <div className="w-14 h-14 rounded-2xl bg-gold/10 flex items-center justify-center text-gold group-hover:bg-gold group-hover:text-dark transition-all">
-                         {game.type === 'flashcards' ? <Layers size={28} /> 
-                          : game.type === 'match' ? <Trophy size={28} />
-                          : game.type === 'sentence' ? <Languages size={28} />
-                          : game.type === 'sort' ? <Brain size={28} />
-                          : game.type === 'tf_run' ? <Zap size={28} />
-                          : <GraduationCap size={28} />}
-                      </div>
-                      <div className="flex-1">
-                         <h4 className="font-bold text-white group-hover:gold-text transition-all">{game.title}</h4>
-                         <p className="text-[10px] text-text-muted mt-1 uppercase tracking-tighter">
-                            {game.type === 'flashcards' ? 'بطاقات تعليمية' 
-                             : game.type === 'match' ? 'مطابقة المصطلحات'
-                             : game.type === 'sentence' ? 'ترتيب الجمل'
-                             : game.type === 'sort' ? 'تصنيف المواد'
-                             : game.type === 'tf_run' ? 'سرعة الرد'
-                             : 'تحدي الأسئلة'}
-                         </p>
-                      </div>
-                      <ChevronRight size={20} className="text-white/20 group-hover:text-gold" />
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+            <StudentGames games={games} student={student} />
           )}
 
           {/* Profile Tab */}
@@ -1753,170 +1530,24 @@ export default function StudentPortal() {
 
           {/* Global Schedule Tab */}
           {activeTab === 'schedule' && (
-            <div className="space-y-4 animate-slide-up pb-24">
-              <div className="flex items-center justify-between bg-gold/5 p-4 rounded-2xl border border-gold/10">
-                <div className="flex items-center gap-3">
-                  <Calendar className="text-gold" />
-                  <h3 className="font-bold text-white">جدولك الدراسي الموحد</h3>
-                </div>
-                <button onClick={loadGlobalSchedule} className="text-xs gold-text">🔄 تحديث</button>
-              </div>
-
-              {loadingSchedule ? (
-                <TabSkeleton />
-              ) : allTeacherEvents.length === 0 ? (
-                <div className="card-base p-16 text-center space-y-4">
-                  <Calendar className="mx-auto text-white/5" size={48} />
-                  <p className="text-xs text-text-muted">لا توجد فعاليات مجدولة حالياً.</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {allTeacherEvents.map((evt: any) => {
-                    const dateObj = new Date(evt.date);
-                    const isPast = dateObj.getTime() < Date.now();
-                    const dayName = dateObj.toLocaleDateString('ar-EG', { weekday: 'long' });
-                    const timeStr = dateObj.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
-
-                    return (
-                      <div key={evt.id} className={`card-base p-4 border border-white/5 flex gap-4 ${isPast ? 'opacity-50' : ''}`}>
-                         <div className="w-16 flex flex-col items-center justify-center border-l border-white/5 pl-4 shrink-0">
-                           <span className="text-[10px] font-bold text-gold uppercase">{dayName}</span>
-                           <span className="text-xl font-black">{dateObj.getDate()}</span>
-                           <span className="text-[10px] text-gray-500">{dateObj.toLocaleDateString('ar-EG', { month: 'short' })}</span>
-                         </div>
-                         <div className="flex-1 min-w-0">
-                            <div className="flex justify-between items-start mb-1">
-                               <h4 className="font-bold text-sm truncate">{evt.title}</h4>
-                               <span className={`text-[9px] px-1.5 py-0.5 rounded border flex-shrink-0 ml-2 ${
-                                 evt.type === 'exam' ? 'bg-red-500/10 text-red-500 border-red-500/20' :
-                                 evt.type === 'assignment' ? 'bg-orange-500/10 text-orange-500 border-orange-500/20' :
-                                 evt.type === 'fixed_class' ? 'bg-purple-500/10 text-purple-500 border-purple-500/20' :
-                                 'bg-blue-500/10 text-blue-500 border-blue-500/20'
-                               }`}>
-                                 {evt.type === 'exam' ? 'امتحان' : 
-                                  evt.type === 'assignment' ? 'واجب' : 
-                                  evt.type === 'fixed_class' ? 'حصة ثابتة' : 'فعالية'}
-                               </span>
-                            </div>
-                            <div className="flex items-center gap-2 text-[10px] text-gray-400">
-                               <Clock size={10} className="text-gold" /> {timeStr}
-                               <span className="w-1 h-1 rounded-full bg-white/20" />
-                               <span className="gold-text font-bold">🎓 {evt.teacherName}</span>
-                            </div>
-                            {evt.isRecurring && evt.recurringDays && (
-                              <div className="mt-2 flex gap-1">
-                                {['ح', 'ن', 'ث', 'ر', 'خ', 'ج', 'س'].map((day, dIdx) => (
-                                  <span key={dIdx} className={`w-4 h-4 rounded-md flex items-center justify-center text-[8px] font-bold ${evt.recurringDays.includes(dIdx) ? 'bg-purple-500 text-white' : 'bg-white/5 text-gray-600'}`}>
-                                    {day}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-                         </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+            <StudentSchedule student={student} allEnrollments={allEnrollments} />
           )}
             </div>
           )}
         </div>
       </MobileStudentPortalWrapper>
 
-      {/* ═══ NOTIFICATIONS PANEL ═══ */}
-      {showNotifs && (
-        <div
-          className="fixed inset-0 z-[80] flex justify-start"
-          style={{ background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(6px)' }}
-          onClick={() => setShowNotifs(false)}
-        >
-          <div
-            className="w-full max-w-sm h-full flex flex-col bg-[#12121f] shadow-2xl border-l border-white/10"
-            style={{ animation: 'slideInLeft 0.25s ease' }}
-            onClick={e => e.stopPropagation()}
-          >
-            {/* Header */}
-            <div className="p-5 border-b border-white/5 flex items-center justify-between bg-black/20 flex-shrink-0">
-              <h3 className="font-black text-lg font-cairo flex items-center gap-2 text-white">
-                <div className="w-8 h-8 rounded-full bg-gold/20 flex items-center justify-center border border-gold/30">
-                  <Bell size={18} className="text-gold" />
-                </div>
-                الإشعارات
-                {notifications.filter(n => !n.read).length > 0 && (
-                  <span className="w-5 h-5 rounded-full bg-red-500 text-[9px] font-bold flex items-center justify-center text-white">
-                    {notifications.filter(n => !n.read).length}
-                  </span>
-                )}
-              </h3>
-              <button onClick={() => setShowNotifs(false)} className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition-colors">
-                <X size={18} />
-              </button>
-            </div>
-
-            {/* Notification List */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-3" style={{ scrollbarWidth: 'none' }}>
-              {notifications.length === 0 ? (
-                <div className="text-center p-12 text-gray-500 flex flex-col items-center justify-center h-full gap-3">
-                  <Bell size={48} className="text-white/5" />
-                  <p className="font-bold">لا توجد إشعارات حالياً</p>
-                </div>
-              ) : notifications.map(n => (
-                <div key={n.id} 
-                  onClick={async () => {
-                    if (!n.read) {
-                      try {
-                        await markNotificationRead(n.id);
-                      } catch (e: any) {
-                        console.error('Failed to mark read:', e);
-                      }
-                    }
-                    if (n.actionPath) {
-                      // Map full paths to student tabs if necessary
-                      let targetTab = n.actionPath;
-                      if (targetTab.startsWith('/')) {
-                        const parts = targetTab.split('/');
-                        targetTab = parts[parts.length - 1]; // e.g. /teacher/exams -> exams
-                      }
-                      setActiveTab(targetTab as any);
-                      setShowNotifs(false);
-                    }
-                  }}
-                  className={`p-4 rounded-xl border relative overflow-hidden transition-all ${
-                    n.actionPath || !n.read ? 'cursor-pointer hover:border-gold/50' : ''
-                  } ${
-                    n.read
-                      ? 'border-white/5 bg-white/5 opacity-70'
-                      : 'border-gold/20 bg-gradient-to-br from-gold/10 to-transparent shadow-md'
-                  }`}>
-                  {n.type === 'error' && <div className="absolute top-0 right-0 w-1 h-full bg-red-500 rounded-l" />}
-
-                  {n.type === 'success' && <div className="absolute top-0 right-0 w-1 h-full bg-green-500 rounded-l" />}
-                  {n.type === 'warning' && <div className="absolute top-0 right-0 w-1 h-full bg-yellow-500 rounded-l" />}
-                  {n.type === 'info' && <div className="absolute top-0 right-0 w-1 h-full bg-blue-500 rounded-l" />}
-                  <p className="text-sm font-semibold leading-relaxed text-white pr-3">{n.msg}</p>
-                  <div className="flex justify-between items-center mt-3 pt-2 border-t border-white/5">
-                    <span className="text-[10px] text-gray-500">{n.time || new Date(n.createdAt).toLocaleString('ar-EG', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
-                    {!n.read && <span className="w-2 h-2 rounded-full bg-gold shadow-[0_0_6px_rgba(245,197,24,0.8)] animate-pulse" />}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
+      {/* Global Floating Chat Widget */}
+      {student && student.id !== 'unknown_student' && (
+        <GlobalChatWidget 
+          currentUser={{...student, role: 'student'}}
+          conversations={conversations}
+          contacts={teacherInfo ? [{ id: teacherInfo.id, name: teacherInfo.name, subtitle: teacherInfo.subject, role: 'teacher' }] : []}
+          superAdmin={null}
+        />
       )}
 
       {/* ═══ LUXURIOUS CERTIFICATE MODAL ═══ */}
-      {/* ═══ EDUCATIONAL GAME PORTAL ═══ */}
-      {selectedGame && student && (
-        <GamePortal 
-          game={selectedGame}
-          studentId={student.id}
-          studentName={student.name}
-          onClose={() => setSelectedGame(null)}
-        />
-      )}
 
       {certData && (
         <div className="modal-overlay" onClick={() => setCertData(null)}>

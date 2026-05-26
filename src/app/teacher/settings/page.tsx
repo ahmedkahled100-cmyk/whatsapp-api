@@ -10,6 +10,7 @@ import type { Settings } from '@/types';
 import { Save, Eye, EyeOff, Copy, Upload, Loader2, MessageCircle, Phone, Trash2, AlertTriangle, X } from 'lucide-react';
 import { showToast } from '@/lib/toast';
 import { GlobalFileUpload } from '@/components/GlobalFileUpload';
+import Image from 'next/image';
 
 const DEFAULT_SETTINGS: Settings = {
   teacherId: '',
@@ -243,7 +244,7 @@ function SettingsPageContent() {
             <label className="block text-sm mb-1.5" style={{ color: 'var(--text-muted)' }}>شعار المنصة (Logo)</label>
             <div className="flex items-center gap-3">
               {form.logoUrl && (
-                <img src={form.logoUrl} alt="شعار المنصة" className="w-14 h-14 object-contain rounded-xl border border-white/10 bg-white/5 p-1 flex-shrink-0" />
+                <Image src={form.logoUrl} alt="شعار المنصة" className="w-14 h-14 object-contain rounded-xl border border-white/10 bg-white/5 p-1 flex-shrink-0" width={56} height={56} />
               )}
               <div className="flex-1 space-y-2">
                 <GlobalFileUpload 
@@ -274,7 +275,7 @@ function SettingsPageContent() {
             <label className="block text-sm mb-1.5" style={{ color: 'var(--text-muted)' }}>صورة المعلم الشخصية</label>
             <div className="flex items-center gap-3">
               {teacherImageUrl ? (
-                <img src={teacherImageUrl} alt="المعلم" className="w-14 h-14 object-cover rounded-full border border-gold/30 shadow-lg flex-shrink-0" />
+                <Image src={teacherImageUrl} alt="المعلم" className="w-14 h-14 object-cover rounded-full border border-gold/30 shadow-lg flex-shrink-0" width={56} height={56} />
               ) : (
                 <div className="w-14 h-14 rounded-full bg-gold/10 border border-gold/20 flex items-center justify-center text-gold font-black flex-shrink-0">
                   {user?.name?.[0]}
@@ -470,8 +471,8 @@ function SettingsPageContent() {
             </label>
             <div className="flex items-center gap-3">
               {form.certSignatureUrl && (
-                <div className="w-24 h-14 rounded-xl border border-white/10 bg-white/5 p-2 flex-shrink-0 flex items-center justify-center">
-                  <img src={form.certSignatureUrl} alt="التوقيع" className="max-w-full max-h-full object-contain" />
+                <div className="relative w-24 h-14 rounded-xl border border-white/10 bg-white/5 p-2 flex-shrink-0 flex items-center justify-center">
+                  <Image src={form.certSignatureUrl} alt="التوقيع" className="object-contain p-2" fill />
                 </div>
               )}
               <div className="flex-1 space-y-2">
@@ -669,7 +670,7 @@ function SettingsPageContent() {
                 
                 {form.logoUrl && (
                   <div className="absolute inset-0 flex items-center justify-center opacity-[0.04] pointer-events-none z-0">
-                     <img src={form.logoUrl} alt="Watermark" className="w-[60%] object-contain" />
+                     <Image src={form.logoUrl} alt="Watermark" className="w-[60%] object-contain" width={300} height={300} />
                   </div>
                 )}
                 
@@ -711,7 +712,7 @@ function SettingsPageContent() {
                      <div className="order-3 sm:order-3 sm:text-left flex flex-col items-center">
                         <p className="text-sm text-gray-500 mb-2 font-bold text-center">التوقيع والختم</p>
                         {form.certSignatureUrl ? (
-                           <img src={form.certSignatureUrl} alt="توقيع" className="h-16 max-w-[150px] object-contain" />
+                           <Image src={form.certSignatureUrl} alt="توقيع" className="h-16 max-w-[150px] object-contain" width={150} height={64} />
                         ) : (
                            <p className="font-bold text-2xl text-[#1A1A25] mt-2 opacity-80 font-cairo shrink-0 text-center whitespace-nowrap">
                              {form.teacherName}

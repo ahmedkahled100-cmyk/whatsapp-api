@@ -4,6 +4,8 @@
 
 import { useState, useEffect } from 'react';
 import { Home, BookOpen, ClipboardList, BarChart2, Settings, Bell, User, MessageSquare, LogOut, LayoutGrid, Calendar } from 'lucide-react';
+import Image from 'next/image';
+import { GlobalNotificationWidget } from '@/components/shared/GlobalNotificationWidget';
 
 type TabId = 'home' | 'courses' | 'exams' | 'assignments' | 'results' | 'messages' | 'settings' | 'profile' | 'discover' | 'link' | 'games' | 'schedule';
 
@@ -27,6 +29,7 @@ interface Props {
   activeTab: TabId;
   onTabChange: (tab: TabId) => void;
   notifCount?: number;
+  notifications?: any[];
   msgCount?: number;
   onNotifClick?: () => void;
   onLogout?: () => void;
@@ -43,9 +46,11 @@ export function MobileAppLayout({
   activeTab,
   onTabChange,
   notifCount = 0,
+  notifications = [],
   msgCount = 0,
   onNotifClick,
   onLogout,
+  onAcademySwitch,
   appName = 'AN Academy',
   hasMultipleAcademies = false,
   student,
@@ -76,18 +81,11 @@ export function MobileAppLayout({
       >
         {/* Left: Notification & Switcher */}
         <div className="flex items-center gap-2">
-          <button
-            onClick={onNotifClick}
-            className="relative w-10 h-10 rounded-xl flex items-center justify-center transition-all active:scale-95"
-            style={{ background: 'rgba(255,255,255,0.05)' }}
-          >
-            <Bell size={20} className="text-gray-300" />
-            {notifCount > 0 && (
-              <span className="absolute top-1 right-1 w-4 h-4 rounded-full bg-red-500 text-[9px] font-bold flex items-center justify-center text-white animate-pulse">
-                {notifCount > 9 ? '9+' : notifCount}
-              </span>
-            )}
-          </button>
+          <GlobalNotificationWidget 
+            notifications={notifications} 
+            currentUser={{...student, role: 'student'}} 
+            teacherId={student?.teacherId} 
+          />
           
           {hasMultipleAcademies && (
             <button
@@ -100,19 +98,34 @@ export function MobileAppLayout({
           )}
         </div>
 
-        {/* Center: App name */}
-        <div className="text-center">
-          <div className="font-cairo font-black text-base gold-text">{appName}</div>
-          {studentName && (
-            <div className="text-[11px] mt-0.5 flex flex-col items-center justify-center">
-              <span className="text-gray-400">مرحباً، {studentName}</span>
-              {student && (
-                <div className="flex items-center gap-1 mt-0.5 bg-white/5 px-2 py-0.5 rounded-full border border-gold/20 text-gold font-bold text-[10px]">
-                  <span>🏆 مـ {student.level || 1}</span>
-                  <span className="w-1 h-1 bg-white/20 rounded-full mx-0.5"></span>
-                  <span>✨ {student.points || 0} ن</span>
+        {/* Center: App name / Teacher Info */}
+        <div className="flex-1 flex flex-col items-center justify-center min-w-0 mx-2 overflow-hidden">
+          {student?.teacherName ? (
+             <div className="flex items-center justify-center gap-2 max-w-full w-full">
+                <div className="w-8 h-8 rounded-full bg-gold/10 border border-gold/30 flex items-center justify-center overflow-hidden shrink-0 shadow-md">
+                  {student.teacherImage ? (
+                    <Image src={student.teacherImage} alt={student.teacherName} className="w-full h-full object-cover" width={32} height={32} />
+                  ) : (
+                    <span className="text-xs gold-text font-bold">{student.teacherName[0]}</span>
+                  )}
                 </div>
-              )}
+                <div className="flex flex-col text-right truncate">
+                  <span className="font-cairo font-black text-[13px] sm:text-[14px] gold-text truncate leading-tight">أ. {student.teacherName?.replace(/^أ\.\s*/, '')}</span>
+                  <span className="text-[10px] text-gray-400 truncate">{student.teacherSubject || 'منصة تعليمية'}</span>
+                </div>
+             </div>
+           ) : (
+             <div className="font-cairo font-black text-base gold-text truncate">{appName}</div>
+           )}
+          
+          {/* Level and points (optional - hidden on very small screens to save space if teacher info is visible) */}
+          {student && !student.teacherName && (
+            <div className="text-[11px] mt-0.5 flex flex-col items-center justify-center">
+              <button onClick={() => onTabChange('leaderboard')} className="flex items-center gap-1 mt-0.5 bg-white/5 px-2 py-0.5 rounded-full border border-gold/20 text-gold font-bold text-[10px] hover:bg-gold/10 transition-colors">
+                <span>🏆 مـ {student.level || 1}</span>
+                <span className="w-1 h-1 bg-white/20 rounded-full mx-0.5"></span>
+                <span>✨ {student.points || 0} ن</span>
+              </button>
             </div>
           )}
         </div>
@@ -124,7 +137,7 @@ export function MobileAppLayout({
           title="ملفي الشخصي"
         >
           {studentImage ? (
-            <img src={studentImage} alt={studentName} className="w-full h-full object-cover" />
+            <Image src={studentImage} alt={studentName} className="w-full h-full object-cover" width={40} height={40} />
           ) : (
             <div
               className="w-full h-full flex items-center justify-center text-sm font-black"

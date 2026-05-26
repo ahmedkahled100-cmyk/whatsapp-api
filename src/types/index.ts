@@ -6,7 +6,7 @@ export interface TeacherUser {
   username: string; // Used for login
   password?: string; // Stored hashed or plain based on current setup
   code?: string; // Unique mode for login
-  role: 'super_admin' | 'teacher';
+  role: 'super_admin' | 'teacher' | 'assistant';
   subject?: string;
   phone?: string;
   isActive: boolean;
@@ -42,6 +42,8 @@ export interface Student {
   subStart?: number | null;
   subExpiry?: number | null;
   cancelReason?: string;
+  qrCodeId?: string;
+  behavioralNotes?: string;
   totalPaid?: number;
   paymentHistory?: { date: number; amount: number; type: string }[];
   points?: number; // Gamification: Student's experience points
@@ -58,6 +60,27 @@ export interface Group {
   desc?: string;
   studentIds: string[];
   createdAt: string;
+}
+
+export interface AttendanceSession {
+  id: string;
+  teacherId: string;
+  title?: string;
+  groupId?: string;
+  date: string;
+  status: 'open' | 'closed';
+  createdAt: number;
+}
+
+export interface AttendanceRecord {
+  id: string;
+  teacherId: string;
+  sessionId: string;
+  studentId: string;
+  studentName: string;
+  status: 'present' | 'absent' | 'late';
+  time: string;
+  notes?: string;
 }
 
 export interface Question {
@@ -351,4 +374,93 @@ export interface QuestionBankItem extends Question {
   difficulty: 'easy' | 'medium' | 'hard';
   usageCount: number;
   createdAt: string;
+}
+
+export interface Transaction {
+  id: string;
+  teacherId: string;
+  type: 'income' | 'expense';
+  category: string; // e.g. 'Subscription', 'Course', 'Salary', 'Rent'
+  amount: number;
+  description: string;
+  date: string;
+  studentId?: string; // Optional if linked to a student
+  createdAt: number;
+}
+
+export interface Assistant {
+  id: string;
+  teacherId: string;
+  name: string;
+  phone: string;
+  role: string;
+  permissions: string[]; // e.g., 'attendance', 'grading', 'finances', 'students'
+  salaryType: 'fixed' | 'hourly' | 'percentage';
+  salaryValue: number;
+  status?: 'active' | 'inactive' | 'pending' | 'rejected';
+  createdAt: number;
+}
+
+export interface AssistantProfile {
+  id: string;
+  name: string;
+  username: string;
+  password?: string;
+  phone: string;
+  code: string;
+  imageUrl?: string;
+  roleTitle?: string;
+  status: 'pending' | 'approved' | 'rejected';
+  createdAt: number;
+  cvUrl?: string;
+  experience?: string;
+  bio?: string;
+  education?: string;
+  salaryPaymentMethod?: string;
+  isSuspended?: boolean;
+  suspensionReason?: string;
+  subStart?: number;
+  subExpiry?: number;
+  isPausedByAdmin?: boolean;
+}
+
+export interface TeacherAssistantLink {
+  id: string;
+  teacherId: string;
+  assistantId: string;
+  role: string;
+  permissions: string[];
+  salaryType: 'fixed' | 'hourly' | 'percentage';
+  salaryValue: number;
+  status: 'active' | 'inactive' | 'pending' | 'rejected' | 'paused';
+  subStart?: number;
+  subExpiry?: number;
+  createdAt: number;
+}
+
+export interface AssistantJob {
+  id: string;
+  teacherId: string;
+  teacherName: string;
+  teacherPhone?: string;
+  title: string;
+  description: string;
+  requirements?: string;
+  salaryType: 'fixed' | 'hourly' | 'percentage';
+  salaryValue: number;
+  status: 'open' | 'closed';
+  createdAt: number;
+}
+
+export interface AssistantJobApplication {
+  id: string;
+  jobId: string;
+  assistantId: string;
+  status: 'pending' | 'accepted' | 'rejected';
+  cvUrl?: string;
+  message?: string;
+  createdAt: number;
+  // UI Helpers
+  job?: AssistantJob;
+  assistant?: AssistantProfile;
 }

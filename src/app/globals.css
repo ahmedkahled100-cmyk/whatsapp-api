@@ -110,11 +110,11 @@ body::after {
 
   /* Modal Utilities */
   .modal-overlay {
-    @apply fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-sm;
+    @apply fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-sm print:absolute print:bg-white print:backdrop-blur-none;
   }
   
   .modal-content {
-    @apply card-base p-0 w-full max-w-lg animate-scale-in max-h-[92vh] flex flex-col relative overflow-hidden;
+    @apply card-base p-0 w-full max-w-lg animate-scale-in max-h-[92vh] flex flex-col relative overflow-hidden print:border-none print:shadow-none print:w-full print:max-w-none;
   }
 
   .modal-header {
@@ -170,21 +170,26 @@ body::after {
 
   .input-base {
     width: 100%;
-    background: rgba(255,255,255,0.05);
-    border: 1px solid rgba(255,255,255,0.1);
-    border-radius: 0.625rem;
-    padding: 0.688rem 1.25rem; /* Increased horizontal padding */
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 0.75rem;
+    padding: 0.75rem 1rem;
     color: var(--text);
     font-family: 'Tajawal', sans-serif;
     font-size: 0.875rem;
-    transition: all 0.3s;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     outline: none;
   }
 
   .input-base:focus {
-    border-color: var(--gold);
-    background: rgba(245,197,24,0.05);
-    box-shadow: 0 0 0 3px rgba(245,197,24,0.08);
+    border-color: var(--accent2);
+    background: rgba(255,255,255,0.06);
+    box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.1);
+  }
+
+  .input-base:hover:not(:focus) {
+    border-color: rgba(255,255,255,0.2);
+    background: rgba(255,255,255,0.05);
   }
 
   /* Robust icon alignment for inputs in RTL (Start = Right) */
@@ -445,3 +450,53 @@ td {
   color: var(--text-muted);
 }
 tr:hover td { background: rgba(255,255,255,0.015); }
+
+/* --- Print Reset for Blank Pages --- */
+@media print {
+  html, body {
+    height: auto !important;
+    min-height: auto !important;
+    overflow: visible !important;
+    overflow-x: visible !important;
+    overflow-y: visible !important;
+    max-width: none !important;
+    background: white !important;
+    color: black !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  
+  body::before, body::after {
+    display: none !important;
+  }
+  
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  
+  /* Reset modal to relative so it prints all pages */
+  .modal-overlay {
+    position: relative !important;
+    background: transparent !important;
+    align-items: flex-start !important;
+    padding: 0 !important;
+    height: auto !important;
+    min-height: auto !important;
+    overflow: visible !important;
+  }
+  
+  .modal-content {
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: white !important;
+    color: black !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+}
+

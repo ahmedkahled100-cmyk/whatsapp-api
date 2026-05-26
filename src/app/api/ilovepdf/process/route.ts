@@ -18,6 +18,7 @@ const SECRET_KEY = process.env.ILOVEPDF_SECRET_KEY || '';
 
 const TOOL_MAPPING: Record<string, string> = {
   'ocr': 'pdfocr',
+  'pdfoffice': 'officepdf',
 };
 
 export async function POST(req: Request) {

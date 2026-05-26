@@ -1,5 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  optimizeFonts: false,
   output: process.env.BUILD_APK === 'true' ? 'export' : undefined,
   images: {
     unoptimized: true,

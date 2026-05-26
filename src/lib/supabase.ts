@@ -1,10 +1,18 @@
 // src/lib/supabase.ts
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const getSupabaseUrl = () => {
+  if (typeof window !== 'undefined') {
+    // On the client browser, use the local proxy to bypass ISP blocking on *.supabase.co
+    return `${window.location.origin}/api/supabase-proxy`;
+  }
+  return process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+};
+
+const supabaseUrl = getSupabaseUrl();
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
-if (!supabaseUrl || !supabaseAnonKey) {
+if (!supabaseUrl && typeof window === 'undefined') {
   console.warn('Supabase credentials missing. Supabase functionality will be disabled.');
 }
 

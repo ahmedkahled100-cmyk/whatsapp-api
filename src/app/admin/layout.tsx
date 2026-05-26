@@ -5,13 +5,17 @@ import Link from 'next/link';
 import { useTeacherStore } from '@/lib/store';
 import { filterNotificationsForAdminInbox } from '@/lib/notification-audience';
 import { subscribeToNotifications, subscribeToRegistrationRequests } from '@/lib/db';
-import { LayoutDashboard, Users, Settings, LogOut, Menu, X, ShieldCheck, GraduationCap, MessageSquare, CreditCard, Smartphone } from 'lucide-react';
+import { LayoutDashboard, Users, Settings, LogOut, Menu, X, ShieldCheck, GraduationCap, MessageSquare, CreditCard, Smartphone, Briefcase, Bell } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
+import { GlobalNotificationWidget } from '@/components/shared/GlobalNotificationWidget';
 
 const NAV_ITEMS = [
   { href: '/admin', icon: LayoutDashboard, label: 'لوحة التحكم الشاملة' },
   { href: '/admin/teachers', icon: Users, label: 'إدارة المعلمين' },
+  { href: '/admin/assistants', icon: Briefcase, label: 'إدارة مساعدي المادة' },
   { href: '/admin/subscriptions', icon: CreditCard, label: 'إدارة الاشتراكات' },
   { href: '/admin/messages', icon: MessageSquare, label: 'رسائل المعلمين' },
+  { href: '/admin/notifications', icon: Bell, label: 'إدارة الإشعارات' },
   { href: '/admin/app-settings', icon: Smartphone, label: 'تخصيص التطبيق' },
   { href: '/admin/settings', icon: Settings, label: 'إعدادات المنصة' },
   { href: '/teacher/dashboard', icon: GraduationCap, label: 'لوحة المعلم الخاصة بي' },
@@ -24,9 +28,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mounted, setMounted] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [pendingAssistantsCount, setPendingAssistantsCount] = useState(0);
 
   useEffect(() => {
     setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!mounted) return;
     if (!user) {
       router.replace('/auth');
       return;
@@ -35,7 +44,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       router.replace('/teacher/dashboard');
       return;
     }
-  }, [user, router]);
+  }, [user, router, mounted]);
   
   useEffect(() => {
     if (!user?.id) return;
@@ -53,6 +62,42 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     });
     return () => { unsub(); };
   }, [user?.id, setTeacherJoinRequests]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    
+    const fetchPendingCount = async () => {
+      try {
+        const { count, error } = await supabase
+          .from('assistants_profiles')
+          .select('*', { count: 'exact', head: true })
+          .eq('status', 'pending');
+        if (!error && count !== null) {
+          setPendingAssistantsCount(count);
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    };
+
+    void fetchPendingCount();
+
+    // Subscribe to changes in assistants_profiles
+    const channel = supabase
+      .channel('admin_assistants_changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'assistants_profiles' },
+        () => {
+          void fetchPendingCount();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id]);
 
   useEffect(() => {
     const handleResize = () => {
@@ -129,7 +174,16 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                      {teacherJoinRequests.length}
                    </span>
                 )}
-                {active && ! (item.href === '/admin/teachers' && teacherJoinRequests.length > 0) && <div className="mr-auto w-1.5 h-1.5 rounded-full bg-purple-500 shadow-[0_0_8px_rgba(168,85,247,0.6)]" />}
+                {item.href === '/admin/assistants' && pendingAssistantsCount > 0 && (
+                   <span className="bg-amber-500 text-black text-[10px] font-black px-2 py-0.5 rounded-full mr-auto animate-pulse">
+                     {pendingAssistantsCount}
+                   </span>
+                )}
+                {active && 
+                  ! (item.href === '/admin/teachers' && teacherJoinRequests.length > 0) && 
+                  ! (item.href === '/admin/assistants' && pendingAssistantsCount > 0) && 
+                  <div className="mr-auto w-1.5 h-1.5 rounded-full bg-purple-500 shadow-[0_0_8px_rgba(168,85,247,0.6)]" />
+                }
               </Link>
             );
           })}
@@ -153,19 +207,26 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <Menu size={20} />
           </button>
           <h2 className="font-cairo font-black text-lg text-white">إدارة المنصة الشاملة</h2>
-            <Link href="/admin/settings" className="mr-auto flex items-center gap-2 p-1 pr-3 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all">
-               <div className="text-left hidden sm:block">
-                  <div className="text-[10px] font-bold text-white leading-none">{user.name}</div>
-                  <div className="text-[8px] text-gray-500 mt-1">مدير المنصة</div>
-               </div>
-               {user.imageUrl ? (
-                 <img src={user.imageUrl} alt="Admin" className="w-8 h-8 rounded-lg object-cover" />
-               ) : (
-                 <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center text-purple-400 text-xs font-black">
-                   {user.name[0]}
+            <div className="mr-auto flex items-center gap-3">
+              <GlobalNotificationWidget 
+                notifications={adminNotifications} 
+                currentUser={user} 
+                teacherId={user.id} 
+              />
+              <Link href="/admin/settings" className="flex items-center gap-2 p-1 pr-3 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all">
+                 <div className="text-left hidden sm:block">
+                    <div className="text-[10px] font-bold text-white leading-none">{user.name}</div>
+                    <div className="text-[8px] text-gray-500 mt-1">مدير المنصة</div>
                  </div>
-               )}
-            </Link>
+                 {user.imageUrl ? (
+                   <img src={user.imageUrl} alt="Admin" className="w-8 h-8 rounded-lg object-cover" />
+                 ) : (
+                   <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center text-purple-400 text-xs font-black">
+                     {user.name[0]}
+                   </div>
+                 )}
+              </Link>
+            </div>
         </header>
 
         <div className="p-4 lg:p-10 w-full">

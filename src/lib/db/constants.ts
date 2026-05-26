@@ -21,3 +21,5 @@ export const CONVERSATIONS = 'conversations';
 export const APP_HOME = 'app_home';
 export const EDUCATIONAL_GAMES = 'educational_games';
 export const GAME_RESULTS = 'game_results';
+export const ATTENDANCE_SESSIONS = 'attendance_sessions';
+export const ATTENDANCE_RECORDS = 'attendance_records';

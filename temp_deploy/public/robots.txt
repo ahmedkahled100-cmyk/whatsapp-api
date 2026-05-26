@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+
+# Sitemap
+Sitemap: https://an-academy.vercel.app/sitemap.xml
+
+# Disallow admin and API routes from crawling (optional)
+Disallow: /api/
+Disallow: /admin/

@@ -154,7 +154,9 @@ function RegisterForm() {
         const existing = await getStudentByPhoneAnywhere(form.phone);
         if (existing) {
           existingCode = existing.code;
-          studentId = existing.id;
+          // IMPORTANT: DO NOT set studentId = existing.id here. 
+          // If we pass an existing ID for a different teacher, it will overwrite the old student record.
+          
           // Ensure image is unified if no new one was uploaded
           if (!form.imageUrl && existing.imageUrl) {
             form.imageUrl = existing.imageUrl;
@@ -181,7 +183,7 @@ function RegisterForm() {
           msg: `طلب اشتراك جديد: ${form.name} (${form.subType})`,
           targetRoles: ['teacher'],
           channels: { inApp: true, whatsapp: false },
-          actionPath: '/teacher/students'
+          actionPath: '/teacher/subscriptions'
         });
         if (form.phone) {
           await dispatchNotification({

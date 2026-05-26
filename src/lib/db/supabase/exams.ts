@@ -91,14 +91,30 @@ export const toggleExamPublish = async (id: string, published: boolean) => {
 
 export const subscribeToExams = (teacherId: string, callback: (exams: Exam[]) => void) => {
   if (!teacherId || teacherId === 'unknown_teacher') { callback([]); return () => {}; }
+  
+  let currentExams: Exam[] = [];
+  
   const channel = supabase
     .channel(`exams:${teacherId}`)
-    .on('postgres_changes', { event: '*', schema: 'public', table: EXAMS, filter: `teacher_id=eq.${teacherId}` }, async () => {
-      const exams = await getExams(teacherId);
-      callback(exams);
+    .on('postgres_changes', { event: '*', schema: 'public', table: EXAMS, filter: `teacher_id=eq.${teacherId}` }, async (payload) => {
+      if (payload.eventType === 'DELETE') {
+        const deletedId = (payload.old as any).id;
+        const instant = currentExams.filter(e => e.id !== deletedId);
+        currentExams = instant;
+        callback(instant);
+      } else if (payload.eventType === 'UPDATE') {
+        // Instant patch: toggle publish or minor update reflects immediately
+        const updated = fromDB<Exam>(payload.new as any);
+        const patchedExam = { ...updated, desc: (updated as any).description };
+        const instant = currentExams.map(e => e.id === patchedExam.id ? { ...e, ...patchedExam } : e);
+        currentExams = instant;
+        callback(instant);
+      }
+      // Always do a background re-fetch for full consistency
+      getExams(teacherId).then(exams => { currentExams = exams; callback(exams); }).catch(() => {});
     })
     .subscribe();
-  getExams(teacherId).then(callback);
+  getExams(teacherId).then(exams => { currentExams = exams; callback(exams); });
   return () => supabase.removeChannel(channel);
 };
 
@@ -149,14 +165,35 @@ export const deleteAttempt = async (id: string) => {
 
 export const subscribeToAttempts = (teacherId: string, callback: (attempts: Attempt[]) => void) => {
   if (!teacherId || teacherId === 'unknown_teacher') { callback([]); return () => {}; }
+  
+  let currentAttempts: Attempt[] = [];
+  
   const channel = supabase
     .channel(`attempts:${teacherId}`)
-    .on('postgres_changes', { event: '*', schema: 'public', table: ATTEMPTS, filter: `teacher_id=eq.${teacherId}` }, async () => {
-      const attempts = await getAllAttempts(teacherId);
-      callback(attempts);
+    .on('postgres_changes', { event: '*', schema: 'public', table: ATTEMPTS, filter: `teacher_id=eq.${teacherId}` }, async (payload) => {
+      if (payload.eventType === 'DELETE') {
+        // ⚡ Instant local removal — no waiting for re-fetch
+        const deletedId = (payload.old as any).id;
+        const instant = currentAttempts.filter(a => a.id !== deletedId);
+        currentAttempts = instant;
+        callback(instant);
+        // Background confirm
+        getAllAttempts(teacherId).then(fresh => { currentAttempts = fresh; callback(fresh); }).catch(() => {});
+      } else if (payload.eventType === 'UPDATE') {
+        // Instant patch for grade updates, etc.
+        const updated = fromDB<Attempt>(payload.new as any);
+        const instant = currentAttempts.map(a => a.id === updated.id ? { ...a, ...updated } : a);
+        currentAttempts = instant;
+        callback(instant);
+        // Background re-fetch for full data
+        getAllAttempts(teacherId).then(fresh => { currentAttempts = fresh; callback(fresh); }).catch(() => {});
+      } else if (payload.eventType === 'INSERT') {
+        // ⚡ New attempt: fetch in background (need full object)
+        getAllAttempts(teacherId).then(fresh => { currentAttempts = fresh; callback(fresh); }).catch(() => {});
+      }
     })
     .subscribe();
-  getAllAttempts(teacherId).then(callback);
+  getAllAttempts(teacherId).then(attempts => { currentAttempts = attempts; callback(attempts); });
   return () => supabase.removeChannel(channel);
 };
 

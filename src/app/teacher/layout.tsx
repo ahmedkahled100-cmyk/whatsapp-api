@@ -8,37 +8,44 @@ import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useTeacherStore } from '@/lib/store';
 import { filterNotificationsForTeacherInbox } from '@/lib/notification-audience';
+import { supabase } from '@/lib/supabase';
 import {
   subscribeToExams, subscribeToStudents, subscribeToAttempts, subscribeToGroups, subscribeToNotifications, subscribeToRegistrationRequests, subscribeToMaterials, subscribeToAssignments, subscribeToTeacherProfile, subscribeToSettings, subscribeToConversations, getExams, getAllAttempts, getStudents, getGroups, getMaterials, getAssignments, getRegistrationRequests, getSuperAdmin
 } from '@/lib/db';
 import {
   LayoutDashboard, PlusCircle, FileText, Users, BookOpen,
   BarChart2, ClipboardList, Calendar, Bot, TrendingUp,
-  CreditCard, BookMarked, Settings, LogOut, Bell, Menu, X,
-  GraduationCap, Database, ChevronLeft, Zap, ShieldCheck, ExternalLink, MessageSquare, Gamepad2
+  CreditCard, BookMarked, Settings, LogOut, Bell, Menu, X, Clock, DollarSign,
+  GraduationCap, Database, ChevronLeft, Zap, ShieldCheck, ExternalLink, MessageSquare, Gamepad2, AlertCircle
 } from 'lucide-react';
 import { SubscriptionExpiredOverlay } from '@/components/SubscriptionExpiredOverlay';
+import { GlobalChatWidget } from '@/components/shared/GlobalChatWidget';
+import { GlobalNotificationWidget } from '@/components/shared/GlobalNotificationWidget';
 
 const NAV_ITEMS = [
   { href: '/teacher/dashboard', icon: LayoutDashboard, label: 'الرئيسية', section: 'main', permission: 'dashboard' },
   { href: '/teacher/notifications', icon: Bell, label: 'الإشعارات', section: 'main', permission: 'notifications' },
   { href: '/teacher/analytics', icon: TrendingUp, label: 'التحليلات', section: 'main', permission: 'analytics' },
-  { href: '/teacher/messages', icon: MessageSquare, label: 'الرسائل', section: 'main', permission: 'dashboard' },
+  { href: '/teacher/messages', icon: MessageSquare, label: 'الرسائل', section: 'main', permission: 'messages' },
   { href: '/teacher/exams/create', icon: PlusCircle, label: 'اختبار جديد', section: 'exams', permission: 'exams' },
   { href: '/teacher/exams', icon: FileText, label: 'الاختبارات', section: 'exams', permission: 'exams' },
-  { href: '/teacher/essays', icon: ClipboardList, label: 'المقالي', section: 'exams', permission: 'analytics' },
-  { href: '/teacher/results', icon: BarChart2, label: 'النتائج', section: 'exams', permission: 'students' },
-  { href: '/teacher/qbank', icon: Database, label: 'بنك الأسئلة', section: 'exams', permission: 'exams' },
+  { href: '/teacher/essays', icon: ClipboardList, label: 'المقالي', section: 'exams', permission: 'essays' },
+  { href: '/teacher/results', icon: BarChart2, label: 'النتائج', section: 'exams', permission: 'results' },
+  { href: '/teacher/qbank', icon: Database, label: 'بنك الأسئلة', section: 'exams', permission: 'qbank' },
   { href: '/teacher/ai', icon: Bot, label: 'الذكاء الاصطناعي', section: 'exams', permission: 'ai' },
-  { href: '/teacher/games', icon: Gamepad2, label: 'الألعاب التعليمية', section: 'exams', permission: 'ai' },
+  { href: '/teacher/games', icon: Gamepad2, label: 'الألعاب التعليمية', section: 'exams', permission: 'games' },
   { href: '/teacher/students', icon: Users, label: 'الطلاب', section: 'students', permission: 'students' },
+  { href: '/teacher/attendance', icon: Clock, label: 'الحضور والغياب', section: 'students', permission: 'attendance' },
   { href: '/teacher/groups', icon: BookOpen, label: 'الفصول', section: 'students', permission: 'groups' },
   { href: '/teacher/subscriptions', icon: CreditCard, label: 'الاشتراكات', section: 'students', permission: 'subscriptions' },
+  { href: '/teacher/finances', icon: DollarSign, label: 'الماليات', section: 'students', permission: 'finances' },
   { href: '/teacher/courses', icon: BookMarked, label: 'المناهج', section: 'content', permission: 'courses' },
   { href: '/teacher/assignments', icon: ClipboardList, label: 'الواجبات', section: 'content', permission: 'assignments' },
   { href: '/teacher/calendar', icon: Calendar, label: 'التقويم', section: 'content', permission: 'calendar' },
-  { href: '/teacher/tools/ilovepdf', icon: Zap, label: 'أدوات iLovePDF', section: 'content', permission: 'exams' },
+  { href: '/teacher/schedule', icon: Calendar, label: 'جدول الحصص', section: 'content', permission: 'schedule' },
+  { href: '/teacher/tools/ilovepdf', icon: Zap, label: 'أدوات iLovePDF', section: 'content', permission: 'tools' },
   { href: '/teacher/settings', icon: Settings, label: 'الإعدادات', section: 'settings', permission: 'settings' },
+  { href: '/teacher/staff', icon: Users, label: 'فريق العمل (HR)', section: 'settings', permission: 'settings' }
 ];
 
 const SECTION_LABELS: Record<string, string> = {
@@ -53,6 +60,8 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
   const router = useRouter();
   const pathname = usePathname();
   const user = useTeacherStore(state => state.user);
+  const activeTeacherId = useTeacherStore(state => state.activeTeacherId);
+  
   const setUser = useTeacherStore(state => state.setUser);
   const logout = useTeacherStore(state => state.logout);
   const setExams = useTeacherStore(state => state.setExams);
@@ -69,6 +78,7 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
   const settings = useTeacherStore(state => state.settings);
   const registrationRequests = useTeacherStore(state => state.registrationRequests);
   const conversations = useTeacherStore(state => state.conversations);
+  const students = useTeacherStore(state => state.students);
 
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -78,38 +88,114 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
   const [syncStatus, setSyncStatus] = useState<'syncing' | 'synced' | 'offline'>('syncing');
   const [adminInfo, setAdminInfo] = useState<any>(null);
 
+  // Assistant permissions cache
+  const [assistantPermissions, setAssistantPermissions] = useState<string[]>([]);
+  const [activeTeacherName, setActiveTeacherName] = useState<string>('');
+
+  useEffect(() => {
+    if (user?.role === 'assistant' && activeTeacherId) {
+      supabase
+        .from('teacher_assistant_links')
+        .select('permissions')
+        .eq('teacher_id', activeTeacherId)
+        .eq('assistant_id', user.id)
+        .eq('status', 'active')
+        .maybeSingle()
+        .then(({ data }) => {
+          if (data) {
+            setAssistantPermissions(data.permissions || []);
+          }
+        });
+
+      supabase
+        .from('teachers')
+        .select('name')
+        .eq('id', activeTeacherId)
+        .maybeSingle()
+        .then(({ data }) => {
+          if (data) {
+            setActiveTeacherName(data.name);
+          }
+        });
+    }
+  }, [user?.role, user?.id, activeTeacherId]);
+
   useEffect(() => {
     setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!mounted) return;
     if (!user) { router.replace('/auth'); return; }
+    if (user.role === 'assistant' && !activeTeacherId) {
+      router.replace('/assistant/dashboard');
+      return;
+    }
+
+    const targetId = user.role === 'assistant' ? activeTeacherId : user.id;
+    if (!targetId) return;
 
     // Real-time subscriptions — initial fetch + realtime updates
     setSyncStatus('syncing');
-    const applyTeacherNotifications = (data: Parameters<typeof setNotifications>[0]) => setNotifications(filterNotificationsForTeacherInbox(data));
+    let lastNotifIds = new Set<string>();
+    let isFirstLoad = true;
+
+    const applyTeacherNotifications = (data: Parameters<typeof setNotifications>[0]) => {
+      setNotifications(filterNotificationsForTeacherInbox(data));
+      setSyncStatus('synced');
+      
+      if (!isFirstLoad && lastNotifIds.size > 0) {
+        const newNotifs = data.filter(n => !lastNotifIds.has(n.id) && !n.read);
+        
+        newNotifs.forEach(n => {
+          import('@/lib/toast').then(m => m.showToast(`🔔 ${(n as any).msg || (n as any).message || 'إشعار جديد'}`));
+        });
+
+        // Always refresh registration requests on any new notification
+        if (newNotifs.length > 0) {
+          getRegistrationRequests(targetId).then(reqs => {
+            setRegistrationRequests(reqs.filter(r => r.type === 'student' || r.type === 'renewal' || !r.type));
+          }).catch(console.error);
+        }
+      }
+      lastNotifIds = new Set(data.map(n => n.id));
+      isFirstLoad = false;
+    };
 
     const unsubs = [
-      subscribeToExams(user.id, data => { setExams(data); setSyncStatus('synced'); }),
-      subscribeToStudents(user.id, setStudents),
-      subscribeToAttempts(user.id, setAttempts),
-      subscribeToGroups(user.id, setGroups),
-      subscribeToNotifications(user.id, applyTeacherNotifications),
-      subscribeToRegistrationRequests(user.id, (data) => {
-        // Filter out teacher requests for the teacher portal
+      subscribeToExams(targetId, data => { setExams(data); setSyncStatus('synced'); }),
+      subscribeToStudents(targetId, (data) => { setStudents(data); setSyncStatus('synced'); }),
+      subscribeToAttempts(targetId, setAttempts),
+      subscribeToGroups(targetId, setGroups),
+      subscribeToNotifications(targetId, applyTeacherNotifications),
+      subscribeToRegistrationRequests(targetId, (data) => {
         setRegistrationRequests(data.filter(r => r.type === 'student' || r.type === 'renewal' || !r.type));
+        setSyncStatus('synced');
       }),
-      subscribeToMaterials(user.id, setMaterials),
-      subscribeToAssignments(user.id, setAssignments),
-      subscribeToTeacherProfile(user.id, setUser),
-      subscribeToSettings(user.id, setSettings),
-      subscribeToConversations(user.id, setConversations),
+      subscribeToMaterials(targetId, setMaterials),
+      subscribeToAssignments(targetId, setAssignments),
+      user.role === 'teacher' ? subscribeToTeacherProfile(user.id, setUser) : () => {}, // Maintain user's login state
+      subscribeToSettings(targetId, setSettings),
+      subscribeToConversations(targetId, setConversations),
     ];
 
-    // Initial fetch of static data that doesn't change often but is needed immediately
-    getExams(user.id).then(setExams);
-    getStudents(user.id).then(setStudents);
-    getGroups(user.id).then(setGroups);
+    // Initial fetch of static data
+    getExams(targetId).then(setExams);
+    getStudents(targetId).then(setStudents);
+    getGroups(targetId).then(setGroups);
 
-    return () => unsubs.forEach(u => u());
-  }, [user?.id, user?.role]);
+    // ⚡ Polling fallback every 30 seconds
+    const pollInterval = setInterval(() => {
+      getRegistrationRequests(targetId).then(reqs => {
+        setRegistrationRequests(reqs.filter(r => r.type === 'student' || r.type === 'renewal' || !r.type));
+      }).catch(() => {});
+    }, 30000);
+
+    return () => {
+      unsubs.forEach(u => u());
+      clearInterval(pollInterval);
+    };
+  }, [user?.id, user?.role, activeTeacherId, mounted]);
 
   // Fetch admin info for teacher to use in renewal contact
   useEffect(() => {
@@ -123,8 +209,6 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
       document.documentElement.style.setProperty('--gold', settings.primaryColor);
     }
   }, [settings?.primaryColor]);
-
-  // Removed redundant fetch-on-navigation logic
 
   useEffect(() => {
     const handleResize = () => {
@@ -159,31 +243,77 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
 
   if (!mounted || !user) return null;
 
-  // ---- Teacher subscription expiry check ----
-  // Only block non-super_admin teachers with expired paid subscriptions
-  const isTeacherSubExpired =
-    user.role === 'teacher' &&
-    user.subType !== 'free' &&
-    user.subExpiry != null &&
-    user.subExpiry < Date.now();
+  // ---- Teacher blocking check ----
+  const isTeacherBlocked =
+    user.role === 'teacher' && (
+      (user.subType !== 'free' && user.subExpiry != null && user.subExpiry < Date.now()) ||
+      user.isActive === false
+    );
 
-  if (isTeacherSubExpired) {
+  if (isTeacherBlocked) {
     return (
       <SubscriptionExpiredOverlay
         target="teacher"
         teacher={user}
         adminInfo={adminInfo}
+        isCancelled={user.isActive === false}
         onLogout={() => { logout(); router.replace('/auth'); }}
         onRenewalSuccess={() => {}}
       />
     );
   }
 
-  const filteredNavItems = NAV_ITEMS.filter(item => {
-    if (user.role === 'super_admin') return true;
-    if (item.permission === 'settings') return true; // Always allow settings
-    return user.permissions?.includes(item.permission as string);
-  });
+  const isNavItemVisible = (item: typeof NAV_ITEMS[0]) => {
+    if (!user) return false;
+    if (user.role !== 'assistant') return true;
+
+    // Always allowed for assistants (Essential routes)
+    if (item.href === '/teacher/dashboard') return true;
+    if (item.href === '/teacher/messages') return true;
+    if (item.href === '/teacher/notifications') return true;
+    
+    if (item.href === '/teacher/settings' || item.href === '/teacher/staff') return false;
+
+    // Route specific permission mapping
+    if (item.href.includes('/attendance')) return assistantPermissions.includes('attendance');
+    
+    if (item.href.includes('/exams') || item.href.includes('/essays') || item.href.includes('/results') || item.href.includes('/qbank') || item.href.includes('/tools') || item.href.includes('/ai') || item.href.includes('/games') || item.href.includes('/assignments')) {
+      return assistantPermissions.includes('grading');
+    }
+    
+    if (item.href.includes('/students') || item.href.includes('/groups')) {
+      return assistantPermissions.includes('students');
+    }
+    
+    if (item.href.includes('/finances') || item.href.includes('/subscriptions')) {
+      return assistantPermissions.includes('finances');
+    }
+    
+    if (item.href.includes('/analytics')) {
+      return assistantPermissions.includes('grading') || assistantPermissions.includes('finances') || assistantPermissions.includes('students');
+    }
+
+    return false; // Hide any other generic menus (e.g., calendar, courses) unless explicitly granted
+  };
+
+  const isCurrentRouteAllowed = () => {
+    if (!user) return false;
+    if (user.role !== 'assistant') return true;
+    
+    // Find matching nav item
+    const navItem = NAV_ITEMS.find(item => pathname === item.href || (item.href !== '/teacher/dashboard' && pathname.startsWith(item.href)));
+    
+    if (navItem) {
+      return isNavItemVisible(navItem);
+    }
+    
+    // Special routes
+    if (pathname.includes('/teacher/tools')) return true;
+    
+    return true; 
+  };
+
+  const filteredNavItems = NAV_ITEMS.filter(isNavItemVisible);
 
   const grouped = filteredNavItems.reduce((acc, item) => {
     if (!acc[item.section]) acc[item.section] = [];
@@ -192,7 +322,7 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
   }, {} as Record<string, typeof NAV_ITEMS>);
 
   return (
-    <div className="min-h-screen bg-[#0a0a0f] relative overflow-x-hidden">
+    <div className="min-h-screen bg-[#0a0a0f] relative overflow-x-hidden print:overflow-visible print:bg-white">
       {/* Overlay for mobile */}
       {sidebarOpen && (
         <div className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-md lg:hidden transition-opacity duration-300"
@@ -201,7 +331,7 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
 
       {/* Sidebar */}
       <aside
-        className={`fixed top-0 right-0 h-full z-[70] flex flex-col transition-all duration-300 ease-in-out border-l border-white/5 
+        className={`fixed top-0 right-0 h-full z-[70] flex flex-col transition-all duration-300 ease-in-out border-l border-white/5 print:hidden
           ${isMobile ? (sidebarOpen ? 'w-[280px] translate-x-0' : 'w-0 translate-x-[285px] invisible') : (isCollapsed ? 'w-20 translate-x-0' : 'w-[280px] translate-x-0')}`}
         style={{
           background: 'linear-gradient(180deg, var(--dark2), var(--dark3))',
@@ -231,7 +361,11 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
           {!isCollapsed && (
             <div className="animate-fade-in">
                 <div className="font-cairo font-black text-sm gold-text whitespace-nowrap">{settings?.acadName || 'A-N Academy'}</div>
-                <div className="text-xs" style={{ color: 'var(--text-muted)' }}>لوحة المعلم</div>
+                {user.role === 'assistant' ? (
+                  <div className="text-xs font-bold text-amber-400 whitespace-nowrap overflow-hidden text-ellipsis">مساعد: أ. {activeTeacherName || '...'}</div>
+                ) : (
+                  <div className="text-xs" style={{ color: 'var(--text-muted)' }}>لوحة المعلم</div>
+                )}
             </div>
           )}
           {/* Close button for mobile */}
@@ -271,13 +405,13 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
                     <item.icon size={18} className={`flex-shrink-0 ${active ? 'scale-110' : 'opacity-70 group-hover:opacity-100'}`} />
                     {!isCollapsed && <span className="animate-fade-in truncate">{item.label}</span>}
                     
-                    {!isCollapsed && item.href === '/teacher/students' && registrationRequests.length > 0 && (
+                    {!isCollapsed && item.href === '/teacher/subscriptions' && registrationRequests.length > 0 && (
                       <span className="w-5 h-5 rounded-full bg-red-500 text-[10px] text-white flex items-center justify-center font-bold mr-auto">
                         {registrationRequests.length}
                       </span>
                     )}
                     
-                    {isCollapsed && item.href === '/teacher/students' && registrationRequests.length > 0 && (
+                    {isCollapsed && item.href === '/teacher/subscriptions' && registrationRequests.length > 0 && (
                       <span className="absolute top-1 right-1 w-4 h-4 bg-red-500 rounded-full text-[8px] flex items-center justify-center text-white border border-[#12121f]">
                         {registrationRequests.length}
                       </span>
@@ -321,6 +455,13 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
             </div>
           )}
           
+          {user.role === 'assistant' && (
+            <Link href="/assistant/dashboard" className={`flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-3 px-4'} py-3 mx-2 rounded-xl transition-all duration-200 text-sm font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20 hover:bg-amber-500/20 mb-2 overflow-hidden`}>
+              <ExternalLink size={18} className="shrink-0" />
+              {!isCollapsed && <span className="whitespace-nowrap">بوابة المساعد</span>}
+            </Link>
+          )}
+          
           {user.role === 'super_admin' && (
             <Link href="/admin" className={`flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-3 px-4'} py-3 mx-2 rounded-xl transition-all duration-200 text-sm font-bold bg-purple-500/10 text-purple-400 border border-purple-500/20 hover:bg-purple-500/20 mb-2 overflow-hidden`}>
               <ShieldCheck size={18} className="shrink-0" />
@@ -336,12 +477,12 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
       </aside>
 
       {/* Main Content Area */}
-      <main className={`transition-all duration-300 ease-in-out min-h-screen ${
+      <main className={`transition-all duration-300 ease-in-out min-h-screen print:min-h-0 print:w-full print:m-0 print:overflow-visible ${
         isMobile ? 'w-full mr-0' : (isCollapsed ? 'mr-20 w-[calc(100%-80px)]' : 'mr-[280px] w-[calc(100%-280px)]')
       }`}>
 
         {/* Top Header */}
-        <header className="sticky top-0 z-40 flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2.5 sm:py-3 lg:px-6 w-full"
+        <header className="sticky top-0 z-40 flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2.5 sm:py-3 lg:px-6 w-full print:hidden"
           style={{
             background: 'rgba(10, 10, 15, 0.8)',
             borderBottom: '1px solid rgba(255,255,255,0.06)',
@@ -369,47 +510,86 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
                 <span className="absolute top-2 right-2 w-2 h-2 bg-blue-500 rounded-full shadow-[0_0_8px_rgba(59,130,246,0.5)]" />
               )}
             </Link>
-            <Link href="/teacher/notifications" className="w-10 h-10 rounded-xl flex items-center justify-center relative transition-all hover:bg-white/5"
-               style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
-              <Bell size={20} className="text-text-muted" />
-              {unreadCount > 0 && (
-                <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full shadow-[0_0_8px_rgba(239,68,68,0.5)]" />
-              )}
-            </Link>
+            <GlobalNotificationWidget 
+              notifications={filterNotificationsForTeacherInbox(notifications)} 
+              currentUser={user} 
+              teacherId={user.id} 
+            />
+
+            {/* Live sync indicator */}
+            <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg hidden sm:flex" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+              <span className={`w-2 h-2 rounded-full ${
+                syncStatus === 'synced' ? 'bg-green-400 shadow-[0_0_6px_#4ade80]' :
+                syncStatus === 'syncing' ? 'bg-yellow-400 animate-pulse shadow-[0_0_6px_#facc15]' :
+                'bg-red-400 shadow-[0_0_6px_#f87171]'
+              }`} />
+              <span className="text-[10px] text-gray-500">
+                {syncStatus === 'synced' ? 'متصل' : syncStatus === 'syncing' ? 'جاري...' : 'غير متصل'}
+              </span>
+            </div>
           </div>
         </header>
 
         <div className="p-4 lg:p-8 pb-32 lg:pb-8 w-full">
           {/* Subscription Banner */}
           {user.role === 'teacher' && user.subType !== 'free' && user.subExpiry && user.subExpiry < Date.now() + (7 * 24 * 60 * 60 * 1000) && (
-            <div className={`mb-6 p-4 rounded-2xl border flex flex-col md:flex-row items-center justify-between gap-4 animate-pulse-subtle ${user.subExpiry < Date.now() ? 'bg-red-500/10 border-red-500/20 text-red-400' : 'bg-gold/10 border-gold/20 text-gold'}`}>
-              <div className="flex items-center gap-3">
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${user.subExpiry < Date.now() ? 'bg-red-500 text-white' : 'bg-gold text-black'}`}>
-                  <CreditCard size={20} />
+            (() => {
+              const daysLeft = Math.ceil((user.subExpiry - Date.now()) / (24 * 60 * 60 * 1000));
+              const isUrgent = daysLeft <= 3;
+              const isExpired = user.subExpiry < Date.now();
+              return (
+                <div className={`mb-6 p-4 rounded-2xl border flex flex-col md:flex-row items-center justify-between gap-4 animate-pulse-subtle ${
+                  isExpired ? 'bg-red-500/20 border-red-500/30 text-red-500' : 
+                  isUrgent ? 'bg-orange-600/20 border-orange-500/40 text-orange-400' :
+                  'bg-gold/10 border-gold/20 text-gold'
+                }`}>
+                  <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                      isExpired ? 'bg-red-500 text-white' : 
+                      isUrgent ? 'bg-orange-500 text-white' :
+                      'bg-gold text-black'
+                    }`}>
+                      {isUrgent || isExpired ? <AlertCircle size={20} /> : <CreditCard size={20} />}
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-sm">
+                        {isExpired ? 'انتهى اشتراك المنصة الخاص بك' : 
+                         isUrgent ? `انذار: اشتراكك ينتهي خلال ${daysLeft} أيام!` : 
+                         'اشتراكك ينتهي قريباً'}
+                      </h3>
+                      <p className="text-xs opacity-80">
+                        {isExpired ? 'يرجى تجديد الاشتراك لاستمرار الخدمة.' : 
+                         isUrgent ? 'يرجى التجديد الآن لتجنب توقف حسابك بشكل فوري.' :
+                         `ينتهي في ${new Date(user.subExpiry).toLocaleDateString('ar-EG')}`}
+                      </p>
+                    </div>
+                  </div>
+                  {user.subLink && (
+                    <a href={user.subLink} target="_blank" rel="noopener noreferrer" className={`px-6 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+                      isExpired ? 'bg-red-500 text-white hover:bg-red-600' : 
+                      isUrgent ? 'bg-orange-500 text-white hover:bg-orange-600' :
+                      'bg-gold text-black hover:bg-gold/80'
+                    }`}>
+                      تجديد الاشتراك الآن <ExternalLink size={14} />
+                    </a>
+                  )}
                 </div>
-                <div>
-                   <h3 className="font-bold text-sm">
-                     {user.subExpiry < Date.now() ? 'انتهى اشتراك المنصة الخاص بك' : 'اشتراكك ينتهي قريباً'}
-                   </h3>
-                   <p className="text-xs opacity-80">
-                     {user.subExpiry < Date.now() ? 'يرجى تجديد الاشتراك لاستمرار الخدمة.' : `ينتهي في ${new Date(user.subExpiry).toLocaleDateString('ar-EG')}`}
-                   </p>
-                </div>
-              </div>
-              {user.subLink && (
-                <a href={user.subLink} target="_blank" rel="noopener noreferrer" className={`px-6 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${user.subExpiry < Date.now() ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-gold text-black hover:bg-gold/80'}`}>
-                  تجديد الاشتراك الآن <ExternalLink size={14} />
-                </a>
-              )}
+              );
+            })()
+          )}
+          {isCurrentRouteAllowed() ? children : (
+            <div className="flex flex-col items-center justify-center p-12 text-center animate-fade-in mt-10">
+              <ShieldCheck size={64} className="text-red-500 mb-4 opacity-50" />
+              <h2 className="text-2xl font-black text-red-500 mb-2 font-cairo">غير مصرح لك بالدخول</h2>
+              <p className="text-gray-400">عذراً، ليس لديك الصلاحية الكافية للوصول إلى هذه الصفحة، يمكنك مراجعة المعلم لتعديل صلاحياتك.</p>
             </div>
           )}
-          {children}
         </div>
 
       </main>
 
       {/* 📱 Mobile Bottom Navigation - Application feel */}
-      <nav className="fixed lg:hidden bottom-0 left-0 right-0 z-[60] bg-[#12121f]/90 backdrop-blur-xl border-t border-white/5 px-2 py-2 flex justify-around items-center h-20 shadow-[0_-10px_30px_rgba(0,0,0,0.4)]">
+      <nav className="fixed lg:hidden bottom-0 left-0 right-0 z-[60] bg-[#12121f]/90 backdrop-blur-xl border-t border-white/5 px-2 py-2 flex justify-around items-center h-20 shadow-[0_-10px_30px_rgba(0,0,0,0.4)] print:hidden">
           <Link href="/teacher/dashboard" className={`flex flex-col items-center gap-1.5 px-3 py-1 rounded-xl transition-all ${pathname === '/teacher/dashboard' ? 'text-gold' : 'text-gray-500'}`}>
               <LayoutDashboard size={20} className={pathname === '/teacher/dashboard' ? 'scale-110 drop-shadow-[0_0_8px_var(--gold)]' : ''} />
               <span className="text-[10px] font-bold">الرئيسية</span>
@@ -478,6 +658,14 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
               </div>
           </div>
       )}
+
+      {/* Global Floating Chat Widget */}
+      <GlobalChatWidget 
+        currentUser={user}
+        conversations={conversations}
+        contacts={students.map(s => ({ id: s.id, name: s.name, subtitle: s.grade, role: 'student' }))}
+        superAdmin={adminInfo}
+      />
     </div>
   );
 }

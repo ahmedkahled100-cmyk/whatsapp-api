@@ -28,10 +28,8 @@ export const uploadFileToStorage = async (
 
   try {
     // Step 1: Get upload signature from our server
-    const apiBase =
-      typeof window !== 'undefined' && window.location.hostname.includes('localhost')
-        ? ''
-        : 'https://an-academy.vercel.app';
+    const { getApiBase } = await import('@/lib/utils');
+    const apiBase = getApiBase();
 
     const signRes = await fetch(`${apiBase}/api/cloudinary/sign`, {
       method: 'POST',
@@ -120,7 +118,8 @@ export const deleteFileFromStorage = async (url: string): Promise<boolean> => {
     const isRaw = url.includes('/raw/upload/') || url.includes('/files/upload/');
     const resource_type = isRaw ? 'raw' : 'image';
 
-    const apiBase = typeof window !== 'undefined' && window.location.hostname.includes('localhost') ? '' : 'https://an-academy.vercel.app';
+    const { getApiBase } = await import('@/lib/utils');
+    const apiBase = getApiBase();
 
     const res = await fetch(`${apiBase}/api/cloudinary/delete`, {
       method: 'POST',

@@ -25,9 +25,11 @@ interface TeacherStore {
   activeTab: string;
   isLoading: boolean;
   tempExamQuestions: Question[] | null;
+  activeTeacherId: string | null;
 
   // Actions
   setUser: (user: TeacherUser | null) => void;
+  setActiveTeacherId: (id: string | null) => void;
   setExams: (exams: Exam[]) => void;
   setStudents: (students: Student[]) => void;
   setAttempts: (attempts: Attempt[]) => void;
@@ -65,8 +67,10 @@ export const useTeacherStore = create<TeacherStore>()(
       activeTab: 'dashboard',
       isLoading: false,
       tempExamQuestions: null,
+      activeTeacherId: null,
 
       setUser: (user) => set({ user }),
+      setActiveTeacherId: (activeTeacherId) => set({ activeTeacherId }),
       setExams: (exams) => set({ exams }),
       setStudents: (students) => set({ students }),
       setAttempts: (attempts) => set({ attempts }),
@@ -82,11 +86,11 @@ export const useTeacherStore = create<TeacherStore>()(
       setActiveTab: (activeTab) => set({ activeTab }),
       setLoading: (isLoading) => set({ isLoading }),
       setTempExamQuestions: (tempExamQuestions) => set({ tempExamQuestions }),
-      logout: () => set({ user: null, settings: null, tempExamQuestions: null }),
+      logout: () => set({ user: null, settings: null, tempExamQuestions: null, activeTeacherId: null }),
     }),
     {
       name: 'an-academy-teacher',
-      partialize: (state) => ({ user: state.user, settings: state.settings }),
+      partialize: (state) => ({ user: state.user, settings: state.settings, activeTeacherId: state.activeTeacherId }),
     }
   )
 );
