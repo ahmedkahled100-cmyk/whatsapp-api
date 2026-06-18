@@ -2,6 +2,7 @@
 import { supabase } from '@/lib/supabase';
 import { TEACHERS } from '../constants';
 import { fromDB, toDB, manyFromDB } from './dbUtils';
+import { checkUserUniqueness } from './validation';
 import type { TeacherUser } from '@/types';
 
 const decode = (str: string) => {
@@ -29,12 +30,13 @@ export const getTeachers = async (): Promise<TeacherUser[]> => {
   if (error) throw error;
   
   return manyFromDB<TeacherUser>(data).map(teacher => {
-    // Deserialize financials from notes field if present
+    // Fallback deserialize from notes field if native columns are empty
     const t = teacher as any;
-    if (t.notes) {
+    if ((teacher.totalPaid === undefined || teacher.totalPaid === null) && t.notes) {
       const tpMatch = t.notes.match(/\[TP:(\d+)\]/);
       if (tpMatch) teacher.totalPaid = parseInt(tpMatch[1]);
-
+    }
+    if ((!teacher.paymentHistory || teacher.paymentHistory.length === 0) && t.notes) {
       const histMatch = t.notes.match(/\[HIST:(.*?)\]/);
       if (histMatch) {
          try { teacher.paymentHistory = JSON.parse(decode(histMatch[1])); } catch {}
@@ -54,9 +56,11 @@ export const getSuperAdmin = async (): Promise<TeacherUser | null> => {
   if (!data) return null;
   const admin = fromDB<TeacherUser>(data);
   const t = admin as any;
-  if (t.notes) {
+  if ((admin.totalPaid === undefined || admin.totalPaid === null) && t.notes) {
       const tpMatch = t.notes.match(/\[TP:(\d+)\]/);
       if (tpMatch) admin.totalPaid = parseInt(tpMatch[1]);
+  }
+  if ((!admin.paymentHistory || admin.paymentHistory.length === 0) && t.notes) {
       const histMatch = t.notes.match(/\[HIST:(.*?)\]/);
       if (histMatch) {
          try { admin.paymentHistory = JSON.parse(decode(histMatch[1])); } catch {}
@@ -95,9 +99,11 @@ export const getTeacherById = async (id: string): Promise<TeacherUser | null> =>
   if (!data) return null;
   const teacher = fromDB<TeacherUser>(data);
   const t = teacher as any;
-  if (t.notes) {
+  if ((teacher.totalPaid === undefined || teacher.totalPaid === null) && t.notes) {
       const tpMatch = t.notes.match(/\[TP:(\d+)\]/);
       if (tpMatch) teacher.totalPaid = parseInt(tpMatch[1]);
+  }
+  if ((!teacher.paymentHistory || teacher.paymentHistory.length === 0) && t.notes) {
       const histMatch = t.notes.match(/\[HIST:(.*?)\]/);
       if (histMatch) {
          try { teacher.paymentHistory = JSON.parse(decode(histMatch[1])); } catch {}
@@ -124,20 +130,7 @@ export const saveTeacher = async (teacher: Omit<TeacherUser, 'id'> & { id?: stri
   });
   Object.keys(payload).forEach(k => payload[k] === undefined && delete payload[k]);
 
-  // Serialization for Teachers
-  let cleanNotes = (payload.notes || '').replace(/\[TP:\d+\]/g, '').replace(/\[HIST:.*?\]/g, '').trim();
-  
-  if (payload.total_paid !== undefined) {
-    cleanNotes = `${cleanNotes} [TP:${payload.total_paid || 0}]`.trim();
-    delete payload.total_paid;
-  }
-  if (payload.payment_history !== undefined) {
-    const histStr = encode(JSON.stringify(payload.payment_history || []));
-    cleanNotes = `${cleanNotes} [HIST:${histStr}]`.trim();
-    delete payload.payment_history;
-  }
-  
-  payload.notes = cleanNotes || undefined;
+  await checkUserUniqueness(teacher.code, teacher.username, teacher.id);
 
   if (teacher.id) {
     const { error } = await supabase

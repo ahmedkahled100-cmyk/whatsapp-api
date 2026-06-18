@@ -25,9 +25,9 @@ export default function ExamsPage() {
     if (!confirm(`هل تريد حذف اختبار "${title}" نهائياً؟`)) return;
     const previousExams = [...exams];
     setExams(exams.filter(e => e.id !== id));
+    showToast('✅ تم حذف الاختبار');
     try {
       await deleteExam(id);
-      showToast('✅ تم حذف الاختبار');
     } catch (err) {
       setExams(previousExams);
       showToast('❌ فشل الحذف');
@@ -37,9 +37,9 @@ export default function ExamsPage() {
   const handleTogglePublish = async (id: string, current: boolean) => {
     const previousExams = [...exams];
     setExams(exams.map(e => e.id === id ? { ...e, published: !current } : e));
+    showToast(current ? '🚫 تم إخفاء الاختبار' : '✅ تم نشر الاختبار');
     try {
       await toggleExamPublish(id, !current);
-      showToast(current ? '🚫 تم إخفاء الاختبار' : '✅ تم نشر الاختبار');
     } catch (err) {
       setExams(previousExams);
       showToast('❌ فشل التحديث');

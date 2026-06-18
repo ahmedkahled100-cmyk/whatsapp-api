@@ -141,8 +141,9 @@ function AssignmentsPageContent() {
     if (!user) return;
 
     setSaving(true);
+    const tempId = editingId || crypto.randomUUID();
     const payload: Assignment = {
-      id: editingId || crypto.randomUUID(),
+      id: tempId,
       teacherId: user.id,
       title: newAssign.title,
       description: newAssign.description || '',
@@ -161,15 +162,20 @@ function AssignmentsPageContent() {
       setAssignments([...previous, payload]);
     }
 
+    setShowAddForm(false);
+    setEditingId(null);
+    setNewAssign({ title: '', description: '', dueDate: '', targetGroup: '', fileUrl: '', maxScore: 10 });
+    showToast(editingId ? '🙌 تم تعديل الواجب بنجاح' : '✅ تم إضافة الواجب بنجاح');
+
     try {
-      await saveAssignment(payload);
-      setShowAddForm(false);
-      setEditingId(null);
-      setNewAssign({ title: '', description: '', dueDate: '', targetGroup: '', fileUrl: '', maxScore: 10 });
-      showToast(editingId ? '🙌 تم تعديل الواجب بنجاح' : '✅ تم إضافة الواجب بنجاح');
+      const realId = await saveAssignment(payload);
+      if (!editingId && realId !== tempId) {
+        setAssignments(prev => prev.map(a => a.id === tempId ? { ...a, id: realId } : a));
+      }
     } catch (e) {
       setAssignments(previous);
       showToast('حدث خطأ أثناء الحفظ');
+      setShowAddForm(true); // Optional: Re-open form if failed
     } finally {
       setSaving(false);
     }
@@ -179,9 +185,9 @@ function AssignmentsPageContent() {
     if (!confirm('هل أنت متأكد من الحذف؟ سيتم حذف إجابات الطلاب المرتبطة به أيضاً.')) return;
     const previous = [...assignments];
     setAssignments(previous.filter(a => a.id !== id));
+    showToast('✅ تم حذف الواجب');
     try {
       await deleteAssignment(id);
-      showToast('✅ تم حذف الواجب');
     } catch (e) {
       setAssignments(previous);
       showToast('حدث خطأ أثناء الحذف');
@@ -222,12 +228,16 @@ function AssignmentsPageContent() {
       return;
     }
 
+    // Optimistic UI
+    const previous = [...submissions];
+    setSubmissions(prev => prev.map(s => s.id === sub.id ? { ...s, score: scoreVal, teacherComment: gradingComments[sub.id], status: 'graded' } : s));
+    showToast('تم حفظ تقييم الطالب');
+    
     setSavingGrade(sub.id);
     try {
       await gradeSubmission(sub.id, scoreVal, gradingComments[sub.id]);
-      setSubmissions(prev => prev.map(s => s.id === sub.id ? { ...s, score: scoreVal, teacherComment: gradingComments[sub.id], status: 'graded' } : s));
-      showToast('تم حفظ تقييم الطالب');
     } catch (e) {
+      setSubmissions(previous);
       showToast('حدث خطأ أثناء حفظ التقييم');
     } finally {
       setSavingGrade(null);
@@ -236,12 +246,16 @@ function AssignmentsPageContent() {
 
   const handleRequestRedo = async (sub: AssignmentSubmission) => {
     if (!sub.id) return;
+    // Optimistic UI
+    const previous = [...submissions];
+    setSubmissions(prev => prev.map(s => s.id === sub.id ? { ...s, score: 0, teacherComment: gradingComments[sub.id] || 'يرجى إعادة الواجب مره اخرى', status: 'redo' as const } : s));
+    showToast('تم طلب إرسال الواجب مجدداً من الطالب');
+
     setSavingGrade(sub.id);
     try {
       await gradeSubmission(sub.id, 0, gradingComments[sub.id] || 'يرجى إعادة الواجب مره اخرى', 'redo');
-      setSubmissions(prev => prev.map(s => s.id === sub.id ? { ...s, score: 0, teacherComment: gradingComments[sub.id] || 'يرجى إعادة الواجب مره اخرى', status: 'redo' as const } : s));
-      showToast('تم طلب إرسال الواجب مجدداً من الطالب');
     } catch (e) {
+      setSubmissions(previous);
       showToast('حدث خطأ أثناء طلب الإعادة');
     } finally {
       setSavingGrade(null);

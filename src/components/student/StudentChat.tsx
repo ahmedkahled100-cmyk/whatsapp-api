@@ -83,16 +83,18 @@ export function StudentChat({ student, conversations, siteSettings }: StudentCha
 
     const markOffline = () => setUserOnlineStatus(student.id, 'student', false);
     window.addEventListener('beforeunload', markOffline);
-    document.addEventListener('visibilitychange', () => {
+    const onVis = () => {
       if (document.hidden) setUserOnlineStatus(student.id, 'student', false);
-      else heartbeatUserOnlineStatus(student.id, 'student');
-    });
+      else setUserOnlineStatus(student.id, 'student', true);
+    };
+    document.addEventListener('visibilitychange', onVis);
 
     return () => {
       clearInterval(beat);
       window.removeEventListener('mousemove', onActivity);
       window.removeEventListener('keydown', onActivity);
       window.removeEventListener('beforeunload', markOffline);
+      document.removeEventListener('visibilitychange', onVis);
       setUserOnlineStatus(student.id, 'student', false);
     };
   }, [student?.id]);
@@ -106,13 +108,27 @@ export function StudentChat({ student, conversations, siteSettings }: StudentCha
 
     // Messages subscription
     const unsub = subscribeToMessages(selectedConv.id, (msgs: Message[]) => {
-      setChatMessages(msgs);
+      setChatMessages(prev => {
+        const tempMsgs = prev.filter(m => m.id.startsWith('temp_'));
+        const remainingTemps = tempMsgs.filter(t => !msgs.some(m => m.content === t.content && m.senderId === t.senderId && Math.abs(m.timestamp - t.timestamp) < 10000));
+        const all = [...msgs, ...remainingTemps].sort((a, b) => a.timestamp - b.timestamp);
+        const uniqueIds = new Set();
+        return all.filter(m => {
+          if (uniqueIds.has(m.id)) return false;
+          uniqueIds.add(m.id);
+          return true;
+        });
+      });
       setLoadingChat(false);
       // Check if there could be older messages beyond our page
       setHasOlderMessages(msgs.length >= 100);
-      // Mark as read once when subscription fires
+      // Mark any newly-arrived messages as read
       markMessagesAsRead(selectedConv.id, student.id);
     });
+
+    // Mark existing messages as read immediately on open
+    markMessagesAsRead(selectedConv.id, student.id);
+    setChatMessages(prev => prev.map(m => m.receiverId === student.id && !m.isRead ? { ...m, isRead: true } : m));
 
     // Presence subscription
     const otherParticipantId = selectedConv.participants.find((p: string) => p !== student.id);
@@ -223,7 +239,7 @@ export function StudentChat({ student, conversations, siteSettings }: StudentCha
   // ── Send Message ──────────────────────────────────────────────────────────
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
-    if ((!newMsg.trim() && !chatAttachmentUrl) || !selectedConv || sending) return;
+    if ((!newMsg.trim() && !chatAttachmentUrl) || !selectedConv) return;
 
     const recId = selectedConv.participants.find(p => p !== student.id);
     if (!recId) { showToast('خطأ: لا يمكن تحديد المستلم'); return; }
@@ -252,7 +268,6 @@ export function StudentChat({ student, conversations, siteSettings }: StudentCha
     setNewMsg('');
     setChatAttachmentUrl('');
     setChatAttachmentType('text');
-    setSending(true);
     inputRef.current?.focus();
 
     try {
@@ -283,8 +298,6 @@ export function StudentChat({ student, conversations, siteSettings }: StudentCha
       setChatMessages(prev => prev.filter(m => m.id !== tempId));
       setNewMsg(msgContent);
       if (attachUrl) { setChatAttachmentUrl(attachUrl); setChatAttachmentType(attachType); }
-    } finally {
-      setSending(false);
     }
   };
 
@@ -517,10 +530,10 @@ export function StudentChat({ student, conversations, siteSettings }: StudentCha
               />
               <button
                 type="submit"
-                disabled={isCompressing || chatUploadingFile || sending || (!newMsg.trim() && !chatAttachmentUrl)}
+                disabled={(!newMsg.trim() && !chatAttachmentUrl) || chatUploadingFile || isCompressing}
                 className="w-10 h-10 rounded-xl bg-gold text-black flex items-center justify-center shadow-lg active:scale-95 transition-transform disabled:opacity-50 cursor-pointer"
               >
-                {sending ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
+                <Send size={20} />
               </button>
             </form>
           </div>

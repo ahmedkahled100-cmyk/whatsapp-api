@@ -1,7 +1,7 @@
-// src/lib/db/supabase/hr.ts
 import { supabase } from '@/lib/supabase';
-import type { Assistant, AssistantProfile, TeacherAssistantLink, TeacherUser } from '@/types';
+import type { Assistant, AssistantProfile, TeacherAssistantLink, TeacherUser, AssistantJob, AssistantJobApplication } from '@/types';
 import { toDB, manyFromDB, fromDB } from './dbUtils';
+import { checkUserUniqueness } from './validation';
 
 export const ASSISTANTS_PROFILES = 'assistants_profiles';
 export const TEACHER_ASSISTANT_LINKS = 'teacher_assistant_links';
@@ -103,7 +103,7 @@ export const updateAssistantLinkStatus = async (linkId: string, status: 'active'
 };
 
 // 4. Save a legacy assistant (forward compatibility for legacy code)
-export const saveAssistant = async (assistant: Omit<Assistant, 'id'> & { id?: string }): Promise<string> => {
+export const saveAssistant = async (assistant: Omit<Assistant, 'id'> & { id?: string; subStart?: number; subExpiry?: number }): Promise<string> => {
   // If assistantId is present, we are saving a link/contract
   const ast = assistant as any;
   if (ast.assistantId) {
@@ -172,6 +172,8 @@ export const deleteAssistant = async (id: string): Promise<void> => {
 export const saveAssistantProfile = async (profile: Omit<AssistantProfile, 'id'> & { id?: string }): Promise<string> => {
   const newId = profile.id || crypto.randomUUID();
   const payload = toDB({ ...profile, id: newId, status: profile.status || 'pending', createdAt: profile.createdAt || Date.now() });
+
+  await checkUserUniqueness(profile.code, profile.username, profile.id, profile.phone);
 
   const { error } = await supabase
     .from(ASSISTANTS_PROFILES)
@@ -454,6 +456,10 @@ export const updateApplicationStatus = async (id: string, status: 'pending' | 'a
 
 // 18. Update assistant profile safely (partial fields)
 export const updateAssistantProfile = async (id: string, updates: Partial<AssistantProfile>): Promise<void> => {
+  if (updates.code || updates.username) {
+    // Only fetch phone if needed, but we don't have it here. excludeId is sufficient.
+    await checkUserUniqueness(updates.code, updates.username, id);
+  }
   const payload = toDB(updates);
   const { error } = await supabase
     .from(ASSISTANTS_PROFILES)

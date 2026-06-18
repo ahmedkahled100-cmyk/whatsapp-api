@@ -69,16 +69,18 @@ export default function TeacherMessagesPage() {
 
     const handleUnload = () => setUserOnlineStatus(user.id, 'teachers', false);
     window.addEventListener('beforeunload', handleUnload);
-    document.addEventListener('visibilitychange', () => {
+    const handleVis = () => {
       if (document.hidden) setUserOnlineStatus(user.id, 'teachers', false);
-      else heartbeatUserOnlineStatus(user.id, 'teachers');
-    });
+      else setUserOnlineStatus(user.id, 'teachers', true);
+    };
+    document.addEventListener('visibilitychange', handleVis);
 
     return () => {
       clearInterval(beat);
       window.removeEventListener('mousemove', onActivity);
       window.removeEventListener('keydown', onActivity);
       window.removeEventListener('beforeunload', handleUnload);
+      document.removeEventListener('visibilitychange', handleVis);
       setUserOnlineStatus(user.id, 'teachers', false);
     };
   }, [user?.id]);
@@ -137,9 +139,17 @@ export default function TeacherMessagesPage() {
 
     // Messages — call markRead once on open, not inside subscription callback
     markMessagesAsRead(selectedConv.id, user.id);
+    
+    // Optimistically mark any existing messages as read to reflect UI instantly
+    setMessages(prev => prev.map(m => m.receiverId === user.id && !m.isRead ? { ...m, isRead: true } : m));
 
     const unsubMsgs = subscribeToMessages(selectedConv.id, (msgs: Message[]) => {
-      setMessages(msgs);
+      setMessages(prev => {
+        const tempMsgs = prev.filter(m => m.id.startsWith('temp_'));
+        const remainingTemps = tempMsgs.filter(t => !msgs.some(m => m.content === t.content && m.senderId === t.senderId && Math.abs(m.timestamp - t.timestamp) < 10000));
+        const all = [...msgs, ...remainingTemps].sort((a, b) => a.timestamp - b.timestamp);
+        return all;
+      });
       setLoadingMessages(false);
       setHasOlderMessages(msgs.length >= 100);
       // Mark any newly-arrived messages as read
@@ -196,7 +206,7 @@ export default function TeacherMessagesPage() {
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if ((!newMessage.trim() && !attachmentUrl) || !selectedConv || !user || sending) return;
+    if ((!newMessage.trim() && !attachmentUrl) || !selectedConv || !user) return;
 
     const msgContent = newMessage.trim();
     const attachUrl = attachmentUrl;
@@ -224,7 +234,7 @@ export default function TeacherMessagesPage() {
     setNewMessage('');
     setAttachmentUrl('');
     setAttachmentType('text');
-    setSending(true);
+    setAttachmentType('text');
 
     // Reset textarea
     if (textareaRef.current) {
@@ -250,8 +260,6 @@ export default function TeacherMessagesPage() {
       setMessages(prev => prev.filter(m => m.id !== tempId));
       setNewMessage(msgContent);
       if (attachUrl) { setAttachmentUrl(attachUrl); setAttachmentType(attachType); }
-    } finally {
-      setSending(false);
     }
   };
 
@@ -391,7 +399,7 @@ export default function TeacherMessagesPage() {
             filteredConversations.map(conv => {
               const other = getOtherParticipant(conv);
               const active = selectedConv?.id === conv.id;
-              const hasUnread = conv.lastMessage && !conv.lastMessage.isRead && conv.lastMessage.receiverId === user.id;
+              const hasUnread = conv.lastMessage && !conv.lastMessage.isRead && conv.lastMessage.receiverId === user.id && selectedConv?.id !== conv.id;
 
               return (
                 <button 
@@ -498,7 +506,7 @@ export default function TeacherMessagesPage() {
                       } ${isOptimistic ? 'opacity-60' : 'opacity-100'}`}>
                          {msg.type === 'image' && msg.fileUrl && (
                            <div className="mb-2 rounded-xl overflow-hidden cursor-pointer bg-black/10" onClick={() => openPreview(msg.fileUrl!, 'مرفق صورة')}>
-                             <img src={msg.fileUrl} alt="Attachment" className="max-w-full h-auto max-h-60 object-contain hover:opacity-90 transition-opacity" />
+                             <img loading="lazy" src={msg.fileUrl} alt="Attachment" className="max-w-full h-auto max-h-60 object-contain hover:opacity-90 transition-opacity" />
                            </div>
                          )}
                          {msg.type === 'file' && msg.fileUrl && (
@@ -610,10 +618,10 @@ export default function TeacherMessagesPage() {
                  </div>
                  <button 
                    type="submit" 
-                   disabled={(!newMessage.trim() && !attachmentUrl) || sending || uploadingFile || isCompressing}
+                   disabled={(!newMessage.trim() && !attachmentUrl) || uploadingFile || isCompressing}
                    className="w-12 h-12 rounded-xl bg-gold text-black flex items-center justify-center shadow-lg shadow-gold/20 hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:grayscale"
                  >
-                   {sending ? <Loader2 size={24} className="animate-spin" /> : <Send size={24} />}
+                   <Send size={24} />
                  </button>
               </form>
             </div>
@@ -623,15 +631,15 @@ export default function TeacherMessagesPage() {
 
       {/* New Chat Modal */}
       {showNewChatModal && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="card-base w-full max-w-md max-h-[80vh] flex flex-col overflow-hidden animate-scale-in">
-             <div className="p-4 border-b border-white/5 flex items-center justify-between">
+        <div className="modal-overlay !z-[60]" >
+          <div className="modal-content modal-content-sm">
+             <div className="modal-header">
                 <h3 className="font-black text-lg gold-text">بدء محادثة جديدة</h3>
-                <button onClick={() => setShowNewChatModal(false)} className="text-gray-400 hover:text-white"><X size={24}/></button>
+                <button onClick={() => setShowNewChatModal(false)} className="text-gray-400 hover:text-white shrink-0 p-2"><X size={20}/></button>
              </div>
              
-             <div className="p-4">
-                <div className="relative mb-4">
+             <div className="modal-body flex flex-col">
+                <div className="relative mb-4 shrink-0">
                    <Search size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500" />
                    <input 
                      type="text" 
@@ -641,7 +649,7 @@ export default function TeacherMessagesPage() {
                    />
                 </div>
 
-                <div className="space-y-2 overflow-y-auto max-h-[50vh] pr-1">
+                <div className="space-y-2 pr-1">
                    {/* Option to chat with Admin */}
                    {superAdmin && user && superAdmin.id !== user.id && (
                      <button 

@@ -82,7 +82,7 @@ export const uploadFileToStorage = async (
       xhr.onerror = () => reject(new Error('خطأ في الاتصال بالخادم أثناء الرفع.'));
 
       const formData = new FormData();
-      formData.append('file', file);
+      formData.append('file', file, originalName);
       formData.append('api_key', apiKey);
       formData.append('timestamp', String(timestamp));
       formData.append('signature', signature);

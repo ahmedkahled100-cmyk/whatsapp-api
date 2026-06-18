@@ -343,7 +343,7 @@ const ExamContent = () => {
           <div className="grid grid-cols-1 gap-3 mb-6">
             {exam.imageUrl && (
               <div className="relative aspect-video rounded-2xl overflow-hidden border border-white/10 shadow-inner group">
-                <img src={exam.imageUrl} alt="Exam Illustration" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
+                <img loading="lazy" src={exam.imageUrl} alt="Exam Illustration" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-4">
                   <button onClick={() => openPreview(exam.imageUrl!, 'توضيح الاختبار')} className="btn-accent py-1.5 px-3 text-[10px] flex items-center gap-1.5 backdrop-blur-sm">
                     <Eye size={12} /> تكبير الصورة
@@ -469,7 +469,7 @@ const ExamContent = () => {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-2 animate-fade-in">
                     {q.imageUrl && (
                       <div className="relative aspect-video rounded-xl overflow-hidden border border-white/10 group bg-black/20">
-                        <img src={q.imageUrl} alt="Question Illustration" className="w-full h-full object-contain" />
+                        <img loading="lazy" src={q.imageUrl} alt="Question Illustration" className="w-full h-full object-contain" />
                         <div className="absolute inset-x-0 bottom-0 p-2 bg-black/40 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity">
                           <button onClick={() => openPreview(q.imageUrl!, 'صورة السؤال')} className="w-full btn-accent py-1 px-2 text-[10px] flex items-center justify-center gap-1">
                             <ImageIcon size={12} /> معاينة الصورة
@@ -828,7 +828,7 @@ const EssayUploadArea = ({ q, ans, setEssayAnswer, filePickerOpenRef, openPrevie
               <div key={i} className="flex items-center gap-2 bg-white/5 border border-white/10 p-2.5 rounded-xl animate-scale-in group">
                 <div className="w-10 h-10 rounded-lg bg-white/5 flex items-center justify-center flex-shrink-0 overflow-hidden">
                   {isImg ? (
-                    <img src={url} alt="مرفق" className="w-full h-full object-cover" />
+                    <img loading="lazy" src={url} alt="مرفق" className="w-full h-full object-cover" />
                   ) : (
                     <FileText size={20} className="text-blue-400" />
                   )}

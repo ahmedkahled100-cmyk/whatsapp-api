@@ -6,7 +6,7 @@ import { isAdminDirectedNotification } from '@/lib/notification-audience';
 import { getNotificationLogs, saveNotificationLog, updateNotificationLog, dispatchNotification, subscribeToNotificationLogs, markNotificationRead } from '@/lib/db';
 import type { NotificationLog } from '@/types';
 import { showToast } from '@/lib/toast';
-import { Send, AlertCircle, CheckCircle2, Search, RefreshCw, MessageSquare, Clock, Filter, Users, ShieldAlert, RotateCcw, Bell } from 'lucide-react';
+import { Send, AlertCircle, CheckCircle2, Search, RefreshCw, MessageSquare, Clock, Filter, Users, ShieldAlert, RotateCcw, Bell, Loader2 } from 'lucide-react';
 import { formatDateAr, getApiBase } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 
@@ -17,6 +17,7 @@ export default function NotificationsAdmin() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'inbox' | 'compose' | 'logs'>('inbox');
   const [inboxTab, setInboxTab] = useState<'teacher' | 'admin'>('teacher');
+  const [localReadIds, setLocalReadIds] = useState<Set<string>>(new Set());
 
 
   // Compose State
@@ -26,6 +27,16 @@ export default function NotificationsAdmin() {
   const [selectedStudent, setSelectedStudent] = useState('');
   const [channels, setChannels] = useState({ inApp: true, whatsapp: false });
   const [sending, setSending] = useState(false);
+  const [notifType, setNotifType] = useState<'info' | 'success' | 'warning' | 'error'>('info');
+
+  const templates = [
+    { label: '-- اختر قالباً جاهزاً --', value: '' },
+    { label: '⏰ تذكير بموعد اختبار', value: 'أعزائي الطلاب، نود تذكيركم بأن موعد الاختبار القادم هو [التاريخ] في تمام الساعة [الوقت]. يرجى الاستعداد الجيد والتواجد بالمنصة في الوقت المحدد. بالتوفيق للجميع!' },
+    { label: '📊 إعلان نتائج اختبار', value: 'تم بحمد الله الانتهاء من تصحيح ورفع درجات الاختبار الأخير. يمكنكم الآن الدخول إلى حساباتكم للاطلاع على نتائجكم وتقارير الأداء بالتفصيل. استمروا في العمل الرائع!' },
+    { label: '📝 واجب منزلي جديد', value: 'تم إسناد واجب منزلي جديد لكم على المنصة. يرجى البدء في حله ورفعه قبل الموعد النهائي للاستلام لضمان احتساب الدرجات كاملة.' },
+    { label: '📢 إجازة أو عطلة طارئة', value: 'نود إفادتكم بأنه تقرر تأجيل الحصة القادمة نظراً لظروف طارئة، وسيتم الإعلان عن الموعد البديل والتعويضي في أقرب وقت. شكراً لتفهمكم.' },
+    { label: '💡 نصيحة دراسية وتحفيز', value: 'تذكروا دائماً أن الاستمرارية هي مفتاح النجاح. خصصوا وقتاً يومياً للمراجعة والتدريب، ولا تترددوا في طرح أسئلتكم. فخور بكم وبمجهوداتكم!' }
+  ];
 
   useEffect(() => {
     if (!user) return;
@@ -38,9 +49,10 @@ export default function NotificationsAdmin() {
   }, [user]);
 
   const loadLogs = () => {
-    // Handled by subscription now
+    if (user) {
+      getNotificationLogs(user.id).then(setLogs).catch(console.error);
+    }
   };
-
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -69,19 +81,18 @@ export default function NotificationsAdmin() {
         whatsappNumbers = groupStudents.filter(s => s.phone).map(s => s.phone as string);
         summaryText = groups.find(g => g.id === selectedGroup)?.name || 'مجموعة';
       } else if (targetType === 'assistant') {
-        // target all assistants
-        targetUsers = []; // empty means global for in-app
+        targetUsers = [];
         summaryText = 'جميع المساعدين';
       } else {
-        // all
-        targetUsers = []; // empty means global for in-app
+        targetUsers = [];
         whatsappNumbers = students.filter(s => s.phone).map(s => s.phone as string);
       }
 
       await dispatchNotification({
         teacherId: user.id,
         msg,
-        targetRoles: targetType === 'all' ? ['student'] : targetType === 'assistant' ? ['assistant'] : [], // if all, target all students
+        type: notifType,
+        targetRoles: targetType === 'all' ? ['student'] : targetType === 'assistant' ? ['assistant'] : [],
         targetUsers: targetUsers.length > 0 ? targetUsers : undefined,
         channels: { inApp: channels.inApp, whatsapp: channels.whatsapp },
         whatsappNumbers: channels.whatsapp ? whatsappNumbers : []
@@ -89,10 +100,8 @@ export default function NotificationsAdmin() {
 
       showToast(`تم بدء الإرسال إلى ${summaryText}`);
       setMsg('');
+      setNotifType('info');
       setActiveTab('logs');
-      // Adding a small delay to let backend process pending logs
-      // Handled by subscription
-
     } catch (e: any) {
       console.error(e);
       showToast('حدث خطأ أثناء الإرسال');
@@ -103,8 +112,6 @@ export default function NotificationsAdmin() {
 
   const handleRetry = async (log: NotificationLog) => {
     if (!log.target || log.type !== 'whatsapp') return;
-    
-    // Optimistic UI update
     setLogs(logs.map(l => l.id === log.id ? { ...l, status: 'pending' } : l));
     
     try {
@@ -136,12 +143,12 @@ export default function NotificationsAdmin() {
   });
 
   const unreadTeacher = useMemo(
-    () => notifications.filter(n => !n.read && !isAdminDirectedNotification(n)).length,
-    [notifications]
+    () => notifications.filter(n => !n.read && !localReadIds.has(n.id) && !isAdminDirectedNotification(n)).length,
+    [notifications, localReadIds]
   );
   const unreadAdmin = useMemo(
-    () => notifications.filter(n => !n.read && isAdminDirectedNotification(n)).length,
-    [notifications]
+    () => notifications.filter(n => !n.read && !localReadIds.has(n.id) && isAdminDirectedNotification(n)).length,
+    [notifications, localReadIds]
   );
   const unreadInboxTotal = unreadTeacher + unreadAdmin;
 
@@ -171,7 +178,7 @@ export default function NotificationsAdmin() {
             إرسال جديد
           </button>
           <button 
-            onClick={() => { setActiveTab('logs'); loadLogs(); }}
+            onClick={() => { setActiveTab('logs'); }}
             className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'logs' ? 'bg-gold text-dark' : 'text-gray-400 hover:text-white'}`}
           >
             سجل العمليات
@@ -182,21 +189,48 @@ export default function NotificationsAdmin() {
       {activeTab === 'compose' ? (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-in">
           <div className="lg:col-span-2 card-base p-6">
-            <h2 className="text-lg font-bold mb-6 border-b border-white/10 pb-4">إرسال إشعار يدوي</h2>
+            <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3 mb-6 border-b border-white/10 pb-4">
+              <h2 className="text-lg font-bold">إرسال إشعار يدوي للطلاب</h2>
+              <select 
+                className="input-base text-xs max-w-xs"
+                onChange={e => {
+                  if (e.target.value) setMsg(e.target.value);
+                }}
+              >
+                {templates.map((t, idx) => (
+                  <option key={idx} value={t.value}>{t.label}</option>
+                ))}
+              </select>
+            </div>
+            
             <form onSubmit={handleSend} className="space-y-6">
               
               <div className="space-y-3">
                 <label className="text-sm font-bold text-gray-300">نص الإشعار</label>
                 <textarea 
                   className="input-base w-full h-32 resize-none"
-                  placeholder="اكتب رسالتك هنا..."
+                  placeholder="اكتب رسالتك هنا أو اختر قالباً جاهزاً من الأعلى..."
                   value={msg}
                   onChange={e => setMsg(e.target.value)}
                   required
                 />
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="space-y-3">
+                  <label className="text-sm font-bold text-gray-300">نوع التنبيه (لإشعار التطبيق)</label>
+                  <select 
+                    className="input-base w-full"
+                    value={notifType}
+                    onChange={(e: any) => setNotifType(e.target.value)}
+                  >
+                    <option value="info">إرشاد (أزرق)</option>
+                    <option value="success">موافقة/نجاح (أخضر)</option>
+                    <option value="warning">تحذير (أصفر)</option>
+                    <option value="error">تنبيه عاجل/خطر (أحمر)</option>
+                  </select>
+                </div>
+
                 <div className="space-y-3">
                   <label className="text-sm font-bold text-gray-300">الاستهداف (إلى من؟)</label>
                   <select 
@@ -235,21 +269,20 @@ export default function NotificationsAdmin() {
                     <label className="flex items-center gap-3 cursor-pointer">
                       <input 
                         type="checkbox" 
-                        defaultChecked={true}
                         checked={channels.inApp}
                         onChange={e => setChannels({ ...channels, inApp: e.target.checked })}
-                        className="w-4 h-4 rounded border-gray-600 focus:ring-gold focus:ring-opacity-50" 
+                        className="w-4 h-4 rounded border-gray-600 focus:ring-gold focus:ring-opacity-50 text-gold bg-dark" 
                       />
-                      <span className="flex items-center gap-2"><Bell size={16} className="text-gold"/> إشعار داخل التطبيق</span>
+                      <span className="flex items-center gap-2 text-xs"><Bell size={14} className="text-gold"/> إشعار داخل التطبيق</span>
                     </label>
                     <label className="flex items-center gap-3 cursor-pointer mt-4">
                       <input 
                         type="checkbox" 
                         checked={channels.whatsapp}
                         onChange={e => setChannels({ ...channels, whatsapp: e.target.checked })}
-                        className="w-4 h-4 rounded border-gray-600 focus:ring-green-500 focus:ring-opacity-50" 
+                        className="w-4 h-4 rounded border-gray-600 focus:ring-green-500 focus:ring-opacity-50 text-green-500 bg-dark" 
                       />
-                      <span className="flex items-center gap-2"><MessageSquare size={16} className="text-green-500"/> رسالة واتساب (يتطلب اشتراك API)</span>
+                      <span className="flex items-center gap-2 text-xs"><MessageSquare size={14} className="text-green-500"/> رسالة واتساب</span>
                     </label>
                   </div>
                 </div>
@@ -261,22 +294,55 @@ export default function NotificationsAdmin() {
                   disabled={sending || (!channels.inApp && !channels.whatsapp)}
                   className="btn-gold w-full flex justify-center py-3 text-lg"
                 >
-                  {sending ? 'جاري الإرسال...' : <><Send size={20} className="mr-2"/> إرسال الآن</>}
+                  {sending ? <Loader2 className="animate-spin text-dark mr-2" size={20} /> : <><Send size={20} className="mr-2"/> إرسال الإشعار الآن</>}
                 </button>
               </div>
             </form>
           </div>
 
-          <div className="card-base p-6 border-blue-500/20 bg-blue-500/5 h-fit">
-            <h3 className="font-bold flex items-center gap-2 text-blue-400 mb-4">
-              <ShieldAlert size={20} />
-              ملاحظات هامة
-            </h3>
-            <ul className="space-y-3 text-sm text-gray-300 list-disc list-inside">
-              <li>الإشعارات داخل التطبيق فورية وتظهر للجرس الخاص بالطالب عند تسجيل دخوله.</li>
-              <li>إرسال رسائل الواتساب يتطلب تفعيل وتسجيل أرقام مقبولة في Meta if in Dev mode، أو رصيد كافٍ وAPI Key مفعل in Live mode.</li>
-              <li>يرجى التأكد من اختيار الجمهور الصحيح قبل الضغط على إرسال حيث لا يمكن التراجع.</li>
-            </ul>
+          <div className="space-y-6">
+            {/* Live Preview Card */}
+            <div className="card-base p-6 border-purple-500/20 bg-purple-500/5">
+              <h3 className="font-bold flex items-center gap-2 text-purple-400 mb-4 text-sm">
+                <Bell size={16} />
+                معاينة الإشعار الفورية (المتلقي)
+              </h3>
+              <div className="border border-white/10 bg-black/40 rounded-xl p-4 relative overflow-hidden transition-all shadow-glow min-h-24">
+                {notifType === 'error' && <div className="absolute top-0 right-0 w-1 h-full bg-red-500" />}
+                {notifType === 'success' && <div className="absolute top-0 right-0 w-1 h-full bg-green-500" />}
+                {notifType === 'warning' && <div className="absolute top-0 right-0 w-1 h-full bg-yellow-500" />}
+                {notifType === 'info' && <div className="absolute top-0 right-0 w-1 h-full bg-blue-500" />}
+                
+                <div className="flex items-start gap-2.5">
+                  <div className="mt-0.5">
+                    {notifType === 'error' && <AlertCircle size={16} className="text-red-400" />}
+                    {notifType === 'success' && <CheckCircle2 size={16} className="text-green-400" />}
+                    {notifType === 'warning' && <AlertCircle size={16} className="text-yellow-400" />}
+                    {notifType === 'info' && <AlertCircle size={16} className="text-blue-400" />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs text-white leading-relaxed whitespace-pre-wrap break-words">
+                      {msg.trim() || 'اكتب رسالة لرؤية المعاينة هنا...'}
+                    </p>
+                    <div className="flex items-center gap-1 mt-2 text-[8px] text-gray-500">
+                      <Clock size={8} />
+                      {new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="card-base p-6 border-blue-500/20 bg-blue-500/5 text-xs">
+              <h3 className="font-bold flex items-center gap-2 text-blue-400 mb-4">
+                <ShieldAlert size={20} />
+                ملاحظات هامة للتحكم
+              </h3>
+              <ul className="space-y-3 text-gray-300 list-disc list-inside leading-relaxed">
+                <li>يمكنك اختيار قالب جاهز وتعديل النص لزيادة سرعة التحرير.</li>
+                <li>توزيع الإشعار على الواتساب يتم في الخلفية بشكل متزامن دون التسبب في بطء استجابة الصفحة.</li>
+              </ul>
+            </div>
           </div>
         </div>
       ) : activeTab === 'inbox' ? (
@@ -313,44 +379,57 @@ export default function NotificationsAdmin() {
                 <Bell size={48} className="text-white/5" />
                 <p className="font-bold">لا توجد إشعارات {inboxTab === 'admin' ? 'إدارية' : 'تعليمية'} حالياً</p>
               </div>
-            ) : displayedNotifications.map(n => (
-              <div 
-                key={n.id} 
-                onClick={async () => {
-                  if (!n.read) {
-                    try {
-                      await markNotificationRead(n.id);
-                    } catch (e) {
-                      console.error('Failed to mark read:', e);
+            ) : displayedNotifications.map(n => {
+              const isRead = n.read || localReadIds.has(n.id);
+              return (
+                <div 
+                  key={n.id} 
+                  onClick={async () => {
+                    if (!n.read && !localReadIds.has(n.id)) {
+                      setLocalReadIds(prev => {
+                        const next = new Set(prev);
+                        next.add(n.id);
+                        return next;
+                      });
+                      try {
+                        await markNotificationRead(n.id);
+                      } catch (e) {
+                        console.error('Failed to mark read:', e);
+                        setLocalReadIds(prev => {
+                          const next = new Set(prev);
+                          next.delete(n.id);
+                          return next;
+                        });
+                      }
                     }
-                  }
-                  if (n.actionPath) {
-                    router.push(n.actionPath);
-                  }
-                }}
-                className={`p-4 rounded-xl border relative overflow-hidden transition-all ${
-                  n.actionPath || !n.read ? 'cursor-pointer hover:border-gold/50' : ''
-                } ${
-                  n.read
-                    ? 'border-white/5 bg-white/5 opacity-70'
-                    : 'border-gold/20 bg-gradient-to-br from-gold/10 to-transparent shadow-md'
-                }`}>
-                {n.type === 'error' && <div className="absolute top-0 right-0 w-1 h-full bg-red-500 rounded-l" />}
-                {n.type === 'success' && <div className="absolute top-0 right-0 w-1 h-full bg-green-500 rounded-l" />}
-                {n.type === 'warning' && <div className="absolute top-0 right-0 w-1 h-full bg-yellow-500 rounded-l" />}
-                {n.type === 'info' && <div className="absolute top-0 right-0 w-1 h-full bg-blue-500 rounded-l" />}
-                
-                <p className="text-sm font-bold text-white mb-2 pr-3">{n.msg}</p>
-                
-                <div className="flex justify-between items-center mt-3 pt-2 border-t border-white/5">
-                  <span className="text-[10px] text-gray-500 flex items-center gap-1">
-                    <Clock size={12} />
-                    {n.time || formatDateAr(n.createdAt)}
-                  </span>
-                  {!n.read && <span className="w-2 h-2 rounded-full bg-gold shadow-[0_0_6px_rgba(245,197,24,0.8)] animate-pulse" />}
+                    if (n.actionPath) {
+                      router.push(n.actionPath);
+                    }
+                  }}
+                  className={`p-4 rounded-xl border relative overflow-hidden transition-all ${
+                    n.actionPath || !isRead ? 'cursor-pointer hover:border-gold/50' : ''
+                  } ${
+                    isRead
+                      ? 'border-white/5 bg-white/5 opacity-70'
+                      : 'border-gold/20 bg-gradient-to-br from-gold/10 to-transparent shadow-md'
+                  }`}>
+                  {n.type === 'error' && <div className="absolute top-0 right-0 w-1 h-full bg-red-500 rounded-l" />}
+                  {n.type === 'success' && <div className="absolute top-0 right-0 w-1 h-full bg-green-500 rounded-l" />}
+                  {n.type === 'warning' && <div className="absolute top-0 right-0 w-1 h-full bg-yellow-500 rounded-l" />}
+                  {n.type === 'info' && <div className="absolute top-0 right-0 w-1 h-full bg-blue-500 rounded-l" />}
+                  
+                  <p className="text-sm font-bold text-white mb-2 pr-3">{n.msg}</p>
+                  
+                  <div className="flex justify-between items-center mt-3 pt-2 border-t border-white/5">
+                    <span className="text-[10px] text-gray-500 flex items-center gap-1">
+                      <Clock size={12} />
+                      {n.time || formatDateAr(n.createdAt)}
+                    </span>
+                    {!isRead && <span className="w-2 h-2 rounded-full bg-gold shadow-[0_0_6px_rgba(245,197,24,0.8)] animate-pulse" />}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       ) : (

@@ -95,6 +95,7 @@ interface TeacherOverlayProps {
   target: 'teacher';
   teacher: TeacherUser;
   adminInfo: TeacherUser | null;
+  isCancelled?: boolean;
   onLogout: () => void;
   onRenewalSuccess: () => void;
 }
@@ -258,8 +259,8 @@ export function SubscriptionExpiredOverlay(props: SubscriptionExpiredOverlayProp
   const teacherUser = !isStudent ? (props as TeacherOverlayProps).teacher : null;
 
   // ---- Derived state ----
-  const isCancelled = isStudent ? !!(props as StudentOverlayProps).isCancelled : false;
-  const cancelReason = isStudent ? (props as StudentOverlayProps).student?.cancelReason : undefined;
+  const isCancelled = isStudent ? !!(props as StudentOverlayProps).isCancelled : !!(props as TeacherOverlayProps).isCancelled;
+  const cancelReason = isStudent ? (props as StudentOverlayProps).student?.cancelReason : (props as TeacherOverlayProps).teacher?.cancelReason;
 
   return (
     <div
@@ -324,7 +325,7 @@ export function SubscriptionExpiredOverlay(props: SubscriptionExpiredOverlayProp
                 <AlertCircle size={14} /> سبب الإيقاف
               </div>
               <p className="text-sm text-gray-200 leading-relaxed font-bold bg-black/20 p-3 rounded-xl border border-white/5">
-                {cancelReason || 'يرجى التواصل مع المعلم لمعرفة تفاصيل إيقاف الحساب.'}
+                {cancelReason || (isStudent ? 'يرجى التواصل مع المعلم لمعرفة تفاصيل إيقاف الحساب.' : 'يرجى التواصل مع إدارة المنصة لمعرفة تفاصيل إيقاف الحساب.')}
               </p>
             </div>
           )}

@@ -152,6 +152,8 @@ function AIPageContent() {
   }, [processFile]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) processFile(file);
     e.target.value = '';
   };
 
@@ -882,7 +884,7 @@ function AIPageContent() {
 
       {/* Save Modal */}
       {showSaveModal && (
-        <div className="modal-overlay" onClick={() => setShowSaveModal(false)}>
+        <div className="modal-overlay" >
           <div className="modal-content modal-content-sm" onClick={e => e.stopPropagation()}>
             <h3 className="text-xl font-bold font-cairo">تخصيص الحفظ في البنك</h3>
             <div className="space-y-3">
@@ -917,7 +919,7 @@ function AIPageContent() {
           <div className="flex items-center justify-between mb-8 pb-6" style={{ borderBottom: '3px solid #F5C518' }}>
             <div className="flex items-center gap-4">
               {settings?.logoUrl ? (
-                <img src={settings.logoUrl} alt="Logo" className="w-20 h-20 object-contain rounded-xl border-2 border-[#F5C518]" crossOrigin="anonymous" />
+                <img loading="lazy" src={settings.logoUrl} alt="Logo" className="w-20 h-20 object-contain rounded-xl border-2 border-[#F5C518]" crossOrigin="anonymous" />
               ) : (
                 <div className="w-20 h-20 rounded-xl bg-[#F5C518] flex items-center justify-center font-black text-2xl text-black border-2 border-black">AN</div>
               )}

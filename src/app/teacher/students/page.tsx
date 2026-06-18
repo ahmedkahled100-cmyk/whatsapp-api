@@ -6,7 +6,7 @@ import { useSearchParams } from 'next/navigation';
 import { useTeacherStore } from '@/lib/store';
 import { showToast } from '@/lib/toast';
 import { saveStudent, deleteStudent, uploadFileToStorage, deleteRegistrationRequest, getSettings, wipeStudentInteraction } from '@/lib/db';
-import { generateCode, formatDateAr, printHtml, openStudentCardForPrint } from '@/lib/utils';
+import { generateCode, formatDateAr, printHtml, openStudentCardForPrint, exportBulkToPdf } from '@/lib/utils';
 import type { Student } from '@/types';
 import { UserPlus, Search, Trash2, Copy, Users, Phone, Upload, Loader2, FileSpreadsheet, Edit, Eye, Printer, Calendar, Clock, Award, CheckCircle2, XCircle, RotateCcw, ImageIcon, X, QrCode, Download } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
@@ -145,10 +145,12 @@ function StudentsPageContent() {
       }
     } catch (err: any) { 
       useTeacherStore.getState().setStudents(previousStudents);
-      if (err.message === 'DUPLICATE_CODE_OR_PHONE') {
-        showToast('❗ خطأ: هذا الكود أو رقم الهاتف مسجل بالفعل لطالب آخر');
-      } else {
-        showToast('فشل الحفظ: يرجى التحقق من البيانات');
+      const msg = err.message === 'DUPLICATE_CODE_OR_PHONE' ? '❗ خطأ: هذا الكود مسجل بالفعل' : (err.message || 'فشل الحفظ: يرجى التحقق من البيانات');
+      showToast(msg);
+      
+      // Auto-revert the specific duplicate field to original if editing
+      if (oldStudent && msg.includes('الكود')) {
+        setForm(f => ({ ...f, code: oldStudent.code || '' }));
       }
     }
     finally { setSaving(false); setUploadProgress(0); }
@@ -204,9 +206,9 @@ function StudentsPageContent() {
     if (!confirm('هل أنت متأكد من رفض هذا الطلب؟')) return;
     const prevReqs = [...registrationRequests];
     useTeacherStore.getState().setRegistrationRequests(prevReqs.filter(r => r.id !== id));
+    showToast('❌ تم رفض الطلب');
     try {
       await deleteRegistrationRequest(id);
-      showToast('❌ تم رفض الطلب');
     } catch { 
       useTeacherStore.getState().setRegistrationRequests(prevReqs);
       showToast('فشل رفض الطلب'); 
@@ -217,9 +219,9 @@ function StudentsPageContent() {
     if (!confirm(`حذف الطالب "${name}" وجميع سجلاته نهائياً؟`)) return;
     const prevStudents = [...students];
     useTeacherStore.getState().setStudents(prevStudents.filter(s => s.id !== id));
+    showToast('✅ تم حذف الطالب');
     try {
       await deleteStudent(id);
-      showToast('✅ تم حذف الطالب');
     } catch {
       useTeacherStore.getState().setStudents(prevStudents);
       showToast('❌ فشل الحذف');
@@ -231,10 +233,6 @@ function StudentsPageContent() {
     try {
       await wipeStudentInteraction(studentId);
       showToast('✅ تم تصفير تفاعلات الطالب بنجاح');
-      // Refresh state if needed, though most stats are computed from 'attempts' which should update if we refetch or update store
-      // For now, reload window or refetch is safer but optimistic UI is better.
-      // Since we don't have a global 'attempts' setter that's easy to use here, we'll just show toast and let them refresh or wait for sync.
-      window.location.reload(); 
     } catch {
       showToast('❌ فشل تصفير التفاعلات');
     }
@@ -599,7 +597,7 @@ function StudentsPageContent() {
 
       {/* Student Profile & Print Modal */}
       {viewStudent && (
-        <div className="modal-overlay print:p-0 print:bg-white print:block overflow-y-auto" onClick={e => e.target === e.currentTarget && setViewStudent(null)}>
+        <div className="modal-overlay print:p-0 print:bg-white print:block overflow-y-auto" >
           <div className="modal-content modal-content-xl print:max-h-none print:shadow-none print:border-none print:bg-white print:text-black">
             {/* Header / Actions */}
             <div className="sticky top-0 z-10 flex items-center justify-between p-4 bg-[#0a0f18]/90 backdrop-blur border-b border-white/5 print:hidden">
@@ -678,7 +676,7 @@ function StudentsPageContent() {
                         .footer { margin-top:24px; text-align:center; font-size:11px; color:#9ca3af; border-top:1px solid #e5e7eb; padding-top:12px; }
                       </style></head><body>
                       <div class="header">
-                        ${viewStudent.imageUrl ? `<img src="${viewStudent.imageUrl}" class="avatar" crossorigin="anonymous" />` : `<div class="avatar-placeholder">${viewStudent.name[0]}</div>`}
+                        ${viewStudent.imageUrl ? `<img loading="lazy" src="${viewStudent.imageUrl}" class="avatar" crossorigin="anonymous" />` : `<div class="avatar-placeholder">${viewStudent.name[0]}</div>`}
                         <div class="header-info">
                           <h1>${viewStudent.name}</h1>
                           <p>الصف: ${viewStudent.grade || 'غير محدد'} | المجموعة: ${groupNames} | الكود: ${viewStudent.code.replace(/-T[A-Z0-9]+$/i,'')}</p>
@@ -713,7 +711,7 @@ function StudentsPageContent() {
                 
                 {viewStudent.imageUrl && (
                   <div className="w-24 h-24 rounded-full overflow-hidden border-2 border-black/20 shadow-md">
-                    <img src={viewStudent.imageUrl} alt={viewStudent.name} className="w-full h-full object-cover" />
+                    <img loading="lazy" src={viewStudent.imageUrl} alt={viewStudent.name} className="w-full h-full object-cover" />
                   </div>
                 )}
 
@@ -849,7 +847,7 @@ function StudentsPageContent() {
 
       {/* Barcode Bulk Printing Modal */}
       {printingBarcodes && (
-        <div className="modal-overlay overflow-y-auto" onClick={e => e.target === e.currentTarget && setPrintingBarcodes(false)}>
+        <div className="modal-overlay overflow-y-auto" >
           <div className="modal-content modal-content-xl">
             {/* Header */}
             <div className="sticky top-0 z-10 flex items-center justify-between p-4 bg-[#0a0f18]/90 backdrop-blur border-b border-white/5">
@@ -927,7 +925,7 @@ function StudentsPageContent() {
       )}
 
       {showModal && (
-        <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setShowModal(false)}>
+        <div className="modal-overlay" >
           <div className="modal-content">
             <div className="modal-header">
               <h3 className="font-bold text-lg text-gold flex items-center gap-2">

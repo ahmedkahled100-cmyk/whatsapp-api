@@ -298,7 +298,7 @@ function CreateExamPageContent() {
               <div className="flex items-center gap-3">
                 {examImageUrl ? (
                   <div className="relative w-20 h-20 rounded-xl overflow-hidden border border-gold/30 flex-shrink-0">
-                    <img src={examImageUrl} alt="Exam" className="w-full h-full object-cover" />
+                    <img loading="lazy" src={examImageUrl} alt="Exam" className="w-full h-full object-cover" />
                     <button onClick={() => setExamImageUrl('')} className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-0.5 shadow-lg">
                       <X size={12} />
                     </button>
@@ -400,7 +400,7 @@ function CreateExamPageContent() {
                       <label className="block text-[10px] font-black text-gold uppercase">صورة السؤال</label>
                       {q.imageUrl ? (
                         <div className="relative w-full aspect-video rounded-lg overflow-hidden border border-white/10">
-                          <img src={q.imageUrl} alt="Q" className="w-full h-full object-cover" />
+                          <img loading="lazy" src={q.imageUrl} alt="Q" className="w-full h-full object-cover" />
                           <button onClick={() => updateQ(q.id, { imageUrl: '' })} className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-0.5">
                             <X size={10} />
                           </button>

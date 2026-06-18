@@ -36,25 +36,31 @@ export default function GroupsPage() {
     if (!name.trim()) { showToast('❗ أدخل اسم الفصل'); return; }
     setSaving(true);
     const teacherId = useTeacherStore.getState().user?.id || '';
+    // Optimistic Update
+    const tempId = editingGroup?.id || crypto.randomUUID();
     const groupData: any = {
-      id: editingGroup?.id || crypto.randomUUID(),
+      id: tempId,
       teacherId,
       name, desc, studentIds: selectedStudents,
       createdAt: editingGroup?.createdAt || new Date().toISOString(),
     };
-    
-    // Optimistic Update
+
     const previousGroups = [...useTeacherStore.getState().groups];
     if (editingGroup) {
-      useTeacherStore.getState().setGroups(previousGroups.map(g => g.id === editingGroup.id ? groupData : g));
+      useTeacherStore.getState().setGroups(previousGroups.map(g => g.id === tempId ? groupData : g));
     } else {
       useTeacherStore.getState().setGroups([...previousGroups, groupData]);
     }
+    
+    setShowModal(false);
+    showToast('✅ تم حفظ الفصل');
 
     try {
-      await saveGroup(groupData);
-      showToast('✅ تم حفظ الفصل');
-      setShowModal(false);
+      const realId = await saveGroup(groupData);
+      if (!editingGroup && realId !== tempId) {
+        // Update temp ID with real ID silently
+        useTeacherStore.getState().setGroups(useTeacherStore.getState().groups.map(g => g.id === tempId ? { ...g, id: realId } : g));
+      }
     } catch (err) {
       useTeacherStore.getState().setGroups(previousGroups);
       showToast('❌ فشل الحفظ'); 
@@ -140,7 +146,7 @@ export default function GroupsPage() {
 
       {/* Modal */}
       {showModal && (
-        <div className="modal-overlay" onClick={() => setShowModal(false)}>
+        <div className="modal-overlay" >
           <div className="modal-content modal-content-sm" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-cairo font-bold" style={{ color: 'var(--gold)' }}>

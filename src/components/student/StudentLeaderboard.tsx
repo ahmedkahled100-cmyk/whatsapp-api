@@ -43,7 +43,7 @@ export function StudentLeaderboard({ leaderboardStudents, currentStudentId }: St
                 
                 <div className="w-12 h-12 rounded-full overflow-hidden border border-white/10 shrink-0">
                   {s.imageUrl ? (
-                    <img src={s.imageUrl} alt={s.name} className="w-full h-full object-cover" />
+                    <img loading="lazy" src={s.imageUrl} alt={s.name} className="w-full h-full object-cover" />
                   ) : (
                     <div className="w-full h-full bg-gold/20 flex items-center justify-center text-gold font-bold">
                       {s.name[0]}

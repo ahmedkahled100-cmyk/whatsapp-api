@@ -70,7 +70,7 @@ function QBankPageContent() {
   useEffect(() => {
     const prefillUrl = searchParams.get('prefillUrl');
     if (prefillUrl) {
-      setNewQuestion(prev => ({ ...prev, imageUrl: prefillUrl }));
+      setNewQuestion((prev: any) => ({ ...prev, imageUrl: prefillUrl }));
       setShowAddForm(true);
       showToast('📥 تم استلام صورة السؤال من أدوات PDF');
       window.history.replaceState({}, '', window.location.pathname);
@@ -105,8 +105,8 @@ function QBankPageContent() {
     setNewQuestion({ type: 'mcq', text: '', options: ['', '', '', ''], correctAnswer: undefined, difficulty: 'medium', subject: '', unit: '', points: 1 });
 
     try {
-      await addToQBank(q as any);
       showToast('✅ تم إضافة السؤال بنجاح');
+      await addToQBank(q as any);
     } catch (error) {
       setQuestions(previousQuestions);
       showToast('❌ حدث خطأ أثناء حفظ السؤال');
@@ -137,8 +137,8 @@ function QBankPageContent() {
     setQuestions(q => q.filter(item => item.id !== id));
     
     try {
-      await deleteFromQBank(id);
       showToast('✅ تم حذف السؤال');
+      await deleteFromQBank(id);
       setSelectedQuestions(prev => {
         const next = new Set(prev);
         next.delete(id);
@@ -299,7 +299,7 @@ function QBankPageContent() {
               <label className="block text-xs font-bold text-gold uppercase">صورة السؤال</label>
               {newQuestion.imageUrl ? (
                 <div className="relative aspect-video rounded-xl overflow-hidden border border-gold/30 bg-black/20">
-                  <img src={newQuestion.imageUrl} alt="Q" className="w-full h-full object-contain" />
+                  <img loading="lazy" src={newQuestion.imageUrl} alt="Q" className="w-full h-full object-contain" />
                   <button onClick={() => setNewQuestion({...newQuestion, imageUrl: ''})} className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 shadow-lg">
                     <X size={14} />
                   </button>
@@ -486,7 +486,7 @@ function QBankPageContent() {
 
       {/* Quick Exam Modal */}
       {showQuickExamModal && (
-        <div className="modal-overlay" onClick={() => setShowQuickExamModal(false)}>
+        <div className="modal-overlay" >
           <div className="modal-content modal-content-sm" onClick={e => e.stopPropagation()}>
             <h3 className="text-xl font-bold mb-4 font-cairo">إنشاء اختبار سريع</h3>
             <p className="text-sm text-gray-400 mb-4">

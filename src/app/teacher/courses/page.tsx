@@ -200,8 +200,9 @@ function CoursesPageContent() {
     }
 
     setLoading(true);
+    const tempId = editingId || crypto.randomUUID();
     const materialData: CourseMaterial = {
-      id: editingId || crypto.randomUUID(),
+      id: tempId,
       teacherId: useTeacherStore.getState().user?.id || '',
       title: form.title!,
       type: form.type as any || 'link',
@@ -227,8 +228,16 @@ function CoursesPageContent() {
       useTeacherStore.getState().setMaterials([...previousMaterials, materialData]);
     }
 
+    setShowAddForm(false);
+    setForm({ ...EMPTY_FORM });
+    setEditingId(null);
+    showToast('✅ تم حفظ الدرس بنجاح');
+
     try {
-      await saveMaterial(materialData);
+      const realId = await saveMaterial(materialData);
+      if (!editingId && realId !== tempId) {
+        useTeacherStore.getState().setMaterials(useTeacherStore.getState().materials.map(m => m.id === tempId ? { ...m, id: realId } : m));
+      }
 
       // Notification logic
       if (!editingId) { // Only notify for NEW materials
@@ -250,6 +259,7 @@ function CoursesPageContent() {
       useTeacherStore.getState().setMaterials(previousMaterials);
       console.error(e);
       showToast('حدث خطأ أثناء الحفظ');
+      setShowAddForm(true); // Optional: re-open if failed
     } finally {
       setLoading(false);
       setUploadingFile(false);
@@ -261,9 +271,9 @@ function CoursesPageContent() {
     if (!confirm('هل أنت متأكد من حذف هذه المادة؟')) return;
     const previousMaterials = [...useTeacherStore.getState().materials];
     useTeacherStore.getState().setMaterials(previousMaterials.filter(m => m.id !== id));
+    showToast('✅ تم حذف الدرس');
     try { 
       await deleteMaterial(id); 
-      showToast('✅ تم حذف الدرس');
     } catch { 
       useTeacherStore.getState().setMaterials(previousMaterials);
       showToast('حدث خطأ أثناء الحذف'); 

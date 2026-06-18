@@ -198,6 +198,15 @@ export default function AssistantDashboard() {
     }
   }, [activeTab, user]);
 
+  // Real-time Notifications Subscription
+  useEffect(() => {
+    if (!user) return;
+    const unsubNotifs = subscribeToNotifications(user.id, (data) => {
+      setNotifications(filterNotificationsForAssistant(data, user));
+    });
+    return () => unsubNotifs();
+  }, [user]);
+
   useEffect(() => {
     if (selectedConv && user) {
       setLoadingMessages(true);
@@ -551,6 +560,8 @@ export default function AssistantDashboard() {
     );
   }
 
+  if (!user) return null;
+
   return (
     <div className="min-h-screen bg-[#0a0f1c] text-white p-4 sm:p-8" dir="rtl">
       <div className="max-w-6xl mx-auto space-y-8">
@@ -560,9 +571,9 @@ export default function AssistantDashboard() {
           <div className="absolute top-0 right-0 w-24 h-24 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
           <div className="flex items-center gap-4 text-center sm:text-right flex-col sm:flex-row">
             {profileForm.imageUrl ? (
-              <img src={profileForm.imageUrl} alt={user?.name} className="w-20 h-20 rounded-2xl object-cover border-2 border-amber-500/30 shrink-0" />
+              <img loading="lazy" src={profileForm.imageUrl} alt={user?.name} className="w-20 h-20 rounded-2xl object-cover border-2 border-amber-500/30 shrink-0" />
             ) : user?.imageUrl ? (
-              <img src={user.imageUrl} alt={user?.name} className="w-20 h-20 rounded-2xl object-cover border-2 border-amber-500/30 shrink-0" />
+              <img loading="lazy" src={user.imageUrl} alt={user?.name} className="w-20 h-20 rounded-2xl object-cover border-2 border-amber-500/30 shrink-0" />
             ) : (
               <div className="w-20 h-20 rounded-2xl bg-amber-500/20 flex items-center justify-center text-2xl font-black text-amber-400 border border-amber-500/30 shrink-0">
                 {user?.name?.[0] || 'A'}
@@ -670,7 +681,7 @@ export default function AssistantDashboard() {
                     <div>
                       <div className="flex items-center gap-3 mb-4">
                         {teacher.imageUrl ? (
-                          <img src={teacher.imageUrl} alt={teacher.name} className="w-12 h-12 rounded-xl object-cover border border-white/10" />
+                          <img loading="lazy" src={teacher.imageUrl} alt={teacher.name} className="w-12 h-12 rounded-xl object-cover border border-white/10" />
                         ) : (
                           <div className="w-12 h-12 rounded-xl bg-purple-500/20 text-purple-400 flex items-center justify-center font-bold text-lg border border-purple-500/20">
                             {teacher.name[0]}
@@ -887,7 +898,7 @@ export default function AssistantDashboard() {
               <div className="flex flex-col sm:flex-row items-center gap-4 p-4 border border-white/5 bg-black/20 rounded-2xl">
                 <div className="relative shrink-0">
                   {profileForm.imageUrl ? (
-                    <img src={profileForm.imageUrl} alt="Avatar" className="w-20 h-20 rounded-2xl object-cover border-2 border-amber-500/30" />
+                    <img loading="lazy" src={profileForm.imageUrl} alt="Avatar" className="w-20 h-20 rounded-2xl object-cover border-2 border-amber-500/30" />
                   ) : (
                     <div className="w-20 h-20 rounded-2xl bg-amber-500/20 flex items-center justify-center text-2xl font-black text-amber-400 border border-amber-500/30">
                       {user?.name?.[0] || 'A'}
@@ -1037,7 +1048,7 @@ export default function AssistantDashboard() {
                     const idx = conv.participants.findIndex(p => p !== user?.id);
                     const name = conv.participantNames[idx] || 'معلم';
                     const active = selectedConv?.id === conv.id;
-                    const hasUnread = conv.lastMessage && !conv.lastMessage.isRead && conv.lastMessage.receiverId === user?.id;
+                    const hasUnread = conv.lastMessage && !conv.lastMessage.isRead && conv.lastMessage.receiverId === user?.id && selectedConv?.id !== conv.id;
 
                     return (
                       <button
@@ -1143,7 +1154,7 @@ export default function AssistantDashboard() {
 
       {/* Apply Job Modal */}
       {showApplyModal && applyingToJob && (
-        <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && setShowApplyModal(false)}>
+        <div className="modal-overlay" >
           <div className="modal-content border-amber-500/20 max-w-md">
             <div className="modal-header">
               <h3 className="font-bold text-lg text-amber-400 flex items-center gap-2">

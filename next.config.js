@@ -1,9 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  optimizeFonts: false,
   output: process.env.BUILD_APK === 'true' ? 'export' : undefined,
   images: {
-    unoptimized: true,
+    unoptimized: process.env.BUILD_APK === 'true',
     remotePatterns: [
       { protocol: 'https', hostname: 'firebasestorage.googleapis.com' },
       { protocol: 'https', hostname: 'res.cloudinary.com' },

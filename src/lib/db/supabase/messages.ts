@@ -50,7 +50,7 @@ export const subscribeToConversations = (userId: string, callback: (convs: Conve
     const { data } = await supabase
       .from(CONVERSATIONS)
       .select('*')
-      .contains('participants', [userId])
+      .contains('participants', JSON.stringify([userId]))
       .order('updated_at', { ascending: false });
     if (!cancelled) callback(manyFromDB<Conversation>(data || []));
   };
@@ -79,6 +79,8 @@ export const subscribeToMessages = (
   pageSize = MESSAGE_PAGE_SIZE
 ) => {
   let cancelled = false;
+  let cachedMsgs: Message[] = [];
+
   const fetch = async () => {
     const { data } = await supabase
       .from(MESSAGES)
@@ -87,20 +89,43 @@ export const subscribeToMessages = (
       .order('timestamp', { ascending: false })
       .limit(pageSize);
     if (!cancelled) {
-      // Return in ascending order for display
-      callback(manyFromDB<Message>((data || []).reverse()));
+      cachedMsgs = manyFromDB<Message>((data || []).reverse());
+      callback([...cachedMsgs]);
     }
   };
-
-  // Leading debounce: new message appears instantly, then cooldown 60ms
-  const debouncedFetch = debounceLeading(() => { void fetch(); }, 60);
 
   const channel = supabase
     .channel(`msgs:${conversationId}`)
     .on(
       'postgres_changes',
-      { event: '*', schema: 'public', table: MESSAGES, filter: `conversation_id=eq.${conversationId}` },
-      debouncedFetch
+      { event: 'INSERT', schema: 'public', table: MESSAGES, filter: `conversation_id=eq.${conversationId}` },
+      (payload) => {
+        if (cancelled) return;
+        const newMsg = fromDB<Message>(payload.new);
+        if (!cachedMsgs.find(m => m.id === newMsg.id)) {
+          cachedMsgs = [...cachedMsgs, newMsg];
+          callback([...cachedMsgs]);
+        }
+      }
+    )
+    .on(
+      'postgres_changes',
+      { event: 'UPDATE', schema: 'public', table: MESSAGES, filter: `conversation_id=eq.${conversationId}` },
+      (payload) => {
+        if (cancelled) return;
+        const updatedMsg = fromDB<Message>(payload.new);
+        cachedMsgs = cachedMsgs.map(m => m.id === updatedMsg.id ? updatedMsg : m);
+        callback([...cachedMsgs]);
+      }
+    )
+    .on(
+      'postgres_changes',
+      { event: 'DELETE', schema: 'public', table: MESSAGES, filter: `conversation_id=eq.${conversationId}` },
+      (payload) => {
+        if (cancelled) return;
+        cachedMsgs = cachedMsgs.filter(m => m.id !== payload.old.id);
+        callback([...cachedMsgs]);
+      }
     )
     .subscribe();
 
@@ -130,18 +155,38 @@ export const loadOlderMessages = async (
 // ─── Mark Messages as Read ───────────────────────────────────────────────────
 // Debounced to avoid multiple DB calls when subscription fires multiple times
 const _markRead = async (conversationId: string, userId: string) => {
-  await supabase
+  const { error: msgErr } = await supabase
     .from(MESSAGES)
     .update({ is_read: true })
     .eq('conversation_id', conversationId)
     .eq('receiver_id', userId)
     .eq('is_read', false);
+
+  if (msgErr) {
+    console.error('Error marking messages as read:', msgErr);
+  }
+
+  try {
+    const { data: conv } = await supabase
+      .from(CONVERSATIONS)
+      .select('*')
+      .eq('id', conversationId)
+      .maybeSingle();
+
+    if (conv && conv.last_message && conv.last_message.receiver_id === userId && !conv.last_message.is_read) {
+      const updatedLastMsg = { ...conv.last_message, is_read: true };
+      await supabase
+        .from(CONVERSATIONS)
+        .update({ last_message: updatedLastMsg })
+        .eq('id', conversationId);
+    }
+  } catch (err) {
+    console.error('Error updating conversation last_message:', err);
+  }
 };
 
-const _markReadThrottled = throttle(_markRead as (...args: unknown[]) => void, 3000);
-
-export const markMessagesAsRead = (conversationId: string, userId: string) => {
-  (_markReadThrottled as (a: string, b: string) => void)(conversationId, userId);
+export const markMessagesAsRead = async (conversationId: string, userId: string) => {
+  await _markRead(conversationId, userId);
 };
 
 // ─── User Online Status ───────────────────────────────────────────────────────
@@ -152,6 +197,25 @@ export const setUserOnlineStatus = async (userId: string, role: string, isOnline
     .from(table)
     .update({ is_online: isOnline, last_active: Date.now() })
     .eq('id', userId);
+};
+
+export const setUserOfflineBeacon = (userId: string, role: string) => {
+  if (!userId || !role) return;
+  const table = role === 'student' ? 'students' : 'teachers';
+  const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/${table}?id=eq.${userId}`;
+  const apiKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+
+  fetch(url, {
+    method: 'PATCH',
+    keepalive: true,
+    headers: {
+      'Content-Type': 'application/json',
+      'apikey': apiKey,
+      'Authorization': `Bearer ${apiKey}`,
+      'Prefer': 'return=minimal'
+    },
+    body: JSON.stringify({ is_online: false }),
+  }).catch(() => {});
 };
 
 // Heartbeat: call this periodically while the user is active
@@ -172,8 +236,8 @@ export const subscribeToUserOnlineStatus = (
   role: string,
   callback: (isOnline: boolean, lastActive?: number) => void
 ) => {
-  // Online = is_online flag OR was active within 3 minutes
-  const ONLINE_WINDOW_MS = 3 * 60 * 1000;
+  // Online = is_online flag OR was active within 1 minute
+  const ONLINE_WINDOW_MS = 1 * 60 * 1000;
 
   const table = role === 'student' ? 'students' : 'teachers';
   const channel = supabase

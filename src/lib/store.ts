@@ -206,3 +206,49 @@ export const useStudentStore = create<StudentStore>()(
     }
   )
 );
+
+// ==========================================
+// CROSS-TAB SYNCHRONIZATION
+// ==========================================
+if (typeof window !== 'undefined') {
+  const syncChannel = new BroadcastChannel('an-academy-sync-channel');
+  let isTeacherSyncing = false;
+  let isStudentSyncing = false;
+
+  // Sync persisted state (localStorage changes)
+  window.addEventListener('storage', (e) => {
+    if (e.key === 'an-academy-teacher') {
+      useTeacherStore.persist.rehydrate();
+    }
+    if (e.key === 'an-academy-student') {
+      useStudentStore.persist.rehydrate();
+    }
+  });
+
+  // Listen to local state changes and broadcast them
+  useTeacherStore.subscribe((state) => {
+    if (isTeacherSyncing) return;
+    const serializableState = Object.fromEntries(Object.entries(state).filter(([_, v]) => typeof v !== 'function'));
+    try { syncChannel.postMessage({ type: 'TEACHER_SYNC', state: serializableState }); } catch(e){}
+  });
+
+  useStudentStore.subscribe((state) => {
+    if (isStudentSyncing) return;
+    const serializableState = Object.fromEntries(Object.entries(state).filter(([_, v]) => typeof v !== 'function'));
+    try { syncChannel.postMessage({ type: 'STUDENT_SYNC', state: serializableState }); } catch(e){}
+  });
+
+  // Receive updates from other tabs
+  syncChannel.onmessage = (e) => {
+    if (e.data.type === 'TEACHER_SYNC' && e.data.state) {
+      isTeacherSyncing = true;
+      useTeacherStore.setState(e.data.state);
+      setTimeout(() => { isTeacherSyncing = false; }, 50);
+    }
+    if (e.data.type === 'STUDENT_SYNC' && e.data.state) {
+      isStudentSyncing = true;
+      useStudentStore.setState(e.data.state);
+      setTimeout(() => { isStudentSyncing = false; }, 50);
+    }
+  };
+}

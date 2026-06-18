@@ -2,15 +2,14 @@
 
 import React, { useMemo, useState } from 'react';
 import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
-  PieChart, Pie, Cell, Legend
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, 
+  ResponsiveContainer, PieChart, Pie, Cell, Legend 
 } from 'recharts';
+
 import { 
   Download, TrendingUp, Users, DollarSign, Calendar, 
   ArrowUpRight, AlertCircle, Printer
 } from 'lucide-react';
-
-// Removed top-level import to prevent SSR errors
 
 interface FinancialReportsProps {
   data: any[];
@@ -21,6 +20,11 @@ interface FinancialReportsProps {
 const COLORS = ['#8884d8', '#82ca9d', '#ffc658', '#ff8042', '#0088fe', '#00C49F'];
 
 export const FinancialReports: React.FC<FinancialReportsProps> = ({ data, type, title }) => {
+  const [mounted, setMounted] = useState(false);
+  React.useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const stats = useMemo(() => {
     const totalRevenue = data.reduce((sum, item) => sum + (item.totalPaid || 0), 0);
     const monthlyRevenue = data.reduce((sum, item) => sum + (item.subPrice || 0), 0);
@@ -88,6 +92,10 @@ export const FinancialReports: React.FC<FinancialReportsProps> = ({ data, type, 
     link.click();
     document.body.removeChild(link);
   };
+
+  if (!mounted) {
+    return <div className="h-[300px] w-full bg-white/5 animate-pulse rounded-2xl flex items-center justify-center text-gray-400 font-cairo">جاري تحميل التقارير المالية...</div>;
+  }
 
   return (
     <div className="space-y-8 animate-fade-in" dir="rtl">

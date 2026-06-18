@@ -196,7 +196,7 @@ export default function AppSettingsPage() {
                   <label className="block text-xs mb-1 opacity-70">صورة السلايد</label>
                   {slide.imageUrl ? (
                     <div className="relative">
-                      <img src={slide.imageUrl} alt="" className="w-full h-32 object-cover rounded-xl border border-white/10" />
+                      <img loading="lazy" src={slide.imageUrl} alt="" className="w-full h-32 object-cover rounded-xl border border-white/10" />
                       <button onClick={() => updateSlide(slide.id, { imageUrl: '' })}
                         className="absolute top-2 left-2 w-7 h-7 rounded-full bg-black/60 flex items-center justify-center text-red-400">
                         <X size={14} />
@@ -217,7 +217,39 @@ export default function AppSettingsPage() {
                   <div>
                     <label className="block text-xs mb-1 opacity-70">رابط الضغط (اختياري)</label>
                     <input className="input-base w-full text-sm" value={slide.link || ''}
-                      onChange={e => updateSlide(slide.id, { link: e.target.value })} placeholder="https://..." />
+                      onChange={e => updateSlide(slide.id, { link: e.target.value })} 
+                      onBlur={async (e) => {
+                        const val = e.target.value;
+                        if (!val) return; // Allow updating if they changed the link
+                        
+                        if (val.includes('youtube.com') || val.includes('youtu.be')) {
+                          const videoIdMatch = val.match(/(?:v=|youtu\.be\/)([^&]+)/);
+                          if (videoIdMatch && videoIdMatch[1]) {
+                            updateSlide(slide.id, { imageUrl: `https://img.youtube.com/vi/${videoIdMatch[1]}/maxresdefault.jpg` });
+                            return;
+                          }
+                          
+                          try {
+                            const res = await fetch(`/api/youtube?url=${encodeURIComponent(val)}`);
+                            if (res.ok) {
+                              const data = await res.json();
+                              const highResAvatar = data.avatar ? data.avatar.replace(/=s\d+-c-/, '=s1080-c-').replace(/=s\d+-c$/, '=s1080-c') : undefined;
+                              updateSlide(slide.id, { 
+                                imageUrl: data.banner || highResAvatar || slide.imageUrl,
+                                youtubeData: {
+                                  banner: data.banner,
+                                  avatar: highResAvatar,
+                                  title: data.title,
+                                  subs: data.subs
+                                }
+                              });
+                            }
+                          } catch (err) {
+                            console.error('Failed to fetch channel data', err);
+                          }
+                        }
+                      }}
+                      placeholder="https://..." />
                   </div>
                 </div>
               </div>
@@ -279,8 +311,8 @@ export default function AppSettingsPage() {
 
       {/* ─── Edit Category Modal ─── */}
       {editingCat && (
-        <div className="modal-overlay" onClick={() => setEditingCat(null)}>
-          <div className="modal-content modal-content-sm border border-gold/30">
+        <div className="modal-overlay" >
+          <div className="modal-content modal-content-sm border border-gold/30 p-6 space-y-4" onClick={(e) => e.stopPropagation()} dir="rtl">
             <h3 className="text-xl font-bold font-cairo">تعديل القسم</h3>
 
             <div className="grid grid-cols-2 gap-3">
@@ -295,6 +327,7 @@ export default function AppSettingsPage() {
                   onChange={e => setEditingCat(c => c ? { ...c, targetTab: e.target.value as any } : c)}>
                   <option value="exams">اختباراتي</option>
                   <option value="courses">الكورسات</option>
+                  <option value="youtube">اليوتيوب</option>
                   <option value="assignments">الواجبات</option>
                   <option value="results">نتائجي</option>
                   <option value="messages">الرسائل</option>

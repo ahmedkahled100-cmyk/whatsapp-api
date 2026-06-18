@@ -30,35 +30,48 @@ export const getSettings = async (teacherId: string): Promise<Settings | null> =
   return settings;
 };
 
+export const getAllSettings = async (): Promise<Settings[]> => {
+  const { data, error } = await supabase.from(SETTINGS).select('*');
+  if (error) throw error;
+  return data.map((d: any) => {
+    const settings = fromDB<Settings>(d);
+    if (settings.paymentMethods && settings.paymentMethods.includes('|SET:')) {
+      try {
+        const match = settings.paymentMethods.match(/\|SET:(.*?)\|/);
+        if (match && match[1]) {
+          const extras = JSON.parse(match[1]);
+          Object.assign(settings, extras);
+          settings.paymentMethods = settings.paymentMethods.replace(/\|SET:.*?\|/, '').trim();
+        }
+      } catch (e) {
+        console.error('Failed to parse settings extras', e);
+      }
+    }
+    return settings;
+  });
+};
 export const saveSettings = async (settings: Partial<Settings> & { teacherId: string }) => {
   if (!settings.teacherId || settings.teacherId === 'unknown_teacher' || settings.teacherId === 'undefined') {
     console.error('saveSettings: Invalid teacherId', settings.teacherId);
     return;
   }
-  const payload = toDB({ ...settings });
   
-  // Serialize extras into payment_methods to prevent data loss (Workaround for missing columns)
-  const extraPayload: any = {};
-  const possibleExtras = ['whatsappNumber', 'whatsappEnabled', 'whatsappTemplate'];
+  // Workaround for missing columns: pack them into paymentMethods
+  const extras: any = {};
+  if (settings.youtubeChannelUrl !== undefined) extras.youtubeChannelUrl = settings.youtubeChannelUrl;
   
-  possibleExtras.forEach(key => {
-    if ((settings as any)[key] !== undefined) {
-      extraPayload[key] = (settings as any)[key];
-    }
-  });
-
-  if (Object.keys(extraPayload).length > 0) {
-    const serialized = `|SET:${JSON.stringify(extraPayload)}|`;
-    payload.payment_methods = payload.payment_methods 
-      ? `${payload.payment_methods} ${serialized}` 
-      : serialized;
+  const settingsCopy = { ...settings };
+  if (Object.keys(extras).length > 0) {
+    const pm = settingsCopy.paymentMethods || '';
+    const basePm = pm.replace(/\|SET:.*?\|/, '').trim();
+    settingsCopy.paymentMethods = `${basePm} |SET:${JSON.stringify(extras)}|`;
+    delete settingsCopy.youtubeChannelUrl;
   }
 
+  const payload = toDB(settingsCopy);
+  
   // teacher_password is not in the Supabase schema for the settings table
   delete payload.teacher_password;
-  // Remove possible duplicate snake_case versions that might cause 400 if columns missing
-  const fieldsToRemove = ['whatsapp_number', 'whatsapp_enabled', 'whatsapp_template'];
-  fieldsToRemove.forEach(f => delete payload[f]);
   
   Object.keys(payload).forEach(k => payload[k] === undefined && delete payload[k]);
 

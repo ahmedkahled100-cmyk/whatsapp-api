@@ -16,7 +16,7 @@ import {
   LayoutDashboard, PlusCircle, FileText, Users, BookOpen,
   BarChart2, ClipboardList, Calendar, Bot, TrendingUp,
   CreditCard, BookMarked, Settings, LogOut, Bell, Menu, X, Clock, DollarSign,
-  GraduationCap, Database, ChevronLeft, Zap, ShieldCheck, ExternalLink, MessageSquare, Gamepad2, AlertCircle
+  GraduationCap, Database, ChevronLeft, Zap, ShieldCheck, ExternalLink, MessageSquare, Gamepad2, AlertCircle, Youtube
 } from 'lucide-react';
 import { SubscriptionExpiredOverlay } from '@/components/SubscriptionExpiredOverlay';
 import { GlobalChatWidget } from '@/components/shared/GlobalChatWidget';
@@ -40,6 +40,7 @@ const NAV_ITEMS = [
   { href: '/teacher/subscriptions', icon: CreditCard, label: 'الاشتراكات', section: 'students', permission: 'subscriptions' },
   { href: '/teacher/finances', icon: DollarSign, label: 'الماليات', section: 'students', permission: 'finances' },
   { href: '/teacher/courses', icon: BookMarked, label: 'المناهج', section: 'content', permission: 'courses' },
+  { href: '/teacher/youtube', icon: Youtube, label: 'قناة اليوتيوب', section: 'content', permission: 'courses' },
   { href: '/teacher/assignments', icon: ClipboardList, label: 'الواجبات', section: 'content', permission: 'assignments' },
   { href: '/teacher/calendar', icon: Calendar, label: 'التقويم', section: 'content', permission: 'calendar' },
   { href: '/teacher/schedule', icon: Calendar, label: 'جدول الحصص', section: 'content', permission: 'schedule' },
@@ -137,6 +138,12 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
 
     // Real-time subscriptions — initial fetch + realtime updates
     setSyncStatus('syncing');
+    
+    // Fallback timeout to prevent indefinite "syncing" UI state
+    const syncTimeout = setTimeout(() => {
+      setSyncStatus(prev => prev === 'syncing' ? 'synced' : prev);
+    }, 5000);
+
     let lastNotifIds = new Set<string>();
     let isFirstLoad = true;
 
@@ -194,6 +201,7 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
     return () => {
       unsubs.forEach(u => u());
       clearInterval(pollInterval);
+      clearTimeout(syncTimeout);
     };
   }, [user?.id, user?.role, activeTeacherId, mounted]);
 
@@ -203,6 +211,35 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
       getSuperAdmin().then(admin => setAdminInfo(admin)).catch(() => {});
     }
   }, [user?.role]);
+
+  // Check for expiring subscription (5 days warning)
+  useEffect(() => {
+    if (user?.role === 'teacher' && user.subType !== 'free' && user.subExpiry) {
+      const daysLeft = Math.ceil((user.subExpiry - Date.now()) / (1000 * 60 * 60 * 24));
+      
+      if (daysLeft > 0 && daysLeft <= 5) {
+        const warningKey = `sub_warning_${user.id}`;
+        const lastWarning = localStorage.getItem(warningKey);
+        const now = Date.now();
+        
+        // Warn once every 24 hours
+        if (!lastWarning || now - parseInt(lastWarning) > 24 * 60 * 60 * 1000) {
+          localStorage.setItem(warningKey, now.toString());
+          
+          import('@/lib/db').then(({ dispatchNotification }) => {
+            dispatchNotification({
+              teacherId: user.id,
+              msg: `⚠️ تنبيه هام: سينتهي اشتراكك في المنصة خلال ${daysLeft} أيام. يرجى تجديد الاشتراك لتجنب إيقاف الحساب.`,
+              type: 'warning',
+              channels: { inApp: true, whatsapp: !!(user.phone || user.username) },
+              whatsappNumbers: (user.phone || user.username) ? [(user.phone || user.username)!] : [],
+              actionPath: '/teacher/settings'
+            }).catch(console.error);
+          });
+        }
+      }
+    }
+  }, [user?.id, user?.subExpiry, user?.subType, user?.role, user?.phone, user?.username]);
 
   useEffect(() => {
     if (settings?.primaryColor) {
@@ -430,7 +467,7 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
           {!isCollapsed && (
             <div className="flex items-center gap-3 p-2 group animate-fade-in">
                {user.imageUrl ? (
-                 <img src={user.imageUrl} alt={user.name} className="w-10 h-10 rounded-full border-2 border-gold/30 object-cover shadow-lg" />
+                 <img loading="lazy" src={user.imageUrl} alt={user.name} className="w-10 h-10 rounded-full border-2 border-gold/30 object-cover shadow-lg" />
                ) : (
                  <div className="w-10 h-10 rounded-full bg-gold/10 flex items-center justify-center text-gold font-black border border-gold/20">
                     {user.name?.[0]}
@@ -530,45 +567,40 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
           </div>
         </header>
 
-        <div className="p-4 lg:p-8 pb-32 lg:pb-8 w-full">
+        <div className="p-4 lg:p-8 pb-32 lg:pb-8 w-full max-w-full overflow-x-hidden">
           {/* Subscription Banner */}
-          {user.role === 'teacher' && user.subType !== 'free' && user.subExpiry && user.subExpiry < Date.now() + (7 * 24 * 60 * 60 * 1000) && (
+          {user.role === 'teacher' && user.subType !== 'free' && user.subExpiry && user.subExpiry < Date.now() + (5 * 24 * 60 * 60 * 1000) && (
             (() => {
               const daysLeft = Math.ceil((user.subExpiry - Date.now()) / (24 * 60 * 60 * 1000));
-              const isUrgent = daysLeft <= 3;
+              const isUrgent = daysLeft <= 5;
               const isExpired = user.subExpiry < Date.now();
               return (
                 <div className={`mb-6 p-4 rounded-2xl border flex flex-col md:flex-row items-center justify-between gap-4 animate-pulse-subtle ${
                   isExpired ? 'bg-red-500/20 border-red-500/30 text-red-500' : 
-                  isUrgent ? 'bg-orange-600/20 border-orange-500/40 text-orange-400' :
-                  'bg-gold/10 border-gold/20 text-gold'
+                  'bg-orange-600/20 border-orange-500/40 text-orange-400'
                 }`}>
                   <div className="flex items-center gap-3">
                     <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
                       isExpired ? 'bg-red-500 text-white' : 
-                      isUrgent ? 'bg-orange-500 text-white' :
-                      'bg-gold text-black'
+                      'bg-orange-500 text-white'
                     }`}>
-                      {isUrgent || isExpired ? <AlertCircle size={20} /> : <CreditCard size={20} />}
+                      {isExpired ? <AlertCircle size={20} /> : <AlertCircle size={20} />}
                     </div>
                     <div>
                       <h3 className="font-bold text-sm">
                         {isExpired ? 'انتهى اشتراك المنصة الخاص بك' : 
-                         isUrgent ? `انذار: اشتراكك ينتهي خلال ${daysLeft} أيام!` : 
-                         'اشتراكك ينتهي قريباً'}
+                         `تنبيه تلقائي: اشتراكك ينتهي خلال ${daysLeft} أيام!`}
                       </h3>
                       <p className="text-xs opacity-80">
                         {isExpired ? 'يرجى تجديد الاشتراك لاستمرار الخدمة.' : 
-                         isUrgent ? 'يرجى التجديد الآن لتجنب توقف حسابك بشكل فوري.' :
-                         `ينتهي في ${new Date(user.subExpiry).toLocaleDateString('ar-EG')}`}
+                         'يرجى التجديد الآن لتجنب توقف حسابك بشكل فوري.'}
                       </p>
                     </div>
                   </div>
                   {user.subLink && (
                     <a href={user.subLink} target="_blank" rel="noopener noreferrer" className={`px-6 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
                       isExpired ? 'bg-red-500 text-white hover:bg-red-600' : 
-                      isUrgent ? 'bg-orange-500 text-white hover:bg-orange-600' :
-                      'bg-gold text-black hover:bg-gold/80'
+                      'bg-orange-500 text-white hover:bg-orange-600'
                     }`}>
                       تجديد الاشتراك الآن <ExternalLink size={14} />
                     </a>

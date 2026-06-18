@@ -280,6 +280,12 @@ export default function ILovePDFPage() {
   const [showPreview, setShowPreview] = useState(false);
   const transferMenuRef = useRef<HTMLDivElement>(null);
   
+  // Drag & Drop State
+  const [isDragging, setIsDragging] = useState(false);
+
+  // Live Preview State (before processing)
+  const [livePreviewUrl, setLivePreviewUrl] = useState<string | null>(null);
+
   // OCR Text Extraction State
   const [extractedText, setExtractedText] = useState<string>('');
   const [isExtractingText, setIsExtractingText] = useState(false);
@@ -312,6 +318,13 @@ export default function ILovePDFPage() {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Revoke live preview URL when unmounted or changed to avoid memory leaks
+  useEffect(() => {
+    return () => {
+      if (livePreviewUrl) URL.revokeObjectURL(livePreviewUrl);
+    };
+  }, [livePreviewUrl]);
 
   // Logic to extract text after OCR is completed
   useEffect(() => {
@@ -349,8 +362,7 @@ export default function ILovePDFPage() {
     }
   }, [status, tool, extractedText, isExtractingText]);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selected = Array.from(e.target.files || []);
+  const processSelectedFiles = (selected: File[]) => {
     if (!selected.length) return;
     const valid = selected.filter(f =>
       tool === 'imagepdf' ? f.type.startsWith('image/') : f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf')
@@ -359,9 +371,35 @@ export default function ILovePDFPage() {
     if (valid.length > 0) {
       addFiles(valid);
       setStatus({ stage: 'idle', progress: 0, message: '', originalSize: [...files, ...valid].reduce((s, f) => s + f.size, 0) });
-      if (tool === 'editpdf') setTextElements([]); // reset elements for new file
+      if (tool === 'editpdf') setTextElements([]);
+      
+      // Set live preview for the first valid file if not image
+      if (valid[0].type === 'application/pdf') {
+        if (livePreviewUrl) URL.revokeObjectURL(livePreviewUrl);
+        setLivePreviewUrl(URL.createObjectURL(valid[0]));
+      }
     }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    processSelectedFiles(Array.from(e.target.files || []));
     e.target.value = '';
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    processSelectedFiles(Array.from(e.dataTransfer.files));
   };
 
   const handleTransfer = async (dest: typeof TRANSFER_DESTINATIONS[0]) => {
@@ -430,9 +468,21 @@ export default function ILovePDFPage() {
               className="input-base text-sm h-8 w-full" />
           </div>
         </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-[10px] font-bold text-muted/70 mb-1.5 block uppercase tracking-wider">الزاوية ({settings.rotation || 0}°)</label>
+            <input type="range" min="0" max="360" step="15" value={settings.rotation || 0}
+              onChange={e => setToolSettings({ ...settings, rotation: parseInt(e.target.value) })} className="w-full accent-amber-400" />
+          </div>
+          <div className="flex items-center gap-2 mt-4">
+            <input type="checkbox" id="mosaicToggle" checked={settings.mosaic || false}
+              onChange={e => setToolSettings({ ...settings, mosaic: e.target.checked })} className="w-4 h-4 accent-amber-400" />
+            <label htmlFor="mosaicToggle" className="text-[10px] font-bold text-muted/70 cursor-pointer">تكرار كامل الصفحة</label>
+          </div>
+        </div>
         <div>
-          <label className="text-[10px] font-bold text-muted/70 mb-1.5 block uppercase tracking-wider">الموضع</label>
-          <div className="grid grid-cols-3 gap-1 bg-black/30 p-1.5 rounded-xl border border-white/5">
+          <label className="text-[10px] font-bold text-muted/70 mb-1.5 block uppercase tracking-wider">الموضع (في حال عدم التكرار)</label>
+          <div className="grid grid-cols-3 gap-1 bg-black/30 p-1.5 rounded-xl border border-white/5 opacity-100 transition-opacity" style={{ opacity: settings.mosaic ? 0.4 : 1, pointerEvents: settings.mosaic ? 'none' : 'auto' }}>
             {[{ id: 'Top Left', icon: AlignLeft }, { id: 'Top Center', icon: AlignCenter }, { id: 'Top Right', icon: AlignRight },
               { id: 'Center Left', icon: AlignLeft }, { id: 'Center', icon: AlignCenter }, { id: 'Center Right', icon: AlignRight },
               { id: 'Bottom Left', icon: AlignLeft }, { id: 'Bottom Center', icon: AlignCenter }, { id: 'Bottom Right', icon: AlignRight }]
@@ -530,8 +580,8 @@ export default function ILovePDFPage() {
         <div className="space-y-2">
           {[
             { id: 'Word', label: 'مستند Word', desc: 'ملف .docx قابل للتعديل', icon: '📝', available: true },
-            { id: 'Pptx', label: 'عرض PowerPoint', desc: 'ملف .pptx للعروض', icon: '📊', available: false },
-            { id: 'xlsx', label: 'جدول Excel', desc: 'ملف .xlsx للجداول', icon: '📈', available: false },
+            { id: 'Pptx', label: 'عرض PowerPoint', desc: 'ملف .pptx للعروض', icon: '📊', available: true },
+            { id: 'xlsx', label: 'جدول Excel', desc: 'ملف .xlsx للجداول', icon: '📈', available: true },
           ].map((fmt) => {
             const isSelected = settings.outputType === fmt.id || (!settings.outputType && fmt.id === 'Word');
             return (
@@ -551,7 +601,7 @@ export default function ILovePDFPage() {
         </div>
         <div className="bg-blue-500/5 border border-blue-500/10 rounded-xl p-3 flex gap-2">
           <Info size={13} className="text-blue-400 shrink-0 mt-0.5" />
-          <p className="text-[10px] text-muted/70 leading-relaxed">سيتم تحويل ملف PDF إلى مستند Word يمكن فتحه وتعديله في Microsoft Word أو Google Docs.</p>
+          <p className="text-[10px] text-muted/70 leading-relaxed">سيتم تحويل ملف PDF إلى المستند المختار بنفس التنسيقات والجداول لتتمكن من تعديله بسهولة.</p>
         </div>
       </div>
     );
@@ -673,6 +723,75 @@ export default function ILovePDFPage() {
     const savings = getSavingsPercent(originalSize, compressedSize);
 
     if (stage === 'idle') {
+      if (files.length > 0 && livePreviewUrl && tool !== 'editpdf') {
+        const renderWatermarkPreview = () => {
+          if (tool !== 'watermark') return null;
+          
+          const pos = settings.position || 'Center';
+          let alignClass = 'items-center justify-center';
+          if (pos.includes('Top')) alignClass = alignClass.replace('items-center', 'items-start');
+          if (pos.includes('Bottom')) alignClass = alignClass.replace('items-center', 'items-end');
+          if (pos.includes('Left')) alignClass = alignClass.replace('justify-center', 'justify-start');
+          if (pos.includes('Right')) alignClass = alignClass.replace('justify-center', 'justify-end');
+
+          const rotation = settings.rotation || 0;
+          const transparency = settings.transparency || 50;
+          const fontSize = settings.size || 40;
+          const wmText = settings.text || 'AN Academy';
+          
+          if (settings.mosaic) {
+             return (
+               <div className="absolute inset-0 z-10 pointer-events-none flex flex-wrap items-center justify-center overflow-hidden" style={{ gap: '60px', opacity: transparency / 100, padding: '20px' }}>
+                 {Array.from({length: 30}).map((_, i) => (
+                    <div key={i} style={{ 
+                        fontSize: `${fontSize}px`, 
+                        fontWeight: 'bold', 
+                        transform: `rotate(${rotation}deg)`, 
+                        color: 'rgba(0,0,0,0.4)', 
+                        textShadow: '1px 1px 2px rgba(255,255,255,0.8)'
+                    }}>
+                      {wmText}
+                    </div>
+                 ))}
+               </div>
+             );
+          }
+
+          return (
+             <div className={`absolute inset-0 z-10 pointer-events-none flex ${alignClass} p-12 overflow-hidden`} style={{ opacity: transparency / 100 }}>
+                 <div style={{ 
+                     fontSize: `${fontSize}px`, 
+                     fontWeight: 'bold', 
+                     transform: `rotate(${rotation}deg)`, 
+                     color: 'rgba(0,0,0,0.4)', 
+                     textShadow: '1px 1px 2px rgba(255,255,255,0.8)'
+                 }}>
+                   {wmText}
+                 </div>
+             </div>
+          );
+        };
+
+        return (
+          <div className="flex-1 flex flex-col gap-4 h-full">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-black text-amber-400 flex items-center gap-2">
+                <Eye size={16} /> معاينة مباشرة
+              </h3>
+              <p className="text-[10px] text-muted/60">{files[0].name}</p>
+            </div>
+            <div className="flex-1 relative rounded-2xl overflow-hidden border border-white/10 bg-white" style={{ minHeight: '400px' }}>
+              {renderWatermarkPreview()}
+              <iframe
+                src={`${livePreviewUrl}#toolbar=0&navpanes=0`}
+                className="w-full h-full min-h-[400px] border-none block relative z-0"
+                title="Live Preview"
+              />
+            </div>
+          </div>
+        );
+      }
+
       return (
         <div className="flex-1 flex flex-col items-center justify-center text-center gap-4 py-10">
           <div className={`w-24 h-24 rounded-full ${currentTool.bg} border ${currentTool.border} flex items-center justify-center`}>
@@ -1049,10 +1168,14 @@ export default function ILovePDFPage() {
               <h2 className="text-base font-black mb-4 flex items-center gap-2">
                 <Upload size={16} className="text-amber-400" /> رفع الملفات
               </h2>
-              <label className="flex flex-col items-center justify-center gap-3 border-2 border-dashed border-white/10 rounded-2xl p-8 cursor-pointer hover:border-amber-400/40 hover:bg-amber-400/5 transition-all group">
-                <Upload size={28} className="text-muted/40 group-hover:text-amber-400 transition-colors" />
+              <label 
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                className={`flex flex-col items-center justify-center gap-3 border-2 border-dashed rounded-2xl p-8 cursor-pointer transition-all group ${isDragging ? 'border-amber-400 bg-amber-400/10' : 'border-white/10 hover:border-amber-400/40 hover:bg-amber-400/5'}`}>
+                <Upload size={28} className={`transition-colors ${isDragging ? 'text-amber-400 scale-110' : 'text-muted/40 group-hover:text-amber-400'}`} />
                 <div className="text-center">
-                  <p className="text-sm font-black">{files.length > 0 ? 'إضافة المزيد' : 'اضغط لاختيار الملفات'}</p>
+                  <p className="text-sm font-black">{files.length > 0 ? 'إضافة المزيد أو اسحب وأفلت هنا' : 'اسحب وأفلت الملفات هنا أو اضغط للاختيار'}</p>
                   <p className="text-xs text-muted/50 mt-1">{tool === 'imagepdf' ? 'صور (PNG, JPG, WEBP)' : 'ملفات PDF'}</p>
                 </div>
                 <input type="file" className="hidden" multiple accept={tool === 'imagepdf' ? 'image/*' : '.pdf,application/pdf'} onChange={handleFileChange} />

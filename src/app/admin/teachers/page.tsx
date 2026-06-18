@@ -5,11 +5,12 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { getTeachers, saveTeacher, deleteTeacher, updateSuperAdminCredentials, getSuperAdmin, getSettings, deleteRegistrationRequest, dispatchNotification, getAllAssistantProfiles, saveAssistantProfile } from '@/lib/db';
 import { TeacherUser, Settings as PlatformSettings, AssistantProfile } from '@/types';
 import { showToast } from '@/lib/toast';
-import { UserPlus, Shield, User, Clock, Edit2, Trash2, X, Save, Lock, LayoutDashboard, Bell, FileText, Users, CreditCard, BookMarked, ClipboardList, Calendar, Bot, BarChart2, Check, ExternalLink, CheckCircle2, XCircle, Printer, Send, TrendingUp, DollarSign, UserX, ArrowRight, RefreshCw } from 'lucide-react';
+import { UserPlus, Shield, User, Clock, Edit2, Trash2, X, Save, Lock, LayoutDashboard, Bell, FileText, Users, CreditCard, BookMarked, ClipboardList, Calendar, Bot, BarChart2, Check, ExternalLink, CheckCircle2, XCircle, Printer, Send, TrendingUp, DollarSign, UserX, ArrowRight, RefreshCw, Phone, MessageCircle, AlertCircle } from 'lucide-react';
 import { useTeacherStore } from '@/lib/store';
 import { ImageModal } from '@/components/ImageModal';
 import { cleanWhatsAppPhone } from '@/lib/utils';
 import { FinancialReports } from '@/components/FinancialReports';
+import { TeacherLedgerModal } from '@/components/admin/TeacherLedgerModal';
 import { supabase } from '@/lib/supabase';
 import { ASSISTANTS_PROFILES } from '@/lib/db/supabase/hr';
 
@@ -38,9 +39,25 @@ export default function ManageTeachersPage() {
   const [saving, setSaving] = useState(false);
   const [teacherSearch, setTeacherSearch] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [ledgerTeacher, setLedgerTeacher] = useState<TeacherUser | null>(null);
+  const [suspendModal, setSuspendModal] = useState<{ isOpen: boolean; teacher: TeacherUser | null; reason: string }>({ isOpen: false, teacher: null, reason: '' });
   
   // Image Modal state
   const [selectedImg, setSelectedImg] = useState<{ src: string, alt: string } | null>(null);
+
+  // Pending Approval State for Teachers Join Requests
+  const [pendingApproval, setPendingApproval] = useState<any | null>(null);
+  const [approvalForm, setApprovalForm] = useState({
+    code: '',
+    password: '',
+    subType: 'monthly' as 'monthly' | 'yearly' | 'free',
+    subPrice: 0,
+    subStart: '',
+    subExpiry: '',
+    name: '',
+    subject: '',
+    phone: ''
+  });
 
   const [form, setForm] = useState({
     name: '',
@@ -161,11 +178,14 @@ export default function ManageTeachersPage() {
         ? { ...editingTeacher, ...form, id: editingTeacher.id }
         : { ...form, isActive: true, createdAt: Date.now() };
 
-      // Optimistic update for immediate UI response
+      await saveTeacher(data as any);
+
+      // Update UI only after success
       setTeachers(prev => {
         if (editingTeacher) {
           return prev.map(t => t.id === editingTeacher.id ? data as TeacherUser : t);
         } else {
+          // Temporarily use Date.now as ID if not fully refetched
           return [...prev, { ...data, id: 'temp-' + Date.now() } as TeacherUser];
         }
       });
@@ -177,45 +197,138 @@ export default function ManageTeachersPage() {
         subType: 'free', subExpiry: null, subLink: '', subPrice: 0, imageUrl: '', subject: ''
       });
 
-      await saveTeacher(data as any);
       showToast(editingTeacher ? 'تم تحديث الحساب' : 'تمت إضافة الحساب بنجاح');
       void loadData(false);
 
-    } catch (err) {
-      showToast('حدث خطأ');
+    } catch (err: any) {
+      const msg = err.message || 'حدث خطأ';
+      showToast(msg);
+      
+      // Auto-revert the specific duplicate field to original if editing
+      if (editingTeacher) {
+        if (msg.includes('الكود')) {
+          setForm(f => ({ ...f, code: editingTeacher.code || '' }));
+        }
+        if (msg.includes('اسم المستخدم')) {
+          setForm(f => ({ ...f, username: editingTeacher.username || '' }));
+        }
+      }
     } finally {
       setSubmitting(false);
     }
   };
   
-  const handleApproveRequest = async (req: any) => {
-    if (!confirm(`هل أنت متأكد من الموافقة على انضمام ${req.name}؟`)) return;
+  const calculateExpiryDate = (startStr: string, type: 'monthly' | 'yearly' | 'free') => {
+    if (type === 'free') return '';
+    const date = new Date(startStr);
+    if (isNaN(date.getTime())) return '';
+    if (type === 'yearly') {
+      date.setFullYear(date.getFullYear() + 1);
+    } else {
+      date.setMonth(date.getMonth() + 1);
+    }
+    return date.toISOString().split('T')[0];
+  };
+
+  const handleApprovalTypeChange = (newType: 'monthly' | 'yearly' | 'free') => {
+    let price = 0;
+    if (newType === 'monthly') {
+      price = platformSettings?.monthlyPrice || 0;
+    } else if (newType === 'yearly') {
+      price = platformSettings?.yearlyPrice || 0;
+    }
+
+    const startStr = approvalForm.subStart || new Date().toISOString().split('T')[0];
+    const expiryStr = calculateExpiryDate(startStr, newType);
+
+    setApprovalForm(prev => ({
+      ...prev,
+      subType: newType,
+      subPrice: price,
+      subExpiry: expiryStr
+    }));
+  };
+
+  const handleApprovalStartChange = (newStart: string) => {
+    const expiryStr = calculateExpiryDate(newStart, approvalForm.subType);
+    setApprovalForm(prev => ({
+      ...prev,
+      subStart: newStart,
+      subExpiry: expiryStr
+    }));
+  };
+
+  const handleApproveRequest = (req: any) => {
+    const defaultPassword = Math.random().toString(36).slice(-8);
+    const defaultCode = Math.random().toString(36).toUpperCase().slice(-6);
+    const subType = (req.subType as 'monthly' | 'yearly' | 'free') || 'monthly';
+    const subStart = new Date().toISOString().split('T')[0];
+    
+    // Calculate price based on type
+    let price = 0;
+    if (subType === 'monthly') {
+      price = platformSettings?.monthlyPrice || 0;
+    } else if (subType === 'yearly') {
+      price = platformSettings?.yearlyPrice || 0;
+    }
+
+    const expiryStr = calculateExpiryDate(subStart, subType);
+
+    setApprovalForm({
+      code: defaultCode,
+      password: defaultPassword,
+      subType: subType,
+      subPrice: price,
+      subStart: subStart,
+      subExpiry: expiryStr,
+      name: req.name,
+      subject: req.subject || '',
+      phone: req.phone || ''
+    });
+    setPendingApproval(req);
+  };
+
+  const finalApprove = async () => {
+    if (!pendingApproval) return;
     setSaving(true);
     try {
+        const subStart = approvalForm.subStart ? new Date(approvalForm.subStart).getTime() : Date.now();
+        const subExpiry = approvalForm.subType === 'free' ? null : (approvalForm.subExpiry ? new Date(approvalForm.subExpiry).getTime() : (subStart + 30 * 24 * 60 * 60 * 1000));
+        
         const newTeacher: Partial<TeacherUser> = {
-            name: req.name,
-            username: req.phone,
-            password: Math.random().toString(36).slice(-8),
-            code: Math.random().toString(36).toUpperCase().slice(-6),
+            name: approvalForm.name,
+            username: approvalForm.phone,
+            password: approvalForm.password,
+            code: approvalForm.code,
             role: 'teacher',
             isActive: true,
             createdAt: Date.now(),
-            subType: req.subType || 'monthly',
-            subExpiry: Date.now() + (req.subType === 'yearly' ? 365 : 30) * 24 * 60 * 60 * 1000,
-            imageUrl: req.imageUrl || '',
-            subject: req.subject || ''
+            subType: approvalForm.subType,
+            subExpiry: subExpiry,
+            subPrice: approvalForm.subPrice,
+            imageUrl: pendingApproval.imageUrl || '',
+            subject: approvalForm.subject
         };
 
         // Optimistic update for immediate UI response
         setTeachers(prev => [...prev, { ...newTeacher, id: 'temp-' + Date.now() } as TeacherUser]);
-        useTeacherStore.getState().setTeacherJoinRequests(useTeacherStore.getState().teacherJoinRequests.filter(r => r.id !== req.id));
+        useTeacherStore.getState().setTeacherJoinRequests(useTeacherStore.getState().teacherJoinRequests.filter(r => r.id !== pendingApproval.id));
 
         await saveTeacher(newTeacher as any);
-        await deleteRegistrationRequest(req.id);
+        await deleteRegistrationRequest(pendingApproval.id);
+
+        // Notify Teacher (WhatsApp)
+        try {
+          const msg = `🎉 أهلاً بك يا أستاذ ${newTeacher.name} في منصتنا!\n\nتم تفعيل حسابك كمعلم بنجاح.\n🔑 كود المعلم الخاص بك: ${newTeacher.code}\n📱 رقم الهاتف (اسم الدخول): ${newTeacher.username}\n🔑 كلمة المرور: ${newTeacher.password}\n\nنتمنى لك رحلة تعليمية مثمرة!`;
+          const cleanPhone = cleanWhatsAppPhone(newTeacher.username || '');
+          window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`, '_blank');
+        } catch (notifErr) { console.error('WhatsApp notify error:', notifErr); }
+
         showToast('✅ تم تفعيل حساب المعلم بنجاح');
+        setPendingApproval(null);
         void loadData(false);
     } catch (e: any) {
-        showToast(e.message || 'فشل تفعيل الحساب');
+        showToast('❌ فشل التفعيل: ' + e.message);
     } finally {
         setSaving(false);
     }
@@ -250,6 +363,49 @@ export default function ManageTeachersPage() {
       void loadData(false);
     } catch (e: any) { 
       showToast(e.message || 'فشل الحذف'); 
+    }
+  };
+
+  const handleSuspendConfirm = async () => {
+    if (!suspendModal.teacher || !suspendModal.reason) {
+      showToast('يرجى إدخال سبب الإيقاف');
+      return;
+    }
+    setSaving(true);
+    try {
+      const t = suspendModal.teacher;
+      await saveTeacher({ ...t, isActive: false, cancelReason: suspendModal.reason } as any);
+      
+      const msg = `⚠️ *إشعار إيقاف حساب*\n\nأهلاً أ. ${t.name}\nنؤسف إبلاغك بأنه تم إيقاف حسابك على المنصة.\n\n*السبب:* ${suspendModal.reason}\n\nيرجى التواصل مع الإدارة للمراجعة.`;
+      const phone = cleanWhatsAppPhone(t.phone || t.username);
+      window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank');
+      
+      showToast('تم إيقاف الحساب وإرسال رسالة واتساب');
+      setSuspendModal({ isOpen: false, teacher: null, reason: '' });
+      void loadData(false);
+    } catch (e) {
+      showToast('فشل الإيقاف');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleActivate = async (teacher: TeacherUser) => {
+    if (!confirm(`هل أنت متأكد من تفعيل حساب ${teacher.name}؟`)) return;
+    setSaving(true);
+    try {
+      await saveTeacher({ ...teacher, isActive: true, cancelReason: '' } as any);
+      
+      const msg = `🎉 *إشعار تفعيل حساب*\n\nأهلاً أ. ${teacher.name}\nنود إبلاغك بأنه تم إعادة تفعيل حسابك على المنصة بنجاح.\n\nنتمنى لك رحلة موفقة!`;
+      const phone = cleanWhatsAppPhone(teacher.phone || teacher.username);
+      window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank');
+      
+      showToast('تم تفعيل الحساب وإرسال رسالة واتساب');
+      void loadData(false);
+    } catch (e) {
+      showToast('فشل التفعيل');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -345,7 +501,7 @@ export default function ManageTeachersPage() {
                         <div className="flex justify-between items-start mb-4">
                             <div className="flex items-center gap-3">
                                 {req.imageUrl ? (
-                                    <img src={req.imageUrl} alt={req.name} className="w-12 h-12 rounded-2xl object-cover" />
+                                    <img loading="lazy" src={req.imageUrl} alt={req.name} className="w-12 h-12 rounded-2xl object-cover" />
                                 ) : (
                                     <div className="w-12 h-12 rounded-2xl bg-purple-500/20 flex items-center justify-center text-lg font-bold text-purple-400">{req.name[0]}</div>
                                 )}
@@ -362,6 +518,17 @@ export default function ManageTeachersPage() {
                         </div>
                         <div className="flex gap-2">
                              <button onClick={() => handleApproveRequest(req)} disabled={saving} className="flex-1 py-2 rounded-xl bg-purple-500 text-white text-xs font-black hover:bg-purple-600 transition disabled:opacity-50">تفعيل</button>
+                             <button 
+                               onClick={() => {
+                                 const cleanPhone = cleanWhatsAppPhone(req.phone);
+                                 const msg = encodeURIComponent(`مرحباً أ. ${req.name}، بخصوص طلب انضمامك كمعلم لمنصة AN Academy...`);
+                                 window.open(`https://wa.me/${cleanPhone}?text=${msg}`, '_blank');
+                               }}
+                               className="w-10 h-10 rounded-xl bg-green-500/10 text-green-500 border border-green-500/20 flex items-center justify-center hover:bg-green-500 hover:text-white transition"
+                               title="تواصل عبر واتساب"
+                             >
+                               <Phone size={16} />
+                             </button>
                              <button onClick={() => handleRejectRequest(req.id, req.name)} className="w-10 h-10 rounded-xl bg-red-500/10 text-red-500 border border-red-500/20 flex items-center justify-center hover:bg-red-500 hover:text-white transition group"><XCircle size={18} /></button>
                         </div>
                     </div>
@@ -388,7 +555,7 @@ export default function ManageTeachersPage() {
                     <div className="flex justify-between items-start mb-4">
                       <div className="flex items-center gap-3">
                         {ast.imageUrl ? (
-                          <img src={ast.imageUrl} alt={ast.name} className="w-12 h-12 rounded-2xl object-cover" />
+                          <img loading="lazy" src={ast.imageUrl} alt={ast.name} className="w-12 h-12 rounded-2xl object-cover" />
                         ) : (
                           <div className="w-12 h-12 rounded-2xl bg-amber-500/20 flex items-center justify-center text-lg font-bold text-amber-400">{ast.name[0]}</div>
                         )}
@@ -457,7 +624,7 @@ export default function ManageTeachersPage() {
                     <div className="flex justify-between items-start mb-4">
                       <div className="flex items-center gap-3">
                         {ast.imageUrl ? (
-                          <img src={ast.imageUrl} alt={ast.name} className="w-12 h-12 rounded-2xl object-cover" />
+                          <img loading="lazy" src={ast.imageUrl} alt={ast.name} className="w-12 h-12 rounded-2xl object-cover" />
                         ) : (
                           <div className="w-12 h-12 rounded-2xl bg-amber-500/10 flex items-center justify-center text-lg font-bold text-amber-400">{ast.name[0]}</div>
                         )}
@@ -526,7 +693,7 @@ export default function ManageTeachersPage() {
                   <div key={t.id} onClick={() => {
                       setEditingTeacher(t);
                       setForm({
-                        name: t.name, username: t.username, password: '', code: t.code || '', role: t.role,
+                        name: t.name, username: t.username, password: '', code: t.code || '', role: t.role === 'super_admin' ? 'super_admin' : 'teacher',
                         permissions: t.permissions || AVAILABLE_PERMISSIONS.map(p => p.id),
                         subType: t.subType || 'free', subExpiry: t.subExpiry || null, subLink: t.subLink || '', 
                         subPrice: t.subPrice || 0, imageUrl: t.imageUrl || '', subject: t.subject || ''
@@ -538,7 +705,7 @@ export default function ManageTeachersPage() {
                   >
                     <div className="flex justify-between items-start mb-4">
                       <div className="flex items-center gap-3">
-                        {t.imageUrl ? <img src={t.imageUrl} className="w-12 h-12 rounded-2xl object-cover" /> : <div className="w-12 h-12 rounded-2xl bg-purple-500/10 flex items-center justify-center font-bold text-purple-400">{t.name[0]}</div>}
+                        {t.imageUrl ? <img loading="lazy" src={t.imageUrl} className="w-12 h-12 rounded-2xl object-cover" /> : <div className="w-12 h-12 rounded-2xl bg-purple-500/10 flex items-center justify-center font-bold text-purple-400">{t.name[0]}</div>}
                         <div>
                           <h3 className="font-bold text-white truncate max-w-[120px]">{t.name}</h3>
                           <div className="text-[10px] text-gray-500 font-mono">@{t.username}</div>
@@ -551,8 +718,8 @@ export default function ManageTeachersPage() {
                         <div className="flex justify-between text-xs opacity-60"><span>المدفوع:</span> <span className="text-emerald-400 font-bold">{t.totalPaid || 0} ج.م</span></div>
                         <div className="pt-2">
                            <div className="flex justify-between text-[10px] mb-1">
-                              <span className={isExpired ? 'text-red-400' : isExpiring ? 'text-orange-400' : 'text-gray-500'}>
-                                {isExpired ? 'محظور (انتهى)' : isExpiring ? `ينتهي خلال ${days} يوم` : t.subType === 'free' ? 'صلاحية مفتوحة' : `يتبقى ${days} يوم`}
+                              <span className={!t.isActive ? 'text-red-500 font-black' : isExpired ? 'text-red-400' : isExpiring ? 'text-orange-400' : 'text-gray-500'}>
+                                {!t.isActive ? 'موقوف إدارياً' : isExpired ? 'محظور (انتهى)' : isExpiring ? `ينتهي خلال ${days} يوم` : t.subType === 'free' ? 'صلاحية مفتوحة' : `يتبقى ${days} يوم`}
                               </span>
                            </div>
                            <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
@@ -561,8 +728,16 @@ export default function ManageTeachersPage() {
                         </div>
                       </div>
                     )}
-                    <div className="flex gap-2 pt-2 border-t border-white/5">
+                    <div className="flex gap-2 pt-2 border-t border-white/5 flex-wrap">
                       <button className="flex-1 py-1.5 rounded-lg bg-white/5 text-[10px] font-bold hover:bg-purple-500 hover:text-white transition">تعديل</button>
+                      <button onClick={(e) => { e.stopPropagation(); setLedgerTeacher(t); }} className="flex-1 py-1.5 rounded-lg bg-blue-500/10 text-blue-400 text-[10px] font-bold hover:bg-blue-600 hover:text-white transition">الحسابات</button>
+                      {t.role !== 'super_admin' && (
+                        t.isActive ? (
+                           <button onClick={(e) => { e.stopPropagation(); setSuspendModal({ isOpen: true, teacher: t, reason: '' }); }} className="flex-1 py-1.5 rounded-lg bg-orange-500/10 text-orange-400 text-[10px] font-bold hover:bg-orange-600 hover:text-white transition">إيقاف</button>
+                        ) : (
+                           <button onClick={(e) => { e.stopPropagation(); handleActivate(t); }} className="flex-1 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 text-[10px] font-bold hover:bg-emerald-600 hover:text-white transition">تفعيل</button>
+                        )
+                      )}
                       {(isExpired || isExpiring) && <button onClick={(e) => { e.stopPropagation(); sendTeacherReminder(t); }} className="flex-1 py-1.5 rounded-lg bg-green-500/10 text-green-400 text-[10px] font-bold hover:bg-green-600 hover:text-white transition flex items-center justify-center gap-1"><Send size={10} /> تذكير</button>}
                       {t.role !== 'super_admin' && <button onClick={(e) => { e.stopPropagation(); handleDelete(t.id, t.name); }} className="p-1.5 rounded-lg bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white transition"><Trash2 size={12} /></button>}
                     </div>
@@ -582,7 +757,7 @@ export default function ManageTeachersPage() {
 
       {/* Add/Edit Form Overlay */}
       {(showAddForm || editingTeacher) && (
-        <div className="modal-overlay" onClick={() => { setShowAddForm(false); setEditingTeacher(null); }}>
+        <div className="modal-overlay" >
            <form 
               onSubmit={handleSubmit} 
               className="modal-content modal-content-lg border-purple-500/30" 
@@ -730,8 +905,214 @@ export default function ManageTeachersPage() {
               </div>
            </form>
         </div>
-      )
-}
+      )}
+      {/* Custom Teacher Activation Modal */}
+      {pendingApproval && (
+        <div className="modal-overlay" >
+          <div className="modal-content modal-content-lg !p-0 border border-purple-500/20 bg-[#0d1527] animate-scale-in" dir="rtl">
+            {/* Header */}
+            <div className="p-5 sm:p-6 pb-4 flex items-center justify-between border-b border-white/5 bg-purple-500/5">
+                <div className="min-w-0">
+                    <h3 className="text-xl font-black font-cairo text-purple-400 truncate">تفعيل حساب المعلم</h3>
+                    <p className="text-xs text-gray-400 mt-0.5 truncate">{pendingApproval.name}</p>
+                </div>
+                <button 
+                    onClick={() => setPendingApproval(null)} 
+                    className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-gray-400 hover:text-white hover:bg-red-500/20 hover:text-red-400 transition-all active:scale-90"
+                >
+                    <X size={20}/>
+                </button>
+            </div>
+            
+            {/* Body */}
+            <div className="p-5 sm:p-6 space-y-6 overflow-y-auto max-h-[75vh] scrollbar-thin">
+                {/* Section 1: Profile Summary */}
+                <div className="bg-white/5 p-4 rounded-2xl border border-white/10 space-y-4">
+                    <h4 className="text-xs text-purple-400 font-bold uppercase tracking-wider">الملف الشخصي للطلب</h4>
+                    <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+                        <div className="flex gap-3 items-center">
+                            {pendingApproval.imageUrl ? (
+                                <img loading="lazy" src={pendingApproval.imageUrl} alt={pendingApproval.name} className="w-14 h-14 rounded-2xl object-cover border border-purple-500/30" />
+                            ) : (
+                                <div className="w-14 h-14 rounded-2xl bg-purple-500/20 flex items-center justify-center text-xl font-bold text-purple-400">{pendingApproval.name[0]}</div>
+                            )}
+                            <div>
+                                <h4 className="font-bold text-white text-base">{pendingApproval.name}</h4>
+                                <p className="text-xs text-gray-400 font-mono mt-0.5">{pendingApproval.phone}</p>
+                                <p className="text-xs text-gray-400 mt-1">تاريخ الطلب: {new Date(pendingApproval.createdAt).toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+                            </div>
+                        </div>
+                        <div className="flex flex-col items-end gap-1.5 self-stretch sm:self-auto border-t sm:border-t-0 pt-2 sm:pt-0 border-white/5">
+                            <div className="text-xs text-gray-400"><span className="opacity-60">المادة المطلوبة:</span> <span className="text-white font-bold">{pendingApproval.subject || '—'}</span></div>
+                            <div className="text-xs text-gray-400"><span className="opacity-60">الباقة المطلوبة:</span> <span className="text-purple-400 font-black">{pendingApproval.subType === 'yearly' ? 'سنوي' : 'شهري'}</span></div>
+                        </div>
+                    </div>
+
+                    {/* Receipt & Payment Verification */}
+                    {(pendingApproval.paymentRef || pendingApproval.receiptUrl) && (
+                        <div className="mt-3 pt-3 border-t border-white/5 space-y-3">
+                            <h5 className="text-xs font-bold text-gray-300">تفاصيل الدفع والمرفقات:</h5>
+                            {pendingApproval.paymentRef && (
+                                <div className="p-3 bg-black/30 rounded-xl border border-white/5 text-xs text-gray-300">
+                                    <span className="block text-[10px] text-gray-500 font-bold mb-1">مرجع التحويل / ملاحظات:</span>
+                                    <span className="font-medium whitespace-pre-wrap">{pendingApproval.paymentRef}</span>
+                                </div>
+                            )}
+                            {pendingApproval.receiptUrl && (
+                                <button 
+                                  onClick={() => setSelectedImg({ src: pendingApproval.receiptUrl, alt: `إيصال دفع - ${pendingApproval.name}` })} 
+                                  className="w-full bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border border-purple-500/20 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition"
+                                >
+                                  <FileText size={14} /> عرض صورة إيصال الدفع المرفقة
+                                </button>
+                            )}
+                        </div>
+                    )}
+                </div>
+
+                {/* Section 2: Onboarding Credentials */}
+                <div className="space-y-4">
+                    <h4 className="text-xs text-purple-400 font-bold uppercase tracking-wider">بيانات الدخول والاعتماد</h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                            <label className="text-[11px] text-gray-400 font-bold px-1">اسم المعلم المعتمد</label>
+                            <input 
+                                type="text" 
+                                className="input-base text-sm" 
+                                value={approvalForm.name} 
+                                onChange={e => setApprovalForm({ ...approvalForm, name: e.target.value })} 
+                                placeholder="الاسم الكامل للمعلم"
+                                required
+                            />
+                        </div>
+                        <div className="space-y-1.5">
+                            <label className="text-[11px] text-gray-400 font-bold px-1">المادة الدراسية</label>
+                            <input 
+                                type="text" 
+                                className="input-base text-sm" 
+                                value={approvalForm.subject} 
+                                onChange={e => setApprovalForm({ ...approvalForm, subject: e.target.value })} 
+                                placeholder="المادة الدراسية"
+                            />
+                        </div>
+                        <div className="space-y-1.5">
+                            <label className="text-[11px] text-gray-400 font-bold px-1">كود المعلم الموحد</label>
+                            <input 
+                                type="text" 
+                                className="input-base text-sm font-mono text-purple-300 font-bold" 
+                                value={approvalForm.code} 
+                                onChange={e => setApprovalForm({ ...approvalForm, code: e.target.value.toUpperCase() })} 
+                                placeholder="كود فريد للدخول"
+                                required
+                            />
+                        </div>
+                        <div className="space-y-1.5">
+                            <label className="text-[11px] text-gray-400 font-bold px-1">كلمة المرور المؤقتة</label>
+                            <input 
+                                type="text" 
+                                className="input-base text-sm font-mono" 
+                                value={approvalForm.password} 
+                                onChange={e => setApprovalForm({ ...approvalForm, password: e.target.value })} 
+                                placeholder="كلمة المرور المؤقتة"
+                                required
+                            />
+                        </div>
+                    </div>
+                </div>
+
+                {/* Section 3: Subscription & Plan Customization */}
+                <div className="space-y-4 bg-purple-500/5 p-4 rounded-2xl border border-purple-500/10">
+                    <h4 className="text-xs text-purple-400 font-bold uppercase tracking-wider">تخصيص فترة وقيمة الاشتراك</h4>
+                    
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div className="space-y-1.5">
+                            <label className="text-[11px] text-gray-400 font-bold px-1">باقة الاشتراك</label>
+                            <select 
+                                className="input-base text-sm font-bold" 
+                                value={approvalForm.subType} 
+                                onChange={e => handleApprovalTypeChange(e.target.value as any)}
+                            >
+                                <option value="monthly">شهري</option>
+                                <option value="yearly">سنوي</option>
+                                <option value="free">مجاني (دائم)</option>
+                            </select>
+                        </div>
+                        <div className="space-y-1.5">
+                            <label className="text-[11px] text-gray-400 font-bold px-1">سعر الباقة المخصص (ج.م)</label>
+                            <input 
+                                type="number" 
+                                className="input-base text-sm font-bold text-purple-300" 
+                                value={approvalForm.subPrice} 
+                                onChange={e => setApprovalForm({ ...approvalForm, subPrice: parseFloat(e.target.value) || 0 })} 
+                            />
+                        </div>
+                        <div className="space-y-1.5">
+                            <label className="text-[11px] text-gray-400 font-bold px-1">هاتف الدخول المعتمد</label>
+                            <input 
+                                type="text" 
+                                className="input-base text-sm" 
+                                value={approvalForm.phone} 
+                                onChange={e => setApprovalForm({ ...approvalForm, phone: e.target.value })} 
+                                required
+                            />
+                        </div>
+                    </div>
+
+                    {approvalForm.subType !== 'free' && (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                            <div className="space-y-1.5">
+                                <label className="text-[11px] text-gray-400 font-bold px-1">تاريخ بداية الاشتراك</label>
+                                <div className="relative">
+                                    <Calendar size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
+                                    <input 
+                                        type="date" 
+                                        className="input-base w-full text-sm pl-10" 
+                                        value={approvalForm.subStart} 
+                                        onChange={e => handleApprovalStartChange(e.target.value)} 
+                                    />
+                                </div>
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="text-[11px] text-gray-400 font-bold px-1">تاريخ انتهاء الاشتراك</label>
+                                <div className="relative">
+                                    <Calendar size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
+                                    <input 
+                                        type="date" 
+                                        className="input-base w-full text-sm pl-10 font-bold text-purple-300" 
+                                        value={approvalForm.subExpiry} 
+                                        onChange={e => setApprovalForm({ ...approvalForm, subExpiry: e.target.value })} 
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-5 sm:p-6 border-t border-white/5 bg-white/[0.02] flex gap-3">
+              <button 
+                onClick={() => setPendingApproval(null)} 
+                className="btn-outline flex-1 h-12 text-sm justify-center border-white/10 text-gray-400 hover:text-white"
+              >
+                رجوع
+              </button>
+              <button 
+                onClick={finalApprove} 
+                disabled={saving} 
+                className="btn-gold bg-purple-600 hover:bg-purple-700 flex-1 h-12 text-sm justify-center shadow-lg active:translate-y-0.5 transition-all text-white border-none"
+              >
+                {saving ? (
+                    <div className="flex items-center gap-2">
+                        <RefreshCw size={16} className="animate-spin" />
+                        <span>جاري التفعيل...</span>
+                    </div>
+                ) : 'تأكيد وتفعيل الحساب'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Receipt Generator Section */}
       <div className="card-base p-6 bg-blue-500/5 border border-blue-500/20">
@@ -760,7 +1141,49 @@ export default function ManageTeachersPage() {
             <input type="password" className="input-base" value={adminForm.confirmPassword} onChange={e => setAdminForm({...adminForm, confirmPassword: e.target.value})} placeholder="تأكيد كلمة السر" />
             <button type="submit" disabled={saving} className="btn-gold bg-purple-600 hover:bg-purple-700 md:col-span-3 h-12 flex items-center justify-center gap-2">{saving ? 'جاري التحديث...' : 'تحديث بيانات الدخول'}</button>
          </form>
-      </div>
+       </div>
+
+      {ledgerTeacher && (
+        <TeacherLedgerModal 
+          teacher={ledgerTeacher} 
+          onClose={() => setLedgerTeacher(null)} 
+          onUpdate={(updatedTeacher) => {
+            setTeachers(prev => prev.map(t => t.id === updatedTeacher.id ? updatedTeacher : t));
+            setLedgerTeacher(updatedTeacher);
+          }}
+        />
+      )}
+
+      {suspendModal.isOpen && (
+        <div className="modal-overlay">
+          <div className="modal-content modal-content-sm">
+            <div className="modal-header">
+              <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                <AlertCircle className="text-orange-400" /> إيقاف حساب معلم
+              </h2>
+              <button onClick={() => setSuspendModal({ isOpen: false, teacher: null, reason: '' })} className="text-gray-400 hover:text-white"><X size={20}/></button>
+            </div>
+            <div className="modal-body space-y-4">
+              <p className="text-sm text-gray-300">أدخل سبب الإيقاف لإرساله عبر الواتساب إلى {suspendModal.teacher?.name}:</p>
+              <textarea 
+                className="input-base w-full h-24 resize-none" 
+                placeholder="مثال: انتهاء فترة السماح للاشتراك المتأخر..."
+                value={suspendModal.reason}
+                onChange={e => setSuspendModal({...suspendModal, reason: e.target.value})}
+              />
+              <div className="flex gap-2">
+                <button 
+                  onClick={handleSuspendConfirm}
+                  disabled={saving || !suspendModal.reason}
+                  className="btn-gold w-full bg-orange-600 hover:bg-orange-700 disabled:opacity-50"
+                >
+                  {saving ? 'جاري التنفيذ...' : 'تأكيد الإيقاف'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

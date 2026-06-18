@@ -241,9 +241,9 @@ function RegisterForm() {
           {/* Academy Info Card */}
           <div className="card-base p-5 sm:p-6 text-center bg-gradient-to-b from-white/5 to-transparent">
             {settings?.logoUrl ? (
-              <img src={settings.logoUrl} alt="Logo" className="w-16 h-16 sm:w-20 sm:h-20 mx-auto mb-3 object-contain rounded-full" />
+              <img loading="lazy" src={settings.logoUrl} alt="Logo" className="w-16 h-16 sm:w-20 sm:h-20 mx-auto mb-3 object-contain rounded-full" />
             ) : (
-              <img src="/logo.png" alt="Logo" className="w-16 h-16 sm:w-20 sm:h-20 mx-auto mb-3 object-contain rounded-full bg-white/5 p-1" />
+              <img loading="lazy" src="/logo.png" alt="Logo" className="w-16 h-16 sm:w-20 sm:h-20 mx-auto mb-3 object-contain rounded-full bg-white/5 p-1" />
             )}
             <h2 className="text-lg sm:text-xl font-black mb-1">{settings?.acadName || 'أكاديمية A-N'}</h2>
             <p className="text-gray-400 text-xs sm:text-sm">أهلاً بك في منصتنا التعليمية، نهدف لتقديم أفضل مستوى تعليمي لك.</p>

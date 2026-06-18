@@ -9,7 +9,7 @@ import { getAppHomeSettings } from '@/lib/db/app-settings';
 import type { AppHomeSettings, CategoryItem } from '@/lib/db/app-settings';
 import type { Student, Notification, Conversation, Exam, CourseMaterial, Assignment } from '@/types';
 
-type TabId = 'home' | 'courses' | 'exams' | 'assignments' | 'results' | 'messages' | 'settings' | 'profile' | 'discover' | 'link' | 'games' | 'schedule';
+type TabId = 'home' | 'courses' | 'youtube' | 'exams' | 'assignments' | 'results' | 'messages' | 'settings' | 'profile' | 'discover' | 'link' | 'games' | 'schedule' | 'leaderboard';
 
 interface Props {
   student: Student;
@@ -67,7 +67,7 @@ export function MobileStudentPortalWrapper({
     <MobileAppLayout
       studentName={student.name}
       studentImage={student.imageUrl}
-      activeTab={currentTab === 'home' || !['courses','exams','assignments','results','messages','profile'].includes(currentTab) ? 'home' : currentTab as TabId}
+      activeTab={currentTab === 'home' || !['courses','exams','youtube','assignments','results','messages','profile'].includes(currentTab) ? 'home' : currentTab as TabId}
       onTabChange={(tab) => {
         if (tab === 'home') onTabChange('home');
         else onTabChange(tab);
@@ -83,7 +83,7 @@ export function MobileStudentPortalWrapper({
       student={student}
     >
       {/* Home Tab */}
-      {(activeTab === 'home' || !['exams','courses','assignments','results','messages','profile','discover','games','schedule'].includes(activeTab)) && appSettings ? (
+      {(activeTab === 'home' || !['exams','courses','youtube','assignments','results','messages','profile','discover','games','schedule','leaderboard'].includes(activeTab)) && appSettings ? (
         <AppHome
           settings={appSettings}
           onCategoryClick={handleCategoryClick}

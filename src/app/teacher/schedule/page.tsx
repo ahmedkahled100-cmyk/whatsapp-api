@@ -49,30 +49,41 @@ export default function SchedulePage() {
       return;
     }
     
+    const tempId = crypto.randomUUID();
+    const newEvent = {
+      ...form,
+      id: tempId,
+      teacherId: user.id,
+      date: new Date().toISOString().split('T')[0], // Base date, ignored if recurring
+      createdAt: new Date().toISOString()
+    } as CalendarEvent;
+    
+    // Optimistic UI update
+    setEvents(prev => [...prev, newEvent]);
+    setShowModal(false);
+    showToast('تم حفظ الحصة بنجاح', 'success');
+
     try {
-      const newEvent = {
-        ...form,
-        teacherId: user.id,
-        date: new Date().toISOString().split('T')[0], // Base date, ignored if recurring
-        createdAt: new Date().toISOString()
-      } as CalendarEvent;
-      
-      const id = await saveCalendarEvent(newEvent);
-      setEvents([...events, { ...newEvent, id }]);
-      setShowModal(false);
-      showToast('تم حفظ الحصة بنجاح', 'success');
+      const realId = await saveCalendarEvent(newEvent);
+      setEvents(prev => prev.map(e => e.id === tempId ? { ...e, id: realId } : e));
     } catch (err) {
+      setEvents(prev => prev.filter(e => e.id !== tempId));
       showToast('فشل في حفظ الحصة', 'error');
     }
   };
 
   const handleDelete = async (id: string) => {
     if (!confirm('هل أنت متأكد من حذف هذه الحصة من الجدول؟')) return;
+    
+    // Optimistic UI update
+    const previous = [...events];
+    setEvents(prev => prev.filter(e => e.id !== id));
+    showToast('تم الحذف بنجاح', 'success');
+
     try {
       await deleteCalendarEvent(id);
-      setEvents(events.filter(e => e.id !== id));
-      showToast('تم الحذف بنجاح', 'success');
     } catch (err) {
+      setEvents(previous);
       showToast('فشل الحذف', 'error');
     }
   };
@@ -131,7 +142,7 @@ export default function SchedulePage() {
       )}
 
       {showModal && (
-        <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && setShowModal(false)}>
+        <div className="modal-overlay" >
           <div className="modal-content modal-content-sm">
             <div className="modal-header">
               <h3 className="font-bold">إضافة حصة للجدول الأسبوعي</h3>

@@ -120,9 +120,13 @@ export default function AdminAssistantsPage() {
       showToast('✅ تم تحديث الكود الموحد للمساعد بنجاح', 'success');
       setViewingAssistant(updated);
       void loadData(false);
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
-      showToast('حدث خطأ أثناء تحديث الكود', 'error');
+      const msg = e.message || 'حدث خطأ أثناء تحديث الكود';
+      showToast(msg, 'error');
+      if (msg.includes('الكود') || msg.includes('DUPLICATE_CODE') || msg.includes('مسجل مسبقاً')) {
+         setEditedCode(viewingAssistant.code || '');
+      }
     } finally {
       setSaving(false);
     }
@@ -303,7 +307,7 @@ export default function AdminAssistantsPage() {
               <div>
                 <div className="flex items-center gap-3 mb-4">
                   {ast.imageUrl ? (
-                    <img src={ast.imageUrl} alt={ast.name} className="w-14 h-14 rounded-2xl object-cover border border-white/10" />
+                    <img loading="lazy" src={ast.imageUrl} alt={ast.name} className="w-14 h-14 rounded-2xl object-cover border border-white/10" />
                   ) : (
                     <div className="w-14 h-14 rounded-2xl bg-amber-500/10 flex items-center justify-center text-lg font-black text-amber-400 border border-amber-500/20">
                       {ast.name[0]}
@@ -405,23 +409,23 @@ export default function AdminAssistantsPage() {
 
       {/* Details & Administration Modal */}
       {viewingAssistant && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in" dir="rtl">
-          <div className="card-base w-full max-w-2xl bg-[#0d1527] border-white/10 rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+        <div className="modal-overlay !z-50"  dir="rtl">
+          <div className="modal-content modal-content-lg bg-[#0d1527] border-white/10">
             {/* Modal Header */}
-            <div className="p-6 border-b border-white/5 flex items-center justify-between">
+            <div className="modal-header">
               <h3 className="text-lg font-black font-cairo gold-text flex items-center gap-2">
                 <User size={20} className="text-amber-500" /> تفاصيل ملف المساعد
               </h3>
               <button 
                 onClick={() => setViewingAssistant(null)}
-                className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition flex items-center justify-center"
+                className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition flex items-center justify-center shrink-0 mr-auto"
               >
                 <X size={18} />
               </button>
             </div>
 
             {/* Modal Body */}
-            <div className="p-6 overflow-y-auto space-y-6 flex-1 text-right">
+            <div className="modal-body space-y-6 text-right">
               {/* Profile Card Intro */}
               <div className="flex flex-col sm:flex-row items-center gap-4 p-4 bg-white/5 border border-white/5 rounded-2xl">
                 {viewingAssistant.imageUrl ? (
@@ -616,7 +620,7 @@ export default function AdminAssistantsPage() {
             </div>
 
             {/* Modal Footer Actions */}
-            <div className="p-6 border-t border-white/5 bg-black/20 flex flex-wrap justify-between items-center gap-4">
+            <div className="modal-footer bg-black/20 flex-wrap justify-between items-center gap-4">
               <button 
                 onClick={() => handleRejectOrDelete(viewingAssistant)}
                 disabled={saving}

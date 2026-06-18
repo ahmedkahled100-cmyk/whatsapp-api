@@ -132,7 +132,7 @@ export default function AttendancePage() {
     
     if (student) {
       if (activeSession.groupId && (!student.groupIds || !student.groupIds.includes(activeSession.groupId))) {
-        showToast(`تنبيه: الطالب (${student.name}) لا ينتمي للمجموعة المحددة لهذه الجلسة!`, 'warning');
+        showToast(`تنبيه: الطالب (${student.name}) لا ينتمي للمجموعة المحددة لهذه الجلسة!`, 'info');
       } else {
         showToast(`تم تحضير: ${student.name}`, 'success');
       }
@@ -200,7 +200,7 @@ export default function AttendancePage() {
 
         {/* Create Session Modal */}
         {showCreateModal && (
-          <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setShowCreateModal(false)}>
+          <div className="modal-overlay" >
             <div className="modal-content max-w-md">
               <div className="modal-header">
                 <h3 className="font-bold text-lg gold-text flex items-center gap-2">
@@ -429,7 +429,7 @@ export default function AttendancePage() {
       </div>
 
       {showQrModal && selectedStudentForQr && (
-        <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && setShowQrModal(false)}>
+        <div className="modal-overlay" >
           <div className="modal-content">
             <div className="modal-header">
               <h3 className="font-bold text-lg text-gold flex items-center gap-2">
@@ -448,7 +448,7 @@ export default function AttendancePage() {
                 </div>
                 <div className="flex items-center gap-3 p-4">
                   {selectedStudentForQr.imageUrl ? (
-                    <img src={selectedStudentForQr.imageUrl} alt={selectedStudentForQr.name} className="w-14 h-14 rounded-full object-cover border-2 border-amber-400 flex-shrink-0" />
+                    <img loading="lazy" src={selectedStudentForQr.imageUrl} alt={selectedStudentForQr.name} className="w-14 h-14 rounded-full object-cover border-2 border-amber-400 flex-shrink-0" />
                   ) : (
                     <div className="w-14 h-14 rounded-full bg-amber-400 flex items-center justify-center text-white font-black text-2xl flex-shrink-0">{selectedStudentForQr.name[0]}</div>
                   )}

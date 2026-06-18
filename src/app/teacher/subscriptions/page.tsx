@@ -142,7 +142,7 @@ export default function SubscriptionsPage() {
         subType: editForm.subType, 
         subStart, 
         subExpiry, 
-        subPrice,
+        subPrice: parseFloat(editForm.subPrice) || 0,
         cancelReason: editForm.cancelReason
       };
 
@@ -350,7 +350,7 @@ export default function SubscriptionsPage() {
         if (!existingStudent) throw new Error('Student not found');
 
         // Cumulative Revenue for approval
-        const price = req.subPrice || existingStudent.subPrice || 0;
+        const price = existingStudent.subPrice || req.subPrice || 0;
         const history = [...(existingStudent.paymentHistory || []), { date: Date.now(), amount: price, type: req.subType }];
         const totalPaid = (existingStudent.totalPaid || 0) + price;
 
@@ -382,7 +382,7 @@ export default function SubscriptionsPage() {
           await dispatchNotification({
             teacherId: req.teacherId,
             msg: type === 'new' 
-              ? `🎉 أهلاً بك يا ${req.name} في منصتنا!\n\nتم تفعيل حسابك بنجاح.\n🔑 كود الطالب الخاص بك: ${code}\nيرجى استخدامه لتسجيل الدخول الفوري.\n\nنتمنى لك رحلة تعليمية مثمرة!`
+              ? `🎉 أهلاً بك يا ${req.name} في منصتنا!\n\nتم تفعيل حسابك بنجاح.\n🔑 كود الطالب الخاص بك: ${finalStudentObj?.code || approvalForm.code}\nيرجى استخدامه لتسجيل الدخول الفوري.\n\nنتمنى لك رحلة تعليمية مثمرة!`
               : `✅ تم تجديد اشتراكك بنجاح يا ${req.name}!\n\n📅 تاريخ الانتهاء الجديد: ${new Date(subExpiry).toLocaleDateString('ar-EG')}\nشكراً لثقتك بنا!`,
             whatsappNumbers: [req.phone],
             channels: { inApp: false, whatsapp: true }
@@ -711,7 +711,7 @@ export default function SubscriptionsPage() {
               <div key={req.id} className="card-base p-5 border border-white/10 hover:border-gold/30 transition-colors">
                 <div className="flex justify-between items-start mb-3 pb-3 border-b border-white/5">
                   <div className="flex gap-3 items-center">
-                    {req.imageUrl && <img src={req.imageUrl} className="w-11 h-11 rounded-full object-cover border border-gold/30" alt="" />}
+                    {req.imageUrl && <img loading="lazy" src={req.imageUrl} className="w-11 h-11 rounded-full object-cover border border-gold/30" alt="" />}
                     <div>
                       <h3 className="font-bold text-white">{req.name}</h3>
                       <p className="text-xs text-gray-400">{formatDateAr(new Date(req.createdAt).toISOString())}</p>
@@ -851,7 +851,7 @@ export default function SubscriptionsPage() {
 
       {/* Redesigned Edit Student Modal */}
       {editingStudent && (
-        <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setEditingStudent(null)}>
+        <div className="modal-overlay" >
           <div className="modal-content modal-content-sm !p-0 border border-gold/20 animate-scale-in">
             {/* Modal Header */}
             <div className="p-5 sm:p-6 pb-4 flex items-center justify-between border-b border-white/5 bg-gold/5">
@@ -1011,7 +1011,7 @@ export default function SubscriptionsPage() {
 
       {/* Redesigned Approval Confirmation Modal */}
       {pendingApproval && (
-        <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setPendingApproval(null)}>
+        <div className="modal-overlay" >
           <div className="modal-content modal-content-sm !p-0 border border-gold/20 animate-scale-in">
             {/* Header */}
             <div className="p-5 sm:p-6 pb-4 flex items-center justify-between border-b border-white/5 bg-gold/5">
@@ -1115,7 +1115,7 @@ export default function SubscriptionsPage() {
 
       {/* Receipt Modal */}
       {receiptStudent && (
-        <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setReceiptStudent(null)}>
+        <div className="modal-overlay" >
           <div className="modal-content modal-content-sm bg-white text-black !p-6" id="receipt-container">
             <div className="text-center mb-6">
               <h2 className="text-2xl font-black mb-1">🏫 إيصال اشتراك</h2>

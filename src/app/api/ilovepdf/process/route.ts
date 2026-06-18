@@ -83,7 +83,9 @@ export async function POST(req: Request) {
         font_size: s.size || 40,
         font_color: s.color || '#000000',
         transparency: s.transparency || 50,
-        layer: s.layer || 'above'
+        layer: s.layer || 'above',
+        mosaic: s.mosaic || false,
+        rotation: s.rotation || 0
       };
     } else if (tool === 'pagenumber') {
       processParams = {
@@ -131,9 +133,13 @@ export async function POST(req: Request) {
         pagesize: s.pagesize || 'fit'
       };
     } else if (tool === 'pdfoffice') {
-      // PDF to Word conversion
+      // PDF to Word, PowerPoint, Excel conversion
+      let outType = 'word';
+      if (s.outputType === 'Pptx') outType = 'powerpoint';
+      else if (s.outputType === 'xlsx') outType = 'excel';
+
       processParams = {
-        output_type: s.outputType || 'Word', // Word, Pptx, xlsx
+        output_type: outType,
         try_pdf_repair: true
       };
     } else if (tool === 'unlock') {

@@ -165,7 +165,7 @@ export function PDFCompressionModal({ file, showSelection = false, onClose, onCo
   };
 
   return (
-    <div className="modal-overlay !z-[10000] !bg-black/60 !p-4" dir="rtl" onClick={onCancel}>
+    <div className="modal-overlay !z-[10000] !bg-black/60 !p-4" dir="rtl" >
       <style jsx global>{`
         .custom-scrollbar::-webkit-scrollbar { width: 4px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }

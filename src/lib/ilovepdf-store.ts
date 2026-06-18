@@ -130,7 +130,7 @@ export const useILovePDFStore = create<ILovePDFStore>()(
 
       // ── analyzeWithAI ──────────────────────────────────────────────────────────
       analyzeWithAI: async () => {
-        let url = get().status.cloudinaryUrl;
+        let url: string | undefined | null = get().status.cloudinaryUrl;
         if (!url) url = await get().saveToCloud();
         if (!url) return;
 
@@ -194,35 +194,50 @@ export const useILovePDFStore = create<ILovePDFStore>()(
           if (!initRes.ok || !initData.success) throw new Error(initData.error || 'فشل بدء الجلسة');
           const { task, server, token } = initData;
 
-          // 2. Upload files
-          const serverFilenames: string[] = [];
-          for (let i = 0; i < files.length; i++) {
-            const file = files[i];
-            const fileBaseProgress = 10 + (i / files.length) * 60;
-            setStatus({ stage: 'uploading', progress: Math.round(fileBaseProgress), message: `جاري رفع الملف ${i + 1} من ${files.length}...` });
+          // 2. Upload files (Concurrent)
+          const serverFilenames: string[] = new Array(files.length);
+          let completedUploads = 0;
+          setStatus({ stage: 'uploading', progress: 10, message: `جاري رفع ${files.length} ملفات...` });
 
-            const formData = new FormData();
-            formData.append('task', task);
-            formData.append('file', file);
+          const CONCURRENCY_LIMIT = 3;
+          const uploadPromises = [];
+          let currentIndex = 0;
 
-            const uploadData = await new Promise<any>((resolve, reject) => {
-              const xhr = new XMLHttpRequest();
-              xhr.upload.addEventListener('progress', (e) => {
-                if (e.lengthComputable) {
-                  setStatus({ progress: Math.round(fileBaseProgress + (e.loaded / e.total) * (60 / files.length)) });
-                }
+          const uploadWorker = async () => {
+            while (currentIndex < files.length) {
+              const i = currentIndex++;
+              const file = files[i];
+              
+              const formData = new FormData();
+              formData.append('task', task);
+              formData.append('file', file);
+
+              const uploadData = await new Promise<any>((resolve, reject) => {
+                const xhr = new XMLHttpRequest();
+                xhr.addEventListener('load', () => {
+                  if (xhr.status >= 200 && xhr.status < 300) resolve(JSON.parse(xhr.responseText));
+                  else reject(new Error(`فشل رفع الملف ${i + 1}: ${xhr.status}`));
+                });
+                xhr.addEventListener('error', () => reject(new Error(`خطأ في الاتصال بالرفع للملف ${i + 1}`)));
+                xhr.open('POST', `https://${server}/v1/upload`);
+                if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+                xhr.send(formData);
               });
-              xhr.addEventListener('load', () => {
-                if (xhr.status >= 200 && xhr.status < 300) resolve(JSON.parse(xhr.responseText));
-                else reject(new Error(`فشل رفع الملف ${i + 1}: ${xhr.status}`));
+
+              serverFilenames[i] = uploadData.server_filename;
+              completedUploads++;
+              setStatus({ 
+                progress: Math.round(10 + (completedUploads / files.length) * 60),
+                message: `تم رفع ${completedUploads} من ${files.length}...`
               });
-              xhr.addEventListener('error', () => reject(new Error(`خطأ في الاتصال بالرفع للملف ${i + 1}`)));
-              xhr.open('POST', `https://${server}/v1/upload`);
-              if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
-              xhr.send(formData);
-            });
-            serverFilenames.push(uploadData.server_filename);
+            }
+          };
+
+          for (let i = 0; i < Math.min(CONCURRENCY_LIMIT, files.length); i++) {
+            uploadPromises.push(uploadWorker());
           }
+
+          await Promise.all(uploadPromises);
 
           // 3. Process (download mode - fast, no Cloudinary)
           setStatus({ stage: 'compressing', progress: 80, message: 'جاري المعالجة الذكية للملف...' });

@@ -260,7 +260,7 @@ export default function TeacherRegisterPage() {
                 <div className="p-6 rounded-2xl bg-white/5 border border-white/10 flex flex-col items-center gap-4 group hover:border-purple-500/30 transition-all duration-300">
                   {form.imageUrl ? (
                     <div className="relative">
-                       <img src={form.imageUrl} alt="Profile" className="w-24 h-24 rounded-full object-cover border-2 border-purple-500 shadow-lg shadow-purple-500/20" />
+                       <img loading="lazy" src={form.imageUrl} alt="Profile" className="w-24 h-24 rounded-full object-cover border-2 border-purple-500 shadow-lg shadow-purple-500/20" />
                        <button onClick={() => setForm(f => ({ ...f, imageUrl: '' }))} className="absolute -top-1 -right-1 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center shadow-lg"><X size={14} /></button>
                     </div>
                   ) : (

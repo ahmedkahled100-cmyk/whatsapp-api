@@ -125,7 +125,7 @@ export default function EssaysPage() {
                                   <div key={i} className="flex flex-col gap-2 p-2 rounded-lg bg-white/5 border border-white/10">
                                     <div className="flex items-center gap-2">
                                       {isImg ? (
-                                        <img src={url} alt="Student upload" className="w-10 h-10 object-cover rounded" />
+                                        <img loading="lazy" src={url} alt="Student upload" className="w-10 h-10 object-cover rounded" />
                                       ) : (
                                         <div className="w-10 h-10 flex items-center justify-center bg-blue-500/20 text-blue-400 rounded">
                                           <FileText size={18} />

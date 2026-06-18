@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+// @ts-ignore
+import PDFParser from 'pdf2json';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -33,26 +35,42 @@ export async function POST(req: Request) {
       throw new Error('الملف المُعالج فارغ');
     }
 
-    // 2. Extract text using pdf-parse
-    // Dynamic import to avoid edge runtime issues
-    const pdfParse = (await import('pdf-parse')).default;
-    const data = await pdfParse(buffer, {
-      // Don't execute JS inside PDF
-      normalizeWhitespace: true,
+    // 2. Extract text using pdf2json
+    const extractResult = await new Promise<{text: string, pageCount: number}>((resolve, reject) => {
+      // Initialize with 1 for text only extraction
+      const pdfParser = new PDFParser(null, 1);
+      
+      pdfParser.on("pdfParser_dataError", (errData: any) => {
+        console.error("PDFParser Error:", errData.parserError);
+        reject(new Error(errData.parserError));
+      });
+      
+      pdfParser.on("pdfParser_dataReady", (pdfData: any) => {
+        try {
+          const rawText = pdfParser.getRawTextContent();
+          resolve({ 
+            text: rawText, 
+            pageCount: pdfData?.Pages?.length || 0 
+          });
+        } catch (e) {
+          reject(e);
+        }
+      });
+
+      pdfParser.parseBuffer(buffer);
     });
 
-    const text = (data.text || '').trim();
+    const text = (extractResult.text || '').replace(/\r\n/g, '\n').trim();
     const wordCount = text ? text.split(/\s+/).filter(Boolean).length : 0;
-    const pageCount = data.numpages || 0;
 
-    console.log(`[extract-text] Extracted ${text.length} chars, ${wordCount} words, ${pageCount} pages`);
+    console.log(`[extract-text] Extracted ${text.length} chars, ${wordCount} words, ${extractResult.pageCount} pages`);
 
     return NextResponse.json({
       success: true,
       text,
       wordCount,
-      pageCount,
-      info: data.info || {},
+      pageCount: extractResult.pageCount,
+      info: {},
     });
 
   } catch (error: any) {

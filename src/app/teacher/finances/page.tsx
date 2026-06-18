@@ -46,29 +46,41 @@ export default function FinancesPage() {
       return;
     }
     
+    const tempId = crypto.randomUUID();
+    const newTransaction = {
+      ...form,
+      id: tempId,
+      teacherId: user.id,
+      createdAt: Date.now()
+    } as Transaction;
+    
+    // Optimistic UI update
+    setTransactions(prev => [newTransaction, ...prev]);
+    setShowModal(false);
+    showToast('تم حفظ المعاملة بنجاح', 'success');
+
     try {
-      const newTransaction = {
-        ...form,
-        teacherId: user.id,
-        createdAt: Date.now()
-      } as Transaction;
-      
-      const id = await saveTransaction(newTransaction);
-      setTransactions([{ ...newTransaction, id }, ...transactions]);
-      setShowModal(false);
-      showToast('تم حفظ المعاملة بنجاح', 'success');
+      const realId = await saveTransaction(newTransaction);
+      // Optional: Update with real ID in background if needed
+      setTransactions(prev => prev.map(t => t.id === tempId ? { ...t, id: realId } : t));
     } catch (err) {
+      setTransactions(prev => prev.filter(t => t.id !== tempId));
       showToast('فشل حفظ المعاملة', 'error');
     }
   };
 
   const handleDelete = async (id: string) => {
     if (!confirm('هل أنت متأكد من حذف هذه المعاملة؟')) return;
+    
+    // Optimistic UI update
+    const previous = [...transactions];
+    setTransactions(prev => prev.filter(t => t.id !== id));
+    showToast('تم الحذف', 'success');
+    
     try {
       await deleteTransaction(id);
-      setTransactions(transactions.filter(t => t.id !== id));
-      showToast('تم الحذف', 'success');
     } catch (err) {
+      setTransactions(previous);
       showToast('فشل الحذف', 'error');
     }
   };
@@ -159,47 +171,51 @@ export default function FinancesPage() {
           ) : filtered.length === 0 ? (
             <div className="p-8 text-center text-text-muted">لا توجد معاملات مسجلة</div>
           ) : (
-            <table className="w-full text-right text-sm">
-              <thead className="bg-black/20 sticky top-0 backdrop-blur-md">
-                <tr>
-                  <th className="p-3">التاريخ</th>
-                  <th className="p-3">النوع</th>
-                  <th className="p-3">القسم</th>
-                  <th className="p-3">الوصف</th>
-                  <th className="p-3">المبلغ</th>
-                  <th className="p-3">إجراءات</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/5">
-                {filtered.map(t => (
-                  <tr key={t.id} className="hover:bg-white/5 transition-colors">
-                    <td className="p-3">{t.date}</td>
-                    <td className="p-3">
-                      <span className={`px-2 py-1 rounded-md text-xs font-bold ${t.type === 'income' ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'}`}>
-                        {t.type === 'income' ? 'إيراد' : 'مصروف'}
-                      </span>
-                    </td>
-                    <td className="p-3">{t.category}</td>
-                    <td className="p-3 max-w-[200px] truncate">{t.description}</td>
-                    <td className={`p-3 font-mono font-bold ${t.type === 'income' ? 'text-green-400' : 'text-red-400'}`}>
-                      {t.type === 'income' ? '+' : '-'}{t.amount}
-                    </td>
-                    <td className="p-3">
-                      <div className="flex items-center gap-2">
-                        <button onClick={() => handlePrintReceipt(t)} className="p-1.5 bg-white/5 rounded-md hover:bg-white/10 text-blue-400 transition-colors" title="طباعة إيصال"><Printer size={14} /></button>
-                        <button onClick={() => handleDelete(t.id)} className="p-1.5 bg-white/5 rounded-md hover:bg-red-500/20 text-red-400 transition-colors" title="حذف"><Trash2 size={14} /></button>
-                      </div>
-                    </td>
+            <div className="overflow-x-auto w-full">
+              <table className="w-full text-right text-sm">
+                <thead className="bg-black/20 sticky top-0 backdrop-blur-md">
+                  <tr>
+                    <th className="p-3">التاريخ</th>
+                    <th className="p-3">النوع</th>
+                    <th className="p-3">القسم</th>
+                    <th className="p-3">الوصف</th>
+                    <th className="p-3">المبلغ</th>
+                    <th className="p-3">إجراءات</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {filtered.map(t => (
+                    <tr key={t.id}>
+                      <td className="p-3">{t.date}</td>
+                      <td className="p-3">
+                        <span className={`badge ${t.type === 'income' ? 'badge-green' : 'badge-red'}`}>
+                          {t.type === 'income' ? 'إيراد' : 'مصروف'}
+                        </span>
+                      </td>
+                      <td className="p-3 font-bold text-white">{t.category}</td>
+                      <td className="p-3 max-w-[200px] truncate">{t.description}</td>
+                      <td className={`p-3 font-mono font-bold ${t.type === 'income' ? 'text-green-400' : 'text-red-400'}`}>
+                        {t.type === 'income' ? '+' : '-'}{t.amount}
+                      </td>
+                      <td className="p-3 flex gap-2">
+                        <button onClick={() => handlePrintReceipt(t)} className="p-1.5 rounded-lg bg-blue-500/10 text-blue-400 hover:bg-blue-500/20" title="طباعة الإيصال">
+                          <Printer size={16} />
+                        </button>
+                        <button onClick={() => handleDelete(t.id)} className="p-1.5 rounded-lg bg-red-500/10 text-red-500 hover:bg-red-500/20" title="حذف">
+                          <Trash2 size={16} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       </div>
 
       {showModal && (
-        <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && setShowModal(false)}>
+        <div className="modal-overlay" >
           <div className="modal-content modal-content-sm">
             <div className="modal-header">
               <h3 className="font-bold text-lg gold-text flex items-center gap-2">

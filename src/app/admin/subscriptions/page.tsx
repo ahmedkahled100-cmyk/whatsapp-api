@@ -29,7 +29,7 @@ export default function AdminSubscriptionsPage() {
   const [activeTab, setActiveTab] = useState<'teachers' | 'students' | 'renewals' | 'financials'>('teachers');
   const [search, setSearch] = useState('');
   const [editingTeacher, setEditingTeacher] = useState<TeacherUser | null>(null);
-  const [editForm, setEditForm] = useState({ subType: 'free', subExpiry: '', subPrice: '', subLink: '' });
+  const [editForm, setEditForm] = useState({ subType: 'free', subExpiry: '', subPrice: '', subLink: '', logPayment: false });
   const [saving, setSaving] = useState(false);
   const [platformSettings, setPlatformSettings] = useState<Settings | null>(null);
 
@@ -70,8 +70,8 @@ export default function AdminSubscriptionsPage() {
   useEffect(() => { loadData(); }, []);
 
   const stats = useMemo(() => {
-    const teacherRevenue = teachers.reduce((s, t) => s + (t.subPrice || 0), 0);
-    const studentRevenue = students.reduce((s, st) => s + (st.subPrice || 0), 0);
+    const teacherRevenue = teachers.reduce((s, t) => s + (t.totalPaid || t.subPrice || 0), 0);
+    const studentRevenue = students.reduce((s, st) => s + (st.totalPaid || st.subPrice || 0), 0);
     const expiringTeachers = teachers.filter(t => { const d = daysUntil(t.subExpiry); return d !== null && d >= 0 && d <= 7; });
     const expiredTeachers = teachers.filter(t => { const d = daysUntil(t.subExpiry); return d !== null && d < 0; });
     return { teacherRevenue, studentRevenue, grand: teacherRevenue + studentRevenue, expiringTeachers, expiredTeachers };
@@ -107,6 +107,25 @@ export default function AdminSubscriptionsPage() {
     });
   }, [students, teachers, search]);
 
+  const groupedFilteredStudents = useMemo(() => {
+    const map = new Map<string, Student & { enrollments: Student[] }>();
+    filteredStudents.forEach(s => {
+      const key = s.phone || s.code || s.name;
+      if (!map.has(key)) {
+        map.set(key, { ...s, enrollments: [s] });
+      } else {
+        const existing = map.get(key)!;
+        existing.enrollments.push(s);
+        existing.subPrice = (existing.subPrice || 0) + (s.subPrice || 0);
+      }
+    });
+    return Array.from(map.values());
+  }, [filteredStudents]);
+
+  const uniqueTotalStudentsCount = useMemo(() => {
+    return new Set(students.map(s => s.phone || s.code || s.name)).size;
+  }, [students]);
+
   const getExpiryStatus = (subExpiry: number | null | undefined, subType?: string) => {
     if (subType === 'free' || !subExpiry) return { label: 'مجاني دائم', color: 'text-green-400', bg: 'bg-green-500/10' };
     const days = daysUntil(subExpiry);
@@ -126,6 +145,7 @@ export default function AdminSubscriptionsPage() {
       subExpiry: t.subExpiry ? new Date(t.subExpiry).toISOString().split('T')[0] : '',
       subPrice: String(t.subPrice || ''),
       subLink: t.subLink || '',
+      logPayment: false,
     });
   };
 
@@ -150,8 +170,8 @@ export default function AdminSubscriptionsPage() {
       const history = [...(editingTeacher.paymentHistory || [])];
       let newTotal = editingTeacher.totalPaid || 0;
       
-      // If subscriber was free/expired and now is paying, or price is manually set, we log it
-      if (newPrice > 0 && (editingTeacher.subType !== editForm.subType || newPrice !== oldPrice)) {
+      // If the admin explicitly chose to log this as a new payment
+      if (editForm.logPayment && newPrice > 0) {
          history.push({ date: Date.now(), amount: newPrice, type: editForm.subType });
          newTotal += newPrice;
       }
@@ -224,7 +244,7 @@ export default function AdminSubscriptionsPage() {
       const subExpiry = base + days * 86400000;
       
       // Update financials on approval
-      const price = req.subPrice || 
+      const price = teacher.subPrice || req.subPrice || 
         (req.subType === 'yearly' ? (platformSettings?.yearlyPrice || 0) : (platformSettings?.monthlyPrice || 0));
         
       const history = [...(teacher.paymentHistory || []), { date: Date.now(), amount: price, type: req.subType }];
@@ -351,7 +371,7 @@ export default function AdminSubscriptionsPage() {
             className={`px-4 py-2 rounded-lg text-sm font-bold transition-all relative ${activeTab === tab ? 'bg-purple-500 text-white' : 'text-gray-400 hover:text-white'}`}
           >
             {tab === 'teachers' ? `المعلمون (${teachers.length})` : 
-             tab === 'students' ? `طلاب المنصة (${students.length})` : 
+             tab === 'students' ? `طلاب المنصة (${uniqueTotalStudentsCount})` : 
              tab === 'renewals' ? `الطلبات (${teacherRenewalRequests.length})` : 'التقارير المالية'}
           </button>
         ))}
@@ -377,7 +397,7 @@ export default function AdminSubscriptionsPage() {
                 <div className="flex justify-between items-start mb-4">
                   <div className="flex items-center gap-3 min-w-0">
                     {teacher.imageUrl ? (
-                      <img src={teacher.imageUrl} className="w-10 h-10 rounded-xl object-cover flex-shrink-0" alt="" />
+                      <img loading="lazy" src={teacher.imageUrl} className="w-10 h-10 rounded-xl object-cover flex-shrink-0" alt="" />
                     ) : (
                       <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center font-bold text-white flex-shrink-0">
                         {teacher.name[0]}
@@ -398,8 +418,12 @@ export default function AdminSubscriptionsPage() {
                     <span className="font-bold">{subLabel(teacher.subType || 'free')}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-400">قيمة الاشتراك</span>
+                    <span className="text-gray-400">قيمة الاشتراك الحالي</span>
                     <span className="font-black text-gold">{(teacher.subPrice || 0).toLocaleString()} ج.م</span>
+                  </div>
+                  <div className="flex justify-between font-semibold text-purple-300">
+                    <span className="text-gray-400">إجمالي المدفوعات</span>
+                    <span>{(teacher.totalPaid || 0).toLocaleString()} ج.م</span>
                   </div>
                   {teacher.subExpiry && teacher.subType !== 'free' && (
                     <div className="flex justify-between">
@@ -445,34 +469,66 @@ export default function AdminSubscriptionsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
-                {filteredStudents.map(student => {
-                  const status = getExpiryStatus(student.subExpiry, student.subType);
-                  const teacher = teachers.find(t => t.id === student.teacherId);
+                {groupedFilteredStudents.map(student => {
                   return (
                     <tr key={student.id} className="hover:bg-white/5 transition-colors">
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 align-top">
                         <div className="font-bold">{student.name}</div>
                         <div className="text-xs text-gray-500 font-mono">{student.code}</div>
                       </td>
-                      <td className="px-4 py-3 text-gray-400 text-xs">{teacher?.name || '—'}</td>
-                      <td className="px-4 py-3">
-                        <span className="badge badge-blue text-xs">
-                          {student.subType === 'monthly' ? 'شهري' : student.subType === 'yearly' ? 'سنوي' : student.subType === 'halfYearly' ? 'نصف سنوي' : student.subType === 'course' ? 'كورس' : student.subType === 'session' ? 'حصة' : 'غير مشترك'}
-                        </span>
+                      <td className="px-4 py-3 text-gray-400 text-xs align-top">
+                        <div className="space-y-2">
+                          {student.enrollments.map(e => {
+                            const teacher = teachers.find(t => t.id === e.teacherId);
+                            return <div key={e.id}>{teacher?.name || '—'}</div>;
+                          })}
+                        </div>
                       </td>
-                      <td className="px-4 py-3 font-black text-gold">{(student.subPrice || 0)} ج.م</td>
-                      <td className="px-4 py-3 text-gray-400 text-xs">
-                        {student.subExpiry ? new Date(student.subExpiry).toLocaleDateString('ar-EG') : '—'}
+                      <td className="px-4 py-3 align-top">
+                        <div className="space-y-2">
+                          {student.enrollments.map(e => (
+                            <div key={e.id}>
+                              <span className="badge badge-blue text-xs">
+                                {e.subType === 'monthly' ? 'شهري' : e.subType === 'yearly' ? 'سنوي' : e.subType === 'halfYearly' ? 'نصف سنوي' : e.subType === 'course' ? 'كورس' : e.subType === 'session' ? 'حصة' : 'غير مشترك'}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
                       </td>
-                      <td className="px-4 py-3">
-                        <span className={`text-xs px-2 py-1 rounded-lg ${status.bg} ${status.color} font-bold`}>
-                          {status.label}
-                        </span>
+                      <td className="px-4 py-3 font-black text-gold align-top">
+                        <div className="space-y-2">
+                          {student.enrollments.map(e => (
+                            <div key={e.id}>{(e.subPrice || 0)} ج.م</div>
+                          ))}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-gray-400 text-xs align-top">
+                        <div className="space-y-2">
+                          {student.enrollments.map(e => (
+                            <div key={e.id}>
+                              {e.subExpiry ? new Date(e.subExpiry).toLocaleDateString('ar-EG') : '—'}
+                            </div>
+                          ))}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 align-top">
+                        <div className="space-y-2">
+                          {student.enrollments.map(e => {
+                            const status = getExpiryStatus(e.subExpiry, e.subType);
+                            return (
+                              <div key={e.id}>
+                                <span className={`text-xs px-2 py-1 rounded-lg ${status.bg} ${status.color} font-bold`}>
+                                  {status.label}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
                       </td>
                     </tr>
                   );
                 })}
-                {filteredStudents.length === 0 && (
+                {groupedFilteredStudents.length === 0 && (
                   <tr><td colSpan={6} className="text-center py-10 text-gray-500">لا يوجد طلاب مطابقون</td></tr>
                 )}
               </tbody>
@@ -506,7 +562,7 @@ export default function AdminSubscriptionsPage() {
                   <div className="flex justify-between items-start mb-3 pb-3 border-b border-white/5">
                     <div className="flex items-center gap-3">
                       {teacher?.imageUrl ? (
-                        <img src={teacher.imageUrl} className="w-10 h-10 rounded-xl object-cover" alt="" />
+                        <img loading="lazy" src={teacher.imageUrl} className="w-10 h-10 rounded-xl object-cover" alt="" />
                       ) : (
                         <div className="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center text-purple-300 font-black">{req.name[0]}</div>
                       )}
@@ -591,7 +647,7 @@ export default function AdminSubscriptionsPage() {
 
       {/* Redesigned Edit Teacher Modal */}
       {editingTeacher && (
-        <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setEditingTeacher(null)}>
+        <div className="modal-overlay" >
           <div className="modal-content modal-content-sm !p-0 border border-purple-500/30 animate-scale-in">
             {/* Modal Header */}
             <div className="p-5 sm:p-6 pb-4 flex items-center justify-between border-b border-white/5 bg-purple-500/5">
@@ -708,6 +764,25 @@ export default function AdminSubscriptionsPage() {
                       onChange={e => setEditForm({...editForm, subLink: e.target.value})} 
                     />
                 </div>
+              </div>
+
+              {/* Row 5: Log Payment Checkbox */}
+              <div className="pt-2">
+                <label className="flex items-center gap-3 cursor-pointer group p-3 bg-purple-500/5 hover:bg-purple-500/10 rounded-xl border border-purple-500/10 transition">
+                  <div className={`w-5 h-5 rounded flex items-center justify-center border transition-colors ${editForm.logPayment ? 'bg-purple-500 border-purple-500 text-white' : 'border-gray-500 text-transparent'}`}>
+                    <CheckCircle size={14} className={editForm.logPayment ? 'opacity-100' : 'opacity-0'} />
+                  </div>
+                  <input 
+                    type="checkbox" 
+                    className="hidden" 
+                    checked={editForm.logPayment} 
+                    onChange={e => setEditForm({...editForm, logPayment: e.target.checked})} 
+                  />
+                  <div>
+                    <div className="text-sm font-bold text-white group-hover:text-purple-300 transition">تسجيل هذه العملية كدفعة جديدة (تجديد اشتراك)</div>
+                    <div className="text-[10px] text-gray-500">سيتم إضافة المبلغ إلى إجمالي مدفوعات المعلم وتوثيقه في دفتر الحسابات.</div>
+                  </div>
+                </label>
               </div>
             </div>
 

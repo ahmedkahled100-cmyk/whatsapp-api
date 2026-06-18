@@ -10,6 +10,7 @@ export interface TeacherUser {
   subject?: string;
   phone?: string;
   isActive: boolean;
+  cancelReason?: string;
   permissions?: string[]; // Granular features
   imageUrl?: string;
   subType?: 'free' | 'monthly' | 'yearly';
@@ -204,7 +205,7 @@ export interface Notification {
   time: string;
   createdAt: number;
   targetUsers?: string[]; 
-  targetRoles?: ('admin' | 'super_admin' | 'teacher' | 'student')[];
+  targetRoles?: ('admin' | 'super_admin' | 'teacher' | 'student' | 'assistant')[];
   targetGroups?: string[];
   actionPath?: string;
 }
@@ -245,6 +246,7 @@ export interface Settings {
   whatsappNumber?: string; 
   whatsappEnabled?: boolean;
   whatsappTemplate?: string; 
+  youtubeChannelUrl?: string;
 }
 
 export interface RegistrationRequest {
@@ -273,7 +275,7 @@ export interface CourseMaterial {
   id: string;
   teacherId: string;
   title: string;
-  type: 'video' | 'pdf' | 'link' | 'file' | 'image';
+  type: 'video' | 'pdf' | 'link' | 'file' | 'image' | 'youtube';
   url: string; 
   additionalLinks?: { label: string; url: string }[]; 
   fileUrl?: string; 
@@ -397,8 +399,11 @@ export interface Assistant {
   permissions: string[]; // e.g., 'attendance', 'grading', 'finances', 'students'
   salaryType: 'fixed' | 'hourly' | 'percentage';
   salaryValue: number;
-  status?: 'active' | 'inactive' | 'pending' | 'rejected';
+  status?: 'active' | 'inactive' | 'pending' | 'rejected' | 'paused';
   createdAt: number;
+  code?: string;
+  imageUrl?: string;
+  assistantId?: string;
 }
 
 export interface AssistantProfile {

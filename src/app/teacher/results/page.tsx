@@ -155,7 +155,7 @@ export default function ResultsPage() {
     `;
 
     const logoHtml = settings?.logoUrl 
-      ? `<img src="${settings.logoUrl}" style="width: 80px; height: 80px; object-fit: contain; border-radius: 50%; border: 3px solid #d4af37;" />`
+      ? `<img loading="lazy" src="${settings.logoUrl}" style="width: 80px; height: 80px; object-fit: contain; border-radius: 50%; border: 3px solid #d4af37;" />`
       : `<div style="width: 80px; height: 80px; background: linear-gradient(135deg, #d4af37, #b8860b); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 28px; font-weight: bold; color: #1A1A25;">AN</div>`;
 
     const passedColor = attempt.passed ? '#10b981' : '#ef4444';
@@ -397,7 +397,7 @@ export default function ResultsPage() {
                       {/* Student Visual */}
                       <div className="relative">
                         {student?.imageUrl ? (
-                          <img src={student.imageUrl} className="w-12 h-12 rounded-2xl object-cover border border-white/10" alt="" />
+                          <img loading="lazy" src={student.imageUrl} className="w-12 h-12 rounded-2xl object-cover border border-white/10" alt="" />
                         ) : (
                           <div className="w-12 h-12 rounded-2xl bg-gold/10 flex items-center justify-center text-gold font-black border border-gold/20">
                             {att.studentName[0]}
@@ -502,7 +502,7 @@ export default function ResultsPage() {
                         <td className="py-5 px-6">
                             <div className="flex items-center gap-3">
                                 {student?.imageUrl ? (
-                                  <img src={student.imageUrl} className="w-10 h-10 rounded-xl object-cover border border-white/5" alt="" />
+                                  <img loading="lazy" src={student.imageUrl} className="w-10 h-10 rounded-xl object-cover border border-white/5" alt="" />
                                 ) : (
                                   <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-gold font-bold border border-white/5">
                                     {att.studentName[0]}
@@ -597,7 +597,7 @@ export default function ResultsPage() {
         {/* Semi-transparent Watermark */}
         {settings?.logoUrl ? (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0 overflow-hidden" style={{ top: '20vh', opacity: 0.04 }}>
-            <img src={settings.logoUrl} alt="Watermark" className="w-[60%] object-contain grayscale" crossOrigin="anonymous" />
+            <img loading="lazy" src={settings.logoUrl} alt="Watermark" className="w-[60%] object-contain grayscale" crossOrigin="anonymous" />
           </div>
         ) : (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0 overflow-hidden" style={{ top: '20vh', opacity: 0.04 }}>
@@ -692,7 +692,7 @@ export default function ResultsPage() {
 
       {/* Result Image Preview Modal */}
       {resultImagePreview && (
-        <div className="modal-overlay" onClick={() => setResultImagePreview(null)}>
+        <div className="modal-overlay" >
           <div className="modal-content modal-content-lg" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <h3 className="text-xl font-bold gold-text flex items-center gap-2">

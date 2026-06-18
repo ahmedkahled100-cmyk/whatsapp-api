@@ -105,6 +105,10 @@ export default function GamesPage() {
     if (!aiContent) { showToast('⚠️ لا يوجد محتوى لحفظه'); return; }
 
     try {
+      showToast('✅ تم حفظ اللعبة ونشرها للطلاب');
+      setShowCreateModal(false);
+      resetForm();
+      
       await saveGame({
         teacherId: user?.id || '',
         title,
@@ -113,10 +117,7 @@ export default function GamesPage() {
         targetGroup: targetGroup || undefined,
         createdAt: new Date().toISOString()
       });
-      showToast('✅ تم حفظ اللعبة ونشرها للطلاب');
-      setShowCreateModal(false);
-      resetForm();
-      loadGames();
+      loadGames(); // Silent fetch
     } catch (err) {
       showToast('❌ فشل حفظ اللعبة');
     }
@@ -132,12 +133,16 @@ export default function GamesPage() {
 
   const handleDelete = async (id: string) => {
     if (!confirm('هل أنت متأكد من حذف هذه اللعبة وجميع نتائج الطلاب؟')) return;
+    
+    // Optimistic Update
+    setGames(prev => prev.filter(g => g.id !== id));
+    showToast('تم الحذف بنجاح');
+    
     try {
       await deleteGame(id);
-      showToast('تم الحذف بنجاح');
-      loadGames();
     } catch (err) {
       showToast('فشل الحذف');
+      loadGames(); // Revert
     }
   };
 
@@ -278,7 +283,7 @@ export default function GamesPage() {
 
       {/* Create Modal */}
       {showCreateModal && (
-        <div className="modal-overlay" onClick={() => setShowCreateModal(false)}>
+        <div className="modal-overlay" >
           <div className="modal-content" onClick={e => e.stopPropagation()}>
              <div className="p-6 border-b border-white/5 flex items-center justify-between sticky top-0 bg-dark z-10">
                 <div className="flex items-center gap-3">
@@ -410,7 +415,7 @@ export default function GamesPage() {
 
       {/* Results Modal */}
       {showResultsModal && (
-        <div className="modal-overlay" onClick={() => setShowResultsModal(null)}>
+        <div className="modal-overlay" >
           <div className="modal-content modal-content-lg" onClick={e => e.stopPropagation()}>
              <div className="p-6 bg-gradient-to-r from-blue-500/20 to-transparent border-b border-white/5 flex items-center justify-between">
                 <div className="flex items-center gap-3">

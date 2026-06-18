@@ -7,7 +7,7 @@ import { Home, BookOpen, ClipboardList, BarChart2, Settings, Bell, User, Message
 import Image from 'next/image';
 import { GlobalNotificationWidget } from '@/components/shared/GlobalNotificationWidget';
 
-type TabId = 'home' | 'courses' | 'exams' | 'assignments' | 'results' | 'messages' | 'settings' | 'profile' | 'discover' | 'link' | 'games' | 'schedule';
+type TabId = 'home' | 'courses' | 'exams' | 'youtube' | 'assignments' | 'results' | 'messages' | 'settings' | 'profile' | 'discover' | 'link' | 'games' | 'schedule' | 'leaderboard';
 
 interface BottomNavConfig {
   id: TabId;
@@ -137,7 +137,7 @@ export function MobileAppLayout({
           title="ملفي الشخصي"
         >
           {studentImage ? (
-            <Image src={studentImage} alt={studentName} className="w-full h-full object-cover" width={40} height={40} />
+            <Image src={studentImage!} alt={studentName || ''} className="w-full h-full object-cover" width={40} height={40} />
           ) : (
             <div
               className="w-full h-full flex items-center justify-center text-sm font-black"

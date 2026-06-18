@@ -29,8 +29,13 @@ const DEFAULT_SETTINGS: Settings = {
 
 function SettingsPageContent() {
   const searchParams = useSearchParams();
-  const { user, setUser, settings, setSettings } = useTeacherStore();
-  const [form, setForm] = useState<Settings>(settings || { ...DEFAULT_SETTINGS, teacherId: user?.id || '' });
+  const { user, setUser, settings, setSettings, logout } = useTeacherStore();
+  const [form, setForm] = useState<Settings>(settings || { 
+    ...DEFAULT_SETTINGS, 
+    teacherId: user?.id || '',
+    teacherName: user?.name || DEFAULT_SETTINGS.teacherName,
+    acadName: user?.name ? `أكاديمية ${user.name}` : DEFAULT_SETTINGS.acadName
+  });
   const [initialized, setInitialized] = useState(false);
   const [showPass, setShowPass] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -58,7 +63,12 @@ function SettingsPageContent() {
       setForm(prev => ({ ...prev, ...settings, teacherId: settings.teacherId || user?.id || '' }));
       setInitialized(true);
     } else if (user?.id) {
-      setForm(prev => ({ ...prev, teacherId: user.id }));
+      setForm(prev => ({ 
+        ...prev, 
+        teacherId: user.id,
+        teacherName: prev.teacherName === DEFAULT_SETTINGS.teacherName && user.name ? user.name : prev.teacherName,
+        acadName: prev.acadName === DEFAULT_SETTINGS.acadName && user.name ? `أكاديمية ${user.name}` : prev.acadName
+      }));
     }
   }, [settings, user, initialized]);
 
@@ -203,7 +213,8 @@ function SettingsPageContent() {
       showToast('تم مسح جميع البيانات بنجاح.');
       setShowWipeModal(false);
       setWipeConfirmText('');
-      window.location.reload(); // Reload to clear any cached states
+      logout();
+      window.location.href = '/auth';
     } catch (err) {
       console.error(err);
       showToast('حدث خطأ أثناء مسح البيانات.');
@@ -596,7 +607,7 @@ function SettingsPageContent() {
 
       {/* Wipe Confirmation Modal */}
       {showWipeModal && (
-        <div className="modal-overlay" onClick={() => setShowWipeModal(false)}>
+        <div className="modal-overlay" >
           <div className="modal-content modal-content-sm" onClick={e => e.stopPropagation()}>
             <div className="modal-header border-red-500/10 bg-red-500/5">
               <h3 className="font-bold text-lg text-red-500 flex items-center gap-2">
@@ -653,7 +664,7 @@ function SettingsPageContent() {
 
       {/* Certificate Preview Modal */}
       {showCertPreview && (
-        <div className="modal-overlay !bg-black/90" onClick={() => setShowCertPreview(false)}>
+        <div className="modal-overlay !bg-black/90" >
           <div className="modal-content modal-content-lg !p-1" onClick={e => e.stopPropagation()}>
              <button 
                onClick={() => setShowCertPreview(false)}

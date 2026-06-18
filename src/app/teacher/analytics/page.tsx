@@ -1,14 +1,19 @@
 'use client';
 // src/app/teacher/analytics/page.tsx
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useTeacherStore } from '@/lib/store';
 import { gradeColor, getApiBase } from '@/lib/utils';
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer } from 'recharts';
 import { TrendingUp, Users, FileText, CheckCircle, Sparkles, Loader2, Award, AlertTriangle, Lightbulb } from 'lucide-react';
 import { showToast } from '@/lib/toast';
 
 export default function AnalyticsPage() {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const { exams, students, attempts, groups } = useTeacherStore();
   const [aiLoading, setAiLoading] = useState(false);
   const [aiInsights, setAiInsights] = useState<any>(null);
@@ -172,19 +177,25 @@ export default function AnalyticsPage() {
       <div className="card-base p-6">
         <h3 className="font-cairo font-bold mb-6 text-lg">متوسط درجات الطلاب في الاختبارات</h3>
         <div className="h-80 w-full" dir="ltr">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData} margin={{ top: 10, right: 10, left: 10, bottom: 20 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" vertical={false} />
-              <XAxis dataKey="name" stroke="var(--text-muted)" tick={{ fill: 'var(--text-muted)', fontSize: 12 }} angle={-45} textAnchor="end" />
-              <YAxis stroke="var(--text-muted)" tick={{ fill: 'var(--text-muted)', fontSize: 12 }} />
-              <Tooltip
-                contentStyle={{ background: 'var(--dark2)', border: '1px solid rgba(245,197,24,0.3)', borderRadius: '12px' }}
-                itemStyle={{ color: 'var(--gold)' }}
-                cursor={{ fill: 'rgba(255,255,255,0.05)' }}
-              />
-              <Bar dataKey="score" name="متوسط الدرجات %" fill="var(--gold)" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+          {mounted ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={chartData} margin={{ top: 10, right: 10, left: 10, bottom: 20 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" vertical={false} />
+                <XAxis dataKey="name" stroke="var(--text-muted)" tick={{ fill: 'var(--text-muted)', fontSize: 12 }} angle={-45} textAnchor="end" />
+                <YAxis stroke="var(--text-muted)" tick={{ fill: 'var(--text-muted)', fontSize: 12 }} />
+                <Tooltip
+                  contentStyle={{ background: 'var(--dark2)', border: '1px solid rgba(245,197,24,0.3)', borderRadius: '12px' }}
+                  itemStyle={{ color: 'var(--gold)' }}
+                  cursor={{ fill: 'rgba(255,255,255,0.05)' }}
+                />
+                <Bar dataKey="score" name="متوسط الدرجات %" fill="var(--gold)" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="h-full w-full flex items-center justify-center">
+              <Loader2 className="animate-spin text-gold" size={24} />
+            </div>
+          )}
         </div>
       </div>
     </div>

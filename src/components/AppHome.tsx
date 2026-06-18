@@ -51,10 +51,33 @@ export function AppHome({ settings, onCategoryClick, examsCount = 0, coursesCoun
           {slidersWithContent.map((slide, i) => (
             <div
               key={slide.id}
-              className="absolute inset-0 transition-opacity duration-700"
+              className={`absolute inset-0 transition-opacity duration-700 ${slide.link ? 'cursor-pointer' : ''}`}
               style={{ opacity: i === currentSlide ? 1 : 0 }}
+              onClick={() => {
+                if (slide.link) {
+                  window.open(slide.link.startsWith('http') ? slide.link : `https://${slide.link}`, '_blank');
+                }
+              }}
             >
-              {slide.imageUrl ? (
+              {slide.youtubeData ? (
+                <div className="w-full h-full flex flex-col bg-[#0f0f0f] text-white">
+                  <div className="w-full h-[60%]">
+                    <img src={slide.youtubeData.banner || slide.imageUrl} alt="" className="w-full h-full object-cover" />
+                  </div>
+                  <div className="flex-1 px-4 flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-full overflow-hidden bg-black flex-shrink-0 -mt-8 border-[3px] border-[#0f0f0f]">
+                      <img src={slide.youtubeData.avatar} alt="" className="w-full h-full object-cover" />
+                    </div>
+                    <div className="flex-1 min-w-0 flex flex-col justify-center">
+                      <div className="font-bold text-sm truncate">{slide.youtubeData.title || slide.title}</div>
+                      <div className="text-[10px] text-gray-400 truncate">{slide.youtubeData.subs || 'قناة يوتيوب'}</div>
+                    </div>
+                    <div className="bg-white text-black text-[10px] font-bold px-3 py-1.5 rounded-full flex-shrink-0">
+                      اشتراك
+                    </div>
+                  </div>
+                </div>
+              ) : slide.imageUrl ? (
                 <Image
                   src={slide.imageUrl}
                   alt={slide.title || ''}
@@ -75,14 +98,16 @@ export function AppHome({ settings, onCategoryClick, examsCount = 0, coursesCoun
                 </div>
               )}
               {/* Overlay gradient */}
-              <div
-                className="absolute inset-0"
-                style={{
-                  background: 'linear-gradient(to top, rgba(10,10,24,0.9) 0%, rgba(10,10,24,0.2) 50%, transparent 100%)',
-                }}
-              />
+              {!slide.youtubeData && (
+                <div
+                  className="absolute inset-0"
+                  style={{
+                    background: 'linear-gradient(to top, rgba(10,10,24,0.9) 0%, rgba(10,10,24,0.2) 50%, transparent 100%)',
+                  }}
+                />
+              )}
               {/* Slide title */}
-              {slide.title && slide.imageUrl && (
+              {slide.title && slide.imageUrl && !slide.youtubeData && (
                 <div className="absolute bottom-8 right-4 left-4">
                   <div className="font-cairo font-black text-2xl text-white drop-shadow-lg">{slide.title}</div>
                 </div>

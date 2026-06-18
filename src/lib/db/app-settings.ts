@@ -14,9 +14,15 @@ export type SliderItem = {
   title?: string;
   link?: string;
   order: number;
+  youtubeData?: {
+    banner?: string;
+    avatar?: string;
+    title?: string;
+    subs?: string;
+  };
 };
 
-export type TabId = 'home' | 'courses' | 'exams' | 'assignments' | 'results' | 'messages' | 'settings' | 'profile' | 'discover' | 'link' | 'games';
+export type TabId = 'home' | 'courses' | 'exams' | 'assignments' | 'results' | 'messages' | 'settings' | 'profile' | 'discover' | 'link' | 'games' | 'youtube';
 
 export type CategoryItem = {
   id: string;

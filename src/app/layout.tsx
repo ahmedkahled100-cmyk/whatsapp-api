@@ -26,14 +26,14 @@ export const viewport: Viewport = {
 
 export const metadata: Metadata = {
   title: 'A-N Academy - منصة التعليم الذكي',
-  description: 'منصة اختبارات ومتابعة الطلاب - الأستاذ أحمد خالد',
+  description: 'منصة اختبارات ومتابعة الطلاب',
   manifest: '/manifest.json',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ar" dir="rtl" className={`${cairo.variable} ${tajawal.variable}`}>
-      <body className="font-tajawal">
+      <body className="font-tajawal overflow-x-hidden w-full max-w-full m-0 p-0 flex flex-col min-h-screen">
         {children}
         <ToastProvider />
         <FileProcessingCenter />

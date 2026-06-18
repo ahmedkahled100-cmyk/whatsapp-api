@@ -5,7 +5,7 @@ import { Bell, Check, Clock, ExternalLink, X, Info, AlertTriangle, CheckCircle, 
 import { Notification } from '@/types';
 import { useRouter } from 'next/navigation';
 import { formatDateAr } from '@/lib/utils';
-import { markNotificationRead, markAllNotificationsRead } from '@/lib/db';
+import { markNotificationRead, markAllNotificationsRead, markNotificationsAsReadBulk } from '@/lib/db';
 import { showToast } from '@/lib/toast';
 
 interface GlobalNotificationWidgetProps {
@@ -18,9 +18,10 @@ export function GlobalNotificationWidget({ notifications, currentUser, teacherId
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const [localReadIds, setLocalReadIds] = useState<Set<string>>(new Set());
 
   const displayNotifs = teacherId ? notifications.filter((n: any) => n.teacher_id === teacherId || n.teacherId === teacherId) : notifications;
-  const unreadCount = displayNotifs.filter(n => !n.read).length;
+  const unreadCount = displayNotifs.filter(n => !n.read && !localReadIds.has(n.id)).length;
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -34,11 +35,21 @@ export function GlobalNotificationWidget({ notifications, currentUser, teacherId
 
   const handleNotificationClick = async (n: Notification) => {
     setIsOpen(false);
-    if (!n.read) {
+    if (!n.read && !localReadIds.has(n.id)) {
+      setLocalReadIds(prev => {
+        const next = new Set(prev);
+        next.add(n.id);
+        return next;
+      });
       try {
         await markNotificationRead(n.id);
       } catch (error) {
         console.error('Error marking as read:', error);
+        setLocalReadIds(prev => {
+          const next = new Set(prev);
+          next.delete(n.id);
+          return next;
+        });
       }
     }
     if (n.actionPath) {
@@ -48,12 +59,14 @@ export function GlobalNotificationWidget({ notifications, currentUser, teacherId
 
   const handleMarkAllRead = async () => {
     if (!teacherId || unreadCount === 0) return;
+    const unreadNotifs = displayNotifs.filter(n => !n.read && !localReadIds.has(n.id));
+    setLocalReadIds(prev => {
+      const next = new Set(prev);
+      unreadNotifs.forEach(item => next.add(item.id));
+      return next;
+    });
     try {
-      // NOTE: markAllNotificationsRead in DB is currently implemented to mark ALL notifications for a teacher_id.
-      // If the current user is a student, we can't easily mark *all* of them because the notifications belong to the teacher.
-      // Instead, we mark the student's specific unread notifications one by one to be safe, or just loop over the displayed ones.
-      const unreadNotifs = displayNotifs.filter(n => !n.read);
-      await Promise.all(unreadNotifs.map(n => markNotificationRead(n.id)));
+      await markNotificationsAsReadBulk(unreadNotifs.map(n => n.id));
       showToast('تم تحديد الكل كمقروء');
     } catch (error) {
       console.error('Error marking all as read:', error);
@@ -89,11 +102,11 @@ export function GlobalNotificationWidget({ notifications, currentUser, teacherId
       {/* Dropdown Panel (Glassmorphism) */}
       {isOpen && (
         <div 
-          className="absolute left-0 sm:left-auto sm:right-0 mt-3 w-[320px] sm:w-[380px] rounded-2xl shadow-2xl overflow-hidden z-[100] border border-white/10 animate-scale-in"
+          className="absolute left-0 mt-3 w-[320px] sm:w-[380px] rounded-2xl shadow-2xl overflow-hidden z-[100] border border-white/10 animate-scale-in"
           style={{ 
             background: 'rgba(15, 15, 25, 0.85)', 
             backdropFilter: 'blur(20px)',
-            transformOrigin: 'top right'
+            transformOrigin: 'top left'
           }}
           dir="rtl"
         >
@@ -122,19 +135,21 @@ export function GlobalNotificationWidget({ notifications, currentUser, teacherId
               </div>
             ) : (
               <div className="flex flex-col">
-                {displayNotifs.slice(0, 30).map((n) => (
-                  <button 
-                    key={n.id}
-                    onClick={() => handleNotificationClick(n)}
-                    className={`w-full text-right p-4 border-b border-white/5 transition-all hover:bg-white/5 flex gap-3 ${!n.read ? 'bg-gold/5' : ''}`}
-                  >
-                    <div className="mt-1 flex-shrink-0">
-                      {getIcon(n.type || 'info')}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className={`text-sm leading-relaxed mb-1.5 ${!n.read ? 'text-white font-bold' : 'text-gray-300 font-medium'}`}>
-                        {n.msg}
-                      </p>
+                {displayNotifs.slice(0, 30).map((n) => {
+                  const isRead = n.read || localReadIds.has(n.id);
+                  return (
+                    <button 
+                      key={n.id}
+                      onClick={() => handleNotificationClick(n)}
+                      className={`w-full text-right p-4 border-b border-white/5 transition-all hover:bg-white/5 flex gap-3 ${!isRead ? 'bg-gold/5' : ''}`}
+                    >
+                      <div className="mt-1 flex-shrink-0">
+                        {getIcon(n.type || 'info')}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-sm leading-relaxed mb-1.5 ${!isRead ? 'text-white font-bold' : 'text-gray-300 font-medium'}`}>
+                          {n.msg}
+                        </p>
                       <div className="flex items-center justify-between mt-1">
                         <span className="text-[10px] text-gray-500 flex items-center gap-1">
                           <Clock size={10} />
@@ -151,7 +166,8 @@ export function GlobalNotificationWidget({ notifications, currentUser, teacherId
                       <div className="w-2 h-2 rounded-full bg-gold shadow-[0_0_5px_var(--gold)] mt-1.5 flex-shrink-0" />
                     )}
                   </button>
-                ))}
+                );
+              })}
               </div>
             )}
           </div>

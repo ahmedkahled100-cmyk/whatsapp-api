@@ -239,7 +239,7 @@ export default function AuthPage() {
           <div className="flex flex-col items-center mb-4 sm:mb-6">
             <div className="w-16 h-16 sm:w-20 sm:h-20 bg-gold rounded-full flex items-center justify-center shadow-[0_0_30px_rgba(245,197,24,0.3)] relative group animate-fade-in mb-4">
               <div className="absolute inset-0 bg-white/20 rounded-full animate-ping group-hover:animate-none opacity-20" />
-              <img src="/logo.png" alt="A-N Academy" className="relative z-10 w-12 h-12 sm:w-14 sm:h-14 object-contain rounded-full" />
+              <img loading="lazy" src="/logo.png" alt="A-N Academy" className="relative z-10 w-12 h-12 sm:w-14 sm:h-14 object-contain rounded-full" />
             </div>
             <h1 className="text-xl sm:text-2xl font-cairo font-black gold-text text-center">أكاديمية A-N</h1>
             <p className="text-[10px] sm:text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>تسجيل الدخول للإدارة، المعلمين والمساعدين</p>
@@ -351,7 +351,7 @@ export default function AuthPage() {
             {loading ? '⏳ جاري التحقق...' : '🚀 دخول'}
           </button>
 
-          {/* Student link */}
+          {/* Student & Registration links */}
           <div className="mt-4 pt-3 text-center space-y-2" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
             <button 
               onClick={() => { setShowForgot(true); setError(''); }}
@@ -364,6 +364,9 @@ export default function AuthPage() {
             </a>
             <a href="/assistant-register" className="text-xs block w-full hover:underline font-medium" style={{ color: 'var(--accent)' }}>
               🤝 هل أنت مساعد مادة؟ اضغط هنا للتسجيل في المنصة
+            </a>
+            <a href="/teacher-register" className="text-xs block w-full hover:underline font-medium text-emerald-400">
+              👨‍🏫 هل أنت معلم؟ اضغط هنا لتقديم استمارة انضمام
             </a>
           </div>
 

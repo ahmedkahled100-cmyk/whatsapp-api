@@ -4,7 +4,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useTeacherStore } from '@/lib/store';
 import { filterNotificationsForAdminInbox } from '@/lib/notification-audience';
-import { subscribeToNotifications, subscribeToRegistrationRequests } from '@/lib/db';
+import { subscribeToNotifications, subscribeToRegistrationRequests, setUserOnlineStatus, heartbeatUserOnlineStatus } from '@/lib/db';
 import { LayoutDashboard, Users, Settings, LogOut, Menu, X, ShieldCheck, GraduationCap, MessageSquare, CreditCard, Smartphone, Briefcase, Bell } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { GlobalNotificationWidget } from '@/components/shared/GlobalNotificationWidget';
@@ -62,6 +62,37 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     });
     return () => { unsub(); };
   }, [user?.id, setTeacherJoinRequests]);
+
+  // ── Admin Presence: online status + heartbeat ──────────────────────────
+  useEffect(() => {
+    if (!user) return;
+    setUserOnlineStatus(user.id, 'teachers', true);
+
+    const beat = setInterval(() => {
+      heartbeatUserOnlineStatus(user.id, 'teachers');
+    }, 25000);
+
+    const onActivity = () => heartbeatUserOnlineStatus(user.id, 'teachers');
+    window.addEventListener('mousemove', onActivity, { passive: true });
+    window.addEventListener('keydown', onActivity, { passive: true });
+
+    const handleUnload = () => setUserOnlineStatus(user.id, 'teachers', false);
+    window.addEventListener('beforeunload', handleUnload);
+    const handleVis = () => {
+      if (document.hidden) setUserOnlineStatus(user.id, 'teachers', false);
+      else setUserOnlineStatus(user.id, 'teachers', true);
+    };
+    document.addEventListener('visibilitychange', handleVis);
+
+    return () => {
+      clearInterval(beat);
+      window.removeEventListener('mousemove', onActivity);
+      window.removeEventListener('keydown', onActivity);
+      window.removeEventListener('beforeunload', handleUnload);
+      document.removeEventListener('visibilitychange', handleVis);
+      setUserOnlineStatus(user.id, 'teachers', false);
+    };
+  }, [user?.id]);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -219,7 +250,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                     <div className="text-[8px] text-gray-500 mt-1">مدير المنصة</div>
                  </div>
                  {user.imageUrl ? (
-                   <img src={user.imageUrl} alt="Admin" className="w-8 h-8 rounded-lg object-cover" />
+                   <img loading="lazy" src={user.imageUrl} alt="Admin" className="w-8 h-8 rounded-lg object-cover" />
                  ) : (
                    <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center text-purple-400 text-xs font-black">
                      {user.name[0]}
@@ -229,7 +260,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             </div>
         </header>
 
-        <div className="p-4 lg:p-10 w-full">
+        <div className="p-4 lg:p-10 w-full max-w-full overflow-x-hidden">
           {children}
         </div>
       </main>

@@ -7,7 +7,12 @@ export {
   deleteTeacher, subscribeToTeachers, subscribeToTeacherProfile 
 } from './supabase/teachers';
 
-export { getSettings, saveSettings, subscribeToSettings } from './supabase/settings';
+export {
+  getSettings,
+  saveSettings,
+  subscribeToSettings,
+  getAllSettings
+} from './supabase/settings';
 
 export { 
   getExams, getPublishedExams, getExam, saveExam, deleteExam, 
@@ -32,7 +37,7 @@ export {
 } from './supabase/materials';
 
 export { 
-  addNotification, dispatchNotification, markNotificationRead, 
+  addNotification, dispatchNotification, markNotificationRead, markNotificationsAsReadBulk,
   markAllNotificationsRead, subscribeToNotifications, saveNotificationLog, 
   getNotificationLogs, subscribeToNotificationLogs, updateNotificationLog 
 } from './supabase/notifications';
@@ -52,7 +57,7 @@ export { getCalendarEvents, saveCalendarEvent, deleteCalendarEvent } from './sup
 export { 
   sendMessage, subscribeToConversations, subscribeToMessages, 
   markMessagesAsRead, setUserOnlineStatus, subscribeToUserOnlineStatus,
-  heartbeatUserOnlineStatus, loadOlderMessages,
+  heartbeatUserOnlineStatus, setUserOfflineBeacon, loadOlderMessages,
   broadcastTyping, subscribeToTyping
 } from './supabase/messages';
 

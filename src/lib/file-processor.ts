@@ -109,7 +109,7 @@ export class FileProcessor {
       const options = {
         maxSizeMB: 9.5, // Aim for just under 10MB
         maxWidthOrHeight: 2560,
-        useWebWorker: true,
+        useWebWorker: false, // WebWorkers often fail in Next.js causing [object Event] errors
         onProgress: (p: number) => onProgress?.(p),
       };
 

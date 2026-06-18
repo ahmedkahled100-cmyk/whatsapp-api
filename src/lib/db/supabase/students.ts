@@ -2,6 +2,7 @@
 import { supabase } from '@/lib/supabase';
 import { STUDENTS, ATTEMPTS, GROUPS, REG_REQUESTS } from '../constants';
 import { fromDB, toDB, manyFromDB } from './dbUtils';
+import { checkUserUniqueness } from './validation';
 import type { Student, Group, RegistrationRequest } from '@/types';
 import { normalizePhone, generateCode } from '@/lib/utils';
 
@@ -36,74 +37,6 @@ export const getStudents = async (teacherId: string): Promise<Student[]> => {
   return manyFromDB<Student>(data).map(student => {
     // UI CLEANING: Strip shadow sub-codes (-T...)
     if (student.code) student.code = student.code.replace(/-T[a-zA-Z0-9]+$/, '');
-  
-    if (student.notes) {
-      // Extract subStart
-      const stMatch = student.notes.match(/\[ST:(\d+)\]/);
-      if (stMatch) student.subStart = parseInt(stMatch[1]);
-      
-      // Extract Total Paid
-      const tpMatch = student.notes.match(/\[TP:(\d+)\]/);
-      if (tpMatch) student.totalPaid = parseInt(tpMatch[1]);
-  
-      // Extract subPrice (Shadow)
-      const prcMatch = student.notes.match(/\[PRC:(\d+)\]/);
-      if (prcMatch) student.subPrice = parseInt(prcMatch[1]);
-  
-      // Extract History
-      const histMatch = student.notes.match(/\[HIST:(.*?)\]/);
-      if (histMatch) {
-         try { student.paymentHistory = JSON.parse(decode(histMatch[1])); } catch {}
-      }
-  
-      // Extract imageUrl if not in column
-      if (!student.imageUrl) {
-        const imgMatch = student.notes.match(/\[IMG:(.*?)\]/);
-        if (imgMatch) student.imageUrl = imgMatch[1];
-      }
-
-      const qrMatch = student.notes.match(/\[QR:(.*?)\]/);
-      if (qrMatch) student.qrCodeId = qrMatch[1];
-
-      const bnMatch = student.notes.match(/\[BN:(.*?)\]/);
-      if (bnMatch) {
-        try { student.behavioralNotes = decode(bnMatch[1]); } catch { student.behavioralNotes = bnMatch[1]; }
-      }
-
-      // Extract cancelReason from notes if not in dedicated column
-      if (!student.cancelReason) {
-        const crMatch = student.notes.match(/\[CR:(.*?)\]/);
-        if (crMatch) {
-          try { student.cancelReason = decode(crMatch[1]); } catch { student.cancelReason = crMatch[1]; }
-        }
-      }
-
-      const ptsMatch = student.notes.match(/\[PTS:(\d+)\]/);
-      if (ptsMatch) student.points = parseInt(ptsMatch[1]);
-
-      const lvlMatch = student.notes.match(/\[LVL:(\d+)\]/);
-      if (lvlMatch) student.level = parseInt(lvlMatch[1]);
-
-      const bdgMatch = student.notes.match(/\[BDG:(.*?)\]/);
-      if (bdgMatch) {
-         try { student.badges = JSON.parse(decode(bdgMatch[1])); } catch {}
-      }
-  
-      // CLEAN the notes field for the UI
-      student.notes = student.notes
-        .replace(/\[ST:\d+\]/g, '')
-        .replace(/\[IMG:.*?\]/g, '')
-        .replace(/\[TP:\d+\]/g, '')
-        .replace(/\[PRC:\d+\]/g, '')
-        .replace(/\[HIST:.*?\]/g, '')
-        .replace(/\[CR:.*?\]/g, '')
-        .replace(/\[QR:.*?\]/g, '')
-        .replace(/\[BN:.*?\]/g, '')
-        .replace(/\[PTS:\d+\]/g, '')
-        .replace(/\[LVL:\d+\]/g, '')
-        .replace(/\[BDG:.*?\]/g, '')
-        .trim();
-    }
     return student;
   });
 };
@@ -112,58 +45,7 @@ export const getAllStudents = async (): Promise<Student[]> => {
   const { data, error } = await supabase.from(STUDENTS).select('*');
   if (error) throw error;
   return manyFromDB<Student>(data).map(student => {
-    if (student.notes) {
-      const stMatch = student.notes.match(/\[ST:(\d+)\]/);
-      if (stMatch) student.subStart = parseInt(stMatch[1]);
-      
-      const tpMatch = student.notes.match(/\[TP:(\d+)\]/);
-      if (tpMatch) student.totalPaid = parseInt(tpMatch[1]);
-
-      const prcMatch = student.notes.match(/\[PRC:(\d+)\]/);
-      if (prcMatch) student.subPrice = parseInt(prcMatch[1]);
-
-      const histMatch = student.notes.match(/\[HIST:(.*?)\]/);
-      if (histMatch) {
-         try { student.paymentHistory = JSON.parse(decode(histMatch[1])); } catch {}
-      }
-
-      if (!student.imageUrl) {
-        const imgMatch = student.notes.match(/\[IMG:(.*?)\]/);
-        if (imgMatch) student.imageUrl = imgMatch[1];
-      }
-
-      const qrMatch = student.notes.match(/\[QR:(.*?)\]/);
-      if (qrMatch) student.qrCodeId = qrMatch[1];
-
-      const bnMatch = student.notes.match(/\[BN:(.*?)\]/);
-      if (bnMatch) {
-        try { student.behavioralNotes = decode(bnMatch[1]); } catch { student.behavioralNotes = bnMatch[1]; }
-      }
-
-      const ptsMatch = student.notes.match(/\[PTS:(\d+)\]/);
-      if (ptsMatch) student.points = parseInt(ptsMatch[1]);
-
-      const lvlMatch = student.notes.match(/\[LVL:(\d+)\]/);
-      if (lvlMatch) student.level = parseInt(lvlMatch[1]);
-
-      const bdgMatch = student.notes.match(/\[BDG:(.*?)\]/);
-      if (bdgMatch) {
-         try { student.badges = JSON.parse(decode(bdgMatch[1])); } catch {}
-      }
-
-      student.notes = student.notes
-        .replace(/\[ST:\d+\]/g, '')
-        .replace(/\[IMG:.*?\]/g, '')
-        .replace(/\[TP:\d+\]/g, '')
-        .replace(/\[PRC:\d+\]/g, '')
-        .replace(/\[HIST:.*?\]/g, '')
-        .replace(/\[QR:.*?\]/g, '')
-        .replace(/\[BN:.*?\]/g, '')
-        .replace(/\[PTS:\d+\]/g, '')
-        .replace(/\[LVL:\d+\]/g, '')
-        .replace(/\[BDG:.*?\]/g, '')
-        .trim();
-    }
+    if (student.code) student.code = student.code.replace(/-T[a-zA-Z0-9]+$/, '');
     return student;
   });
 };
@@ -176,19 +58,10 @@ export const getStudentByCode = async (code: string): Promise<Student[]> => {
     .or(`code.eq.${cleanCode},code.ilike.${cleanCode}-T%`);
   if (error) throw error;
   
-  const results = manyFromDB<Student>(data).map(s => {
-    // Strip shadow sub-codes (-T...)
+  return manyFromDB<Student>(data).map(s => {
     if (s.code) s.code = s.code.replace(/-T[a-zA-Z0-9]+$/, '');
-    // Decode cancelReason from notes fallback if not in dedicated column
-    if (!s.cancelReason && s.notes) {
-      const crMatch = s.notes.match(/\[CR:(.*?)\]/);
-      if (crMatch) {
-        try { s.cancelReason = decode(crMatch[1]); } catch { s.cancelReason = crMatch[1]; }
-      }
-    }
     return s;
   });
-  return results;
 };
 
 /**
@@ -239,10 +112,6 @@ export const getStudentByParentPhone = async (parentPhone: string): Promise<Stud
   if (error) throw error;
   if (!data) return null;
   const student = fromDB<Student>(data);
-  if (student.notes && !student.imageUrl) {
-    const imgMatch = student.notes.match(/\[IMG:(.*?)\]/);
-    if (imgMatch) student.imageUrl = imgMatch[1];
-  }
   if (student.code) {
     student.code = student.code.replace(/-T[a-zA-Z0-9]+$/, '');
   }
@@ -262,10 +131,6 @@ export const getStudentByPhoneAnywhere = async (phone: string): Promise<Student 
   if (!data) return null;
   
   const student = fromDB<Student>(data);
-  if (student.notes && !student.imageUrl) {
-    const imgMatch = student.notes.match(/\[IMG:(.*?)\]/);
-    if (imgMatch) student.imageUrl = imgMatch[1];
-  }
   if (student.code) {
     student.code = student.code.replace(/-T[a-zA-Z0-9]+$/, '');
   }
@@ -292,11 +157,6 @@ export const getEnrollmentsByParentPhone = async (parentPhone: string): Promise<
     .eq('parent_phone', parentPhone.trim());
   if (error) throw error;
   return manyFromDB<Student>(data).map(s => {
-    if (s.notes && !s.imageUrl) {
-      const imgMatch = s.notes.match(/\[IMG:(.*?)\]/);
-      if (imgMatch) s.imageUrl = imgMatch[1];
-    }
-    // UI CLEANING: Strip shadow sub-codes (-T...)
     if (s.code) s.code = s.code.replace(/-T[a-zA-Z0-9]+$/, '');
     return s;
   });
@@ -311,57 +171,7 @@ export const getEnrollmentsByPhone = async (phone: string): Promise<Student[]> =
     .eq('phone', normalized);
   if (error) throw error;
   return manyFromDB<Student>(data).map(student => {
-    // UI CLEANING: Strip shadow sub-codes (-T...)
     if (student.code) student.code = student.code.replace(/-T[a-zA-Z0-9]+$/, '');
-
-    if (student.notes && !student.imageUrl) {
-      const imgMatch = student.notes.match(/\[IMG:(.*?)\]/);
-      if (imgMatch) student.imageUrl = imgMatch[1];
-    }
-    
-    if (student.notes) {
-      const qrMatch = student.notes.match(/\[QR:(.*?)\]/);
-      if (qrMatch) student.qrCodeId = qrMatch[1];
-
-      const bnMatch = student.notes.match(/\[BN:(.*?)\]/);
-      if (bnMatch) {
-        try { student.behavioralNotes = decode(bnMatch[1]); } catch { student.behavioralNotes = bnMatch[1]; }
-      }
-    }
-
-    if (student.notes) {
-      const stMatch = student.notes.match(/\[ST:(\d+)\]/);
-      if (stMatch) student.subStart = parseInt(stMatch[1]);
-
-      const tpMatch = student.notes.match(/\[TP:(\d+)\]/);
-      if (tpMatch) student.totalPaid = parseInt(tpMatch[1]);
-
-      const prcMatch = student.notes.match(/\[PRC:(\d+)\]/);
-      if (prcMatch) student.subPrice = parseInt(prcMatch[1]);
-
-      const ptsMatch = student.notes.match(/\[PTS:(\d+)\]/);
-      if (ptsMatch) student.points = parseInt(ptsMatch[1]);
-
-      const lvlMatch = student.notes.match(/\[LVL:(\d+)\]/);
-      if (lvlMatch) student.level = parseInt(lvlMatch[1]);
-
-      const bdgMatch = student.notes.match(/\[BDG:(.*?)\]/);
-      if (bdgMatch) {
-         try { student.badges = JSON.parse(decode(bdgMatch[1])); } catch {}
-      }
-
-      student.notes = student.notes
-        .replace(/\[ST:\d+\]/g, '')
-        .replace(/\[IMG:.*?\]/g, '')
-        .replace(/\[TP:\d+\]/g, '')
-        .replace(/\[PRC:\d+\]/g, '')
-        .replace(/\[QR:.*?\]/g, '')
-        .replace(/\[BN:.*?\]/g, '')
-        .replace(/\[PTS:\d+\]/g, '')
-        .replace(/\[LVL:\d+\]/g, '')
-        .replace(/\[BDG:.*?\]/g, '')
-        .trim();
-    }
     return student;
   });
 };
@@ -374,104 +184,6 @@ export const saveStudent = async (student: Omit<Student, 'id'> & { id?: string }
   delete payload.teacher_code;
   delete payload.teacher_name;
 
-  // Serialize everything into notes to prevent DB schema errors
-  let cleanNotes = (payload.notes || '')
-    .replace(/\[ST:\d+\]/g, '')
-    .replace(/\[IMG:.*?\]/g, '')
-    .replace(/\[TP:\d+\]/g, '')
-    .replace(/\[PRC:\d+\]/g, '')
-    .replace(/\[HIST:.*?\]/g, '')
-    .replace(/\[QR:.*?\]/g, '')
-    .replace(/\[BN:.*?\]/g, '')
-    .replace(/\[PTS:\d+\]/g, '')
-    .replace(/\[LVL:\d+\]/g, '')
-    .replace(/\[BDG:.*?\]/g, '')
-    .trim();
-  
-  if (payload.sub_start !== undefined) {
-    if (payload.sub_start !== null) {
-      cleanNotes = `${cleanNotes} [ST:${payload.sub_start}]`.trim();
-    }
-    delete payload.sub_start;
-  }
-
-  if (payload.sub_price !== undefined) {
-    cleanNotes = `${cleanNotes} [PRC:${payload.sub_price || 0}]`.trim();
-    // We keep sub_price in payload too if column exists
-  }
-
-  if (payload.total_paid !== undefined) {
-    cleanNotes = `${cleanNotes} [TP:${payload.total_paid || 0}]`.trim();
-    delete payload.total_paid;
-  }
-
-  if (payload.payment_history !== undefined) {
-    const histStr = encode(JSON.stringify(payload.payment_history || []));
-    cleanNotes = `${cleanNotes} [HIST:${histStr}]`.trim();
-    delete payload.payment_history;
-  }
-
-  // Serialize imageUrl into notes to prevent DB schema errors if column is missing
-  if (payload.image_url !== undefined && payload.image_url !== null) {
-    cleanNotes = `${cleanNotes} [IMG:${payload.image_url}]`.trim();
-    // We keep image_url in payload too, in case the column exists
-  }
-  
-  if (payload.registered_at && typeof payload.registered_at === 'string') {
-    const parsed = new Date(payload.registered_at);
-    if (!isNaN(parsed.getTime())) {
-      cleanNotes = `${cleanNotes} [REG:${parsed.toISOString()}]`.trim();
-    }
-    delete payload.registered_at;
-  }
-
-  // Preserve created_at in notes as well
-  const createdAtToUse = payload.created_at || Date.now();
-  cleanNotes = `${cleanNotes} [CAT:${createdAtToUse}]`.trim();
-  delete payload.created_at;
-
-  // Serialize cancelReason into notes as [CR:...] to ensure it always persists (must be BEFORE payload.notes assignment)
-  const cancelReason = (student as any).cancelReason;
-  if (cancelReason !== undefined) {
-    cleanNotes = cleanNotes.replace(/\[CR:.*?\]/g, '').trim();
-    if (cancelReason) {
-      // Using base64 encoding to handle Arabic text and special characters safely
-      cleanNotes = `${cleanNotes} [CR:${encode(cancelReason)}]`.trim();
-    }
-  }
-
-  const qrCodeId = (student as any).qrCodeId;
-  if (qrCodeId !== undefined) {
-    cleanNotes = cleanNotes.replace(/\[QR:.*?\]/g, '').trim();
-    if (qrCodeId) {
-      cleanNotes = `${cleanNotes} [QR:${qrCodeId}]`.trim();
-    }
-  }
-
-  const behavioralNotes = (student as any).behavioralNotes;
-  if (behavioralNotes !== undefined) {
-    cleanNotes = cleanNotes.replace(/\[BN:.*?\]/g, '').trim();
-    if (behavioralNotes) {
-      cleanNotes = `${cleanNotes} [BN:${encode(behavioralNotes)}]`.trim();
-    }
-  }
-
-  if (payload.points !== undefined) {
-    cleanNotes = `${cleanNotes} [PTS:${payload.points}]`.trim();
-    delete payload.points;
-  }
-  if (payload.level !== undefined) {
-    cleanNotes = `${cleanNotes} [LVL:${payload.level}]`.trim();
-    delete payload.level;
-  }
-  if (payload.badges !== undefined) {
-    const bdgStr = encode(JSON.stringify(payload.badges || []));
-    cleanNotes = `${cleanNotes} [BDG:${bdgStr}]`.trim();
-    delete payload.badges;
-  }
-
-  payload.notes = cleanNotes || undefined;
-
   if (payload.code) payload.code = String(payload.code).trim().toUpperCase();
   
   // Normalize phone numbers radically to ensure 01xxxxxxxxx format
@@ -480,12 +192,19 @@ export const saveStudent = async (student: Omit<Student, 'id'> & { id?: string }
 
   // RADICAL ENFORCEMENT: Force code unification by searching anywhere for this phone
   const existingForCode = await getStudentByPhoneAnywhere(payload.phone);
-  if (existingForCode && existingForCode.code) {
-    // If we found an existing code, we MUST use it to maintain unified identity
-    payload.code = existingForCode.code;
-  } else if (!payload.code) {
-    // Fallback if no code provided and no existing student found
-    payload.code = generateCode();
+  
+  if (!student.id) {
+    // ADDING a new enrollment: Force unified code if exists
+    if (existingForCode && existingForCode.code) {
+      payload.code = existingForCode.code;
+    } else if (!payload.code) {
+      payload.code = generateCode();
+    }
+  } else {
+    // EDITING: Allow custom code, but ensure there's at least one
+    if (!payload.code) {
+      payload.code = existingForCode?.code || generateCode();
+    }
   }
 
   // CONFLICT PREVENTION: Check if THIS teacher already has this student record (by phone)
@@ -504,7 +223,7 @@ export const saveStudent = async (student: Omit<Student, 'id'> & { id?: string }
 
   if (!idToUse) idToUse = crypto.randomUUID();
 
-  // FIELD FILTERING: Only send columns highly likely to be standard in the database
+  // FIELD FILTERING: Map clean payload directly matching the modernized DB schema
   const finalSafePayload: any = {
     id: idToUse,
     teacher_id: payload.teacher_id,
@@ -516,9 +235,23 @@ export const saveStudent = async (student: Omit<Student, 'id'> & { id?: string }
     sub_type: payload.sub_type,
     sub_expiry: payload.sub_expiry,
     sub_price: payload.sub_price,
-    notes: payload.notes
+    notes: payload.notes,
+    
+    // Modern direct columns
+    sub_start: payload.sub_start,
+    total_paid: payload.total_paid,
+    payment_history: payload.payment_history,
+    image_url: payload.image_url,
+    points: payload.points !== undefined ? payload.points : 0,
+    level: payload.level !== undefined ? payload.level : 1,
+    badges: payload.badges,
+    cancel_reason: payload.cancel_reason,
+    qr_code_id: payload.qr_code_id,
+    behavioral_notes: payload.behavioral_notes
   };
 
+  // CHECK UNIQUENESS BEFORE UPSERT
+  await checkUserUniqueness(finalSafePayload.code, undefined, idToUse, finalSafePayload.phone);
 
   // Use upsert to handle both new and existing students correctly
   let { error } = await supabase
@@ -539,6 +272,11 @@ export const saveStudent = async (student: Omit<Student, 'id'> & { id?: string }
   if (error) {
     if (error.code === '23505') throw new Error('DUPLICATE_CODE_OR_PHONE');
     throw error;
+  }
+  
+  // Synchronize the code across all enrollments with the same phone to keep identity unified
+  if (student.id && finalSafePayload.phone && finalSafePayload.code) {
+    await supabase.from(STUDENTS).update({ code: finalSafePayload.code }).eq('phone', finalSafePayload.phone);
   }
   
   return idToUse;
@@ -723,30 +461,9 @@ export const getRegistrationRequests = async (teacherId: string): Promise<Regist
 export const saveRegistrationRequest = async (req: Omit<RegistrationRequest, 'id'> & { id?: string }): Promise<string> => {
   const payload = toDB({ ...req });
   
-  // Serialize extras into a structured string in payment_ref to prevent data loss 
-  // since these columns might be missing in the 'registration_requests' table.
-  const extraPayload: any = {};
-  const possibleExtras = ['notes', 'subject', 'sub_price', 'image_url', 'student_id', 'existing_code'];
-  
-  possibleExtras.forEach(key => {
-    if ((payload as any)[key] !== undefined) {
-      extraPayload[key] = (payload as any)[key];
-    }
-  });
-
-  if (Object.keys(extraPayload).length > 0) {
-    const serialized = `|EXT:${JSON.stringify(extraPayload)}|`;
-    payload.payment_ref = payload.payment_ref 
-      ? `${payload.payment_ref} ${serialized}` 
-      : serialized;
-  }
-
-  // Remove fields that strictly don't exist in the legacy DB schema to prevent 400 errors
-  const fieldsToRemove = [
-    'notes', 'teacher_code', 'teacher_name', 'student_id', 
-    'subject', 'sub_price', 'image_url', 'existing_code'
-  ];
-  fieldsToRemove.forEach(f => delete payload[f]);
+  // Remove fields that strictly don't exist in the database (like cached teacher details if passed)
+  delete payload.teacher_code;
+  delete payload.teacher_name;
 
   Object.keys(payload).forEach(k => payload[k] === undefined && delete payload[k]);
 

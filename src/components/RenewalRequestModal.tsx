@@ -98,27 +98,29 @@ export function RenewalRequestModal({ settings, target, userData, onClose, onSub
 
   return (
     <div
-      className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in"
+      className="modal-overlay !z-[200]"
       onClick={e => e.target === e.currentTarget && onClose()}
     >
-      <div className="relative w-full max-w-lg bg-[#0f1117] border border-gold/20 rounded-2xl shadow-2xl shadow-black/60 animate-scale-in overflow-hidden">
+      <div className="modal-content border-gold/20 shadow-2xl shadow-black/60">
         {/* Header */}
-        <div className="p-5 border-b border-white/8 bg-gradient-to-r from-gold/10 to-transparent flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gold/20 flex items-center justify-center">
-            <CreditCard size={20} className="text-gold" />
+        <div className="modal-header bg-gradient-to-r from-gold/10 to-transparent">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-gold/20 flex items-center justify-center shrink-0">
+              <CreditCard size={20} className="text-gold" />
+            </div>
+            <div>
+              <h2 className="font-cairo font-black text-lg text-white">طلب تجديد الاشتراك</h2>
+              <p className="text-xs text-gray-400">
+                {target === 'student' ? 'أرسل طلبك وانتظر موافقة المعلم' : 'أرسل طلبك وانتظر موافقة الإدارة'}
+              </p>
+            </div>
           </div>
-          <div>
-            <h2 className="font-cairo font-black text-lg text-white">طلب تجديد الاشتراك</h2>
-            <p className="text-xs text-gray-400">
-              {target === 'student' ? 'أرسل طلبك وانتظر موافقة المعلم' : 'أرسل طلبك وانتظر موافقة الإدارة'}
-            </p>
-          </div>
-          <button onClick={onClose} className="mr-auto p-2 hover:bg-white/10 rounded-lg text-gray-400 hover:text-white transition-colors">
+          <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-lg text-gray-400 hover:text-white transition-colors shrink-0">
             <X size={18} />
           </button>
         </div>
 
-        <div className="p-5 space-y-4 max-h-[75vh] overflow-y-auto">
+        <div className="modal-body space-y-4">
           {/* Prices panel */}
           {settings && (
             <div className="bg-gradient-to-br from-gold/8 to-transparent border border-gold/20 rounded-xl p-4">
@@ -242,8 +244,8 @@ export function RenewalRequestModal({ settings, target, userData, onClose, onSub
         </div>
 
         {/* Footer */}
-        <div className="p-4 border-t border-white/8 flex gap-3">
-          <button onClick={onClose} className="btn-outline flex-1">إلغاء</button>
+        <div className="modal-footer">
+          <button onClick={onClose} className="btn-outline flex-1 justify-center">إلغاء</button>
           <button
             onClick={handleSubmit}
             disabled={submitting || uploading}

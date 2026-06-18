@@ -1,7 +1,7 @@
 // src/app/api/supabase-proxy/[...path]/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 
-export async function corsHeaders() {
+async function corsHeaders() {
   return {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, PATCH, OPTIONS',

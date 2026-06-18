@@ -8,7 +8,8 @@ import {
 import { 
   sendMessage, subscribeToMessages, markMessagesAsRead, 
   subscribeToUserOnlineStatus, uploadFileToStorage, dispatchNotification,
-  broadcastTyping, subscribeToTyping
+  broadcastTyping, subscribeToTyping,
+  setUserOnlineStatus, heartbeatUserOnlineStatus, setUserOfflineBeacon
 } from '@/lib/db';
 import { showToast } from '@/lib/toast';
 import { formatRelativeLastSeenAr } from '@/lib/utils';
@@ -52,11 +53,45 @@ export function GlobalChatWidget({ currentUser, conversations, contacts, superAd
   const { openPreview, PreviewModal } = useFilePreview();
 
   const unreadTotal = conversations.reduce((acc, conv) => {
-    if (conv.lastMessage && !conv.lastMessage.isRead && conv.lastMessage.receiverId === currentUser.id) {
+    if (conv.lastMessage && !conv.lastMessage.isRead && conv.lastMessage.receiverId === currentUser.id && selectedConv?.id !== conv.id) {
       return acc + 1;
     }
     return acc;
   }, 0);
+
+  // Global presence tracking
+  useEffect(() => {
+    if (!currentUser?.id) return;
+    const role = currentUser.role === 'student' ? 'student' : 'teachers';
+    
+    setUserOnlineStatus(currentUser.id, role, true);
+    
+    const beat = setInterval(() => {
+      heartbeatUserOnlineStatus(currentUser.id, role);
+    }, 25000);
+    
+    const onActivity = () => heartbeatUserOnlineStatus(currentUser.id, role);
+    window.addEventListener('mousemove', onActivity, { passive: true });
+    window.addEventListener('keydown', onActivity, { passive: true });
+    
+    const markOfflineSync = () => setUserOfflineBeacon(currentUser.id, role);
+    window.addEventListener('beforeunload', markOfflineSync);
+    
+    const onVis = () => {
+      if (document.hidden) setUserOfflineBeacon(currentUser.id, role);
+      else setUserOnlineStatus(currentUser.id, role, true);
+    };
+    document.addEventListener('visibilitychange', onVis);
+    
+    return () => {
+      clearInterval(beat);
+      window.removeEventListener('mousemove', onActivity);
+      window.removeEventListener('keydown', onActivity);
+      window.removeEventListener('beforeunload', markOfflineSync);
+      document.removeEventListener('visibilitychange', onVis);
+      setUserOfflineBeacon(currentUser.id, role);
+    };
+  }, [currentUser?.id, currentUser?.role]);
 
   useEffect(() => {
     if (isOpen && selectedConv) {
@@ -65,10 +100,24 @@ export function GlobalChatWidget({ currentUser, conversations, contacts, superAd
       markMessagesAsRead(selectedConv.id, currentUser.id);
 
       const unsubMsgs = subscribeToMessages(selectedConv.id, (msgs: Message[]) => {
-        setMessages(msgs);
+        setMessages(prev => {
+          const tempMsgs = prev.filter(m => m.id.startsWith('temp_'));
+          const remainingTemps = tempMsgs.filter(t => !msgs.some(m => m.content === t.content && m.senderId === t.senderId && Math.abs(m.timestamp - t.timestamp) < 10000));
+          const all = [...msgs, ...remainingTemps].sort((a, b) => a.timestamp - b.timestamp);
+          // Remove duplicates by ID just in case
+          const uniqueIds = new Set();
+          return all.filter(m => {
+            if (uniqueIds.has(m.id)) return false;
+            uniqueIds.add(m.id);
+            return true;
+          });
+        });
         setLoadingMessages(false);
         markMessagesAsRead(selectedConv.id, currentUser.id);
       });
+
+      markMessagesAsRead(selectedConv.id, currentUser.id);
+      setMessages(prev => prev.map(m => m.receiverId === currentUser.id && !m.isRead ? { ...m, isRead: true } : m));
 
       const otherParticipantId = selectedConv.participants.find(p => p !== currentUser.id);
       let unsubPresence = () => {};
@@ -137,10 +186,10 @@ export function GlobalChatWidget({ currentUser, conversations, contacts, superAd
     setNewMessage('');
     setAttachmentUrl('');
     setAttachmentType('text');
-    setSending(true);
+    setAttachmentType('text');
 
     try {
-      await sendMessage({
+      const realId = await sendMessage({
         senderId: currentUser.id,
         senderName: currentUser.name,
         receiverId,
@@ -150,6 +199,7 @@ export function GlobalChatWidget({ currentUser, conversations, contacts, superAd
         type: attachUrl ? attachType : 'text',
         ...(attachUrl ? { fileUrl: attachUrl } : {})
       });
+      setMessages(prev => prev.map(m => m.id === tempId ? { ...m, id: realId } : m));
       
       // Notify receiver if they are a teacher
       if (currentUser.role === 'student') {
@@ -169,8 +219,6 @@ export function GlobalChatWidget({ currentUser, conversations, contacts, superAd
         setAttachmentUrl(attachUrl);
         setAttachmentType(attachType);
       }
-    } finally {
-      setSending(false);
     }
   };
 
@@ -261,10 +309,12 @@ export function GlobalChatWidget({ currentUser, conversations, contacts, superAd
   };
 
   const filteredConversations = conversations.filter(c => 
-    c.participantNames.some(name => name.toLowerCase().includes(searchQuery.toLowerCase()))
+    !searchQuery || c.participantNames?.some(name => name?.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
-  const filteredContacts = contacts.filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()));
+  const filteredContacts = contacts.filter(c => 
+    !searchQuery || c.name?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   // Dropzone handling
   const [isDragOver, setIsDragOver] = useState(false);
@@ -309,7 +359,7 @@ export function GlobalChatWidget({ currentUser, conversations, contacts, superAd
 
       {/* Chat Widget Panel */}
       <div 
-        className={`fixed bottom-6 right-6 lg:right-10 z-[100] w-[360px] h-[600px] max-h-[85vh] max-w-[calc(100vw-32px)] bg-[#0a0f1c]/95 backdrop-blur-xl border border-white/10 rounded-3xl shadow-2xl flex flex-col overflow-hidden transition-all duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] ${isOpen ? 'translate-y-0 opacity-100 scale-100' : 'translate-y-20 opacity-0 scale-95 pointer-events-none'}`}
+        className={`fixed bottom-6 right-6 lg:right-10 z-[100] w-[360px] h-[600px] max-h-[85vh] max-w-[calc(100dvw-32px)] bg-[#0a0f1c]/95 backdrop-blur-xl border border-white/10 rounded-3xl shadow-2xl flex flex-col overflow-hidden transition-all duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] ${isOpen ? 'translate-y-0 opacity-100 scale-100' : 'translate-y-20 opacity-0 scale-95 pointer-events-none'}`}
       >
         {/* Header */}
         <div className="p-4 bg-gradient-to-r from-white/5 to-transparent border-b border-white/5 flex items-center justify-between shrink-0">
@@ -489,7 +539,7 @@ export function GlobalChatWidget({ currentUser, conversations, contacts, superAd
                       } ${isOptimistic ? 'opacity-60' : 'opacity-100'}`}>
                          {msg.type === 'image' && msg.fileUrl && (
                            <div className="mb-2 rounded-xl overflow-hidden cursor-pointer bg-black/10" onClick={() => openPreview(msg.fileUrl!, 'صورة')}>
-                             <img src={msg.fileUrl} alt="Attachment" className="max-w-full h-auto max-h-48 object-contain hover:scale-105 transition-transform" />
+                             <img loading="lazy" src={msg.fileUrl} alt="Attachment" className="max-w-full h-auto max-h-48 object-contain hover:scale-105 transition-transform" />
                            </div>
                          )}
                          {msg.type === 'file' && msg.fileUrl && (
@@ -605,10 +655,10 @@ export function GlobalChatWidget({ currentUser, conversations, contacts, superAd
 
                 <button 
                   type="submit" 
-                  disabled={(!newMessage.trim() && !attachmentUrl) || sending || uploadingFile || isCompressing}
-                  className="w-10 h-10 shrink-0 rounded-xl bg-gold text-black flex items-center justify-center shadow-lg shadow-gold/20 hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:grayscale mb-0.5"
+                  disabled={(!newMessage.trim() && !attachmentUrl) || uploadingFile || isCompressing}
+                  className="w-10 h-10 shrink-0 rounded-xl bg-gold text-black flex items-center justify-center shadow-lg active:scale-95 transition-all disabled:opacity-50"
                 >
-                  <Send size={18} className="ml-1" />
+                  <Send size={18} />
                 </button>
               </form>
             </div>

@@ -104,7 +104,7 @@ export function TeacherDiscovery({ currentTeacherId, enrolledTeacherIds = [], on
             <div className="relative shrink-0">
               <div className="w-16 h-16 rounded-2xl overflow-hidden bg-white/5 border border-white/10 flex items-center justify-center">
                 {teacher.imageUrl ? (
-                  <img src={teacher.imageUrl} alt={teacher.name} className="w-full h-full object-cover" />
+                  <img loading="lazy" src={teacher.imageUrl} alt={teacher.name} className="w-full h-full object-cover" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gold/20 to-accent/20 text-gold font-black text-xl">
                     {teacher.name[0]}

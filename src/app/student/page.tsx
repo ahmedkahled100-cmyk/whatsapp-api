@@ -38,13 +38,16 @@ import {
   subscribeToStudentByPhone,
   subscribeToRegistrationRequestByPhone,
   getRegistrationRequestsByPhone,
-  getTopStudents
+  getTopStudents,
+  getAllSettings,
+  getTeachers
 } from '@/lib/db';
 import { FileProcessor } from '@/lib/file-processor';
 import { showToast } from '@/lib/toast';
 import type { Settings } from '@/types';
 import type { Exam, Attempt, CourseMaterial, Assignment, AssignmentSubmission, Notification, Message, Conversation, CalendarEvent, Student } from '@/types';
-import { GraduationCap, LogOut, BookOpen, BarChart2, ClipboardList, Download, Award, Video, FileText, Link as LinkIcon, BookMarked, Globe, Lock, Upload, MessageCircle, MessageSquare, Loader2, Bell, Send, Check, CheckCheck, X, Plus, ShieldCheck, AlertCircle, Paperclip, Image as ImageIcon, Trash2, User, Gamepad2, Layers, Trophy, Star, Languages, Brain, Zap, ChevronRight, ChevronDown, ChevronUp, Sparkles, Bot, Calendar, Clock, Camera } from 'lucide-react';
+import { GraduationCap, LogOut, BookOpen, BarChart2, ClipboardList, Download, Award, Video, FileText, Link as LinkIcon, BookMarked, Globe, Lock, Upload, MessageCircle, MessageSquare, Loader2, Bell, Send, Check, CheckCheck, X, Plus, ShieldCheck, AlertCircle, Paperclip, Image as ImageIcon, Trash2, User, Gamepad2, Layers, Trophy, Star, Languages, Brain, Zap, ChevronRight, ChevronDown, ChevronUp, Sparkles, Bot, Calendar, Clock, Camera, Youtube, PlayCircle } from 'lucide-react';
+import { YoutubeChannelCard } from '@/components/YoutubeChannelCard';
 import { PDFCompressionModal, usePDFCompression } from '@/components/PDFCompressionModal';
 import Link from 'next/link';
 import { filterNotificationsForStudent } from '@/lib/notification-audience';
@@ -88,7 +91,7 @@ export default function StudentPortal() {
   const [submittingAssignId, setSubmittingAssignId] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
 
-  const [activeTab, setActiveTab] = useState<'home' | 'exams' | 'courses' | 'assignments' | 'results' | 'messages' | 'settings' | 'profile' | 'discover' | 'link' | 'games' | 'schedule' | 'leaderboard'>('home');
+  const [activeTab, setActiveTab] = useState<'home' | 'exams' | 'courses' | 'youtube' | 'assignments' | 'results' | 'messages' | 'settings' | 'profile' | 'discover' | 'link' | 'games' | 'schedule' | 'leaderboard'>('home');
   const [games, setGames] = useState<EducationalGame[]>([]);
   const [leaderboardStudents, setLeaderboardStudents] = useState<Student[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -96,6 +99,7 @@ export default function StudentPortal() {
   const [showNotifs, setShowNotifs] = useState(false);
   const [certData, setCertData] = useState<{ attempt: Attempt, exam: Exam } | null>(null);
   const [siteSettings, setSiteSettings] = useState<Settings | null>(null);
+  const [allTeacherChannels, setAllTeacherChannels] = useState<{teacherId: string, teacherName: string, url: string, image?: string}[]>([]);
   const [showForgotCode, setShowForgotCode] = useState(false);
   const [parentPhone, setParentPhone] = useState('');
   const [recoveredCode, setRecoveredCode] = useState('');
@@ -122,12 +126,16 @@ export default function StudentPortal() {
     setExplainingQuestionId(qId);
     try {
       const q = exam.questions?.find(x => x.id === qId);
-      const ans = att.answers?.find(x => x.questionId === qId);
-      if (!q || !ans) throw new Error('السؤال غير موجود');
+      const studentAns = att.answers?.[qId];
+      if (!q || studentAns === undefined) throw new Error('السؤال غير موجود');
       
       const qText = q.text;
-      const studentAnsText = q.options ? q.options[Number(ans.answer)] : String(ans.answer);
-      const correctAnsText = q.options ? q.options[Number(q.correct)] : 'غير متوفرة';
+      const studentAnsText = q.options 
+        ? q.options[studentAns] 
+        : (q.type === 'tf' ? (studentAns === 1 ? 'صح' : 'خطأ') : String(studentAns));
+      const correctAnsText = q.options 
+        ? q.options[Number(q.correct)] 
+        : (q.type === 'tf' ? (q.isTrue ? 'صح' : 'خطأ') : 'غير متوفرة');
       
       const prompt = `السؤال: ${qText}\nإجابة الطالب الخاطئة: ${studentAnsText}\nالإجابة الصحيحة: ${correctAnsText}\nاشرح للطالب بأسلوب مبسط ومختصر وبناء لماذا إجابته خاطئة وكيف يصل للإجابة الصحيحة في سطرين.`;
       
@@ -252,10 +260,25 @@ export default function StudentPortal() {
     if (!student) return;
     if (student.teacherId) {
       getSettings(student.teacherId).then((s: any) => setSiteSettings(s));
-      import('@/lib/db').then(({ getTeacherById }: any) => {
+      import('@/lib/db').then(({ getTeacherById, getTeachers, getAllSettings }: any) => {
         getTeacherById(student.teacherId).then((t: any) => {
           setTeacherPermissions(t?.permissions || null);
           setTeacherInfo(t);
+        });
+
+        Promise.all([getTeachers(), getAllSettings()]).then(([ts, sets]: any) => {
+          const channels: any[] = [];
+          sets.forEach((s: any) => {
+             if (s.youtubeChannelUrl) {
+               const t = ts.find((x: any) => x.id === s.teacherId);
+               // Filter out current active teacher because it's already shown as the main channel
+               // or maybe just show everyone. User asked for "list of channels of teachers in the platform".
+               if (t && t.isActive) {
+                 channels.push({ teacherId: t.id, teacherName: t.name, url: s.youtubeChannelUrl, image: t.imageUrl });
+               }
+             }
+          });
+          setAllTeacherChannels(channels);
         });
       });
     }
@@ -319,7 +342,9 @@ export default function StudentPortal() {
         useStudentStore.getState().setStudent({ ...current, ...freshData });
       }
     });
-    return unsub;
+    return () => {
+      if (unsub) void unsub();
+    };
   }, [student?.id, student?.teacherId]);
 
   // 🔔 Real-time: detect new teacher approvals (new enrollment with same phone)
@@ -627,7 +652,7 @@ export default function StudentPortal() {
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 rounded-2xl bg-gold/10 flex items-center justify-center text-gold text-xl font-bold border border-gold/20 overflow-hidden shrink-0">
                     {en.teacherImage ? (
-                      <img src={en.teacherImage} alt={en.teacherName} className="w-full h-full object-cover" />
+                      <img loading="lazy" src={en.teacherImage} alt={en.teacherName} className="w-full h-full object-cover" />
                     ) : (
                       en.teacherName?.[0] || '👨‍🏫'
                     )}
@@ -760,7 +785,7 @@ export default function StudentPortal() {
 
             {/* Forgot Code Modal */}
             {showForgotCode && (
-              <div className="modal-overlay" onClick={() => { setShowForgotCode(false); setRecoveredCode(''); setParentPhone(''); }}>
+              <div className="modal-overlay" >
                 <div className="modal-content modal-content-sm" onClick={e => e.stopPropagation()}>
                   <h3 className="text-xl font-bold mb-4 text-center">استرجاع كود الطالب</h3>
                   <p className="text-xs text-text-muted mb-4 text-center">أدخل رقم هاتف ولي الأمر المسجل للحصول على الكود الخاص بك.</p>
@@ -1066,7 +1091,7 @@ export default function StudentPortal() {
                 </div>
               ) : (
                 Object.entries(
-                  materials.reduce((acc, m) => {
+                  materials.filter(m => m.type !== 'youtube').reduce((acc, m) => {
                     if (!acc[m.subject]) acc[m.subject] = [];
                     acc[m.subject].push(m);
                     return acc;
@@ -1114,6 +1139,102 @@ export default function StudentPortal() {
                   </div>
                 ))
               )}
+            </div>
+          )}
+
+          {/* YouTube Tab */}
+          {activeTab === 'youtube' && (
+            <div className="space-y-6 animate-slide-up">
+               {/* Channel Header (if available) */}
+               {siteSettings?.youtubeChannelUrl && (
+                  <YoutubeChannelCard url={siteSettings.youtubeChannelUrl} />
+               )}
+
+               {/* Teacher Channels List */}
+               {allTeacherChannels.filter(c => c.teacherId !== student?.teacherId).length > 0 && (
+                 <div className="space-y-4 pt-4 border-t border-white/10 mt-6">
+                   <h3 className="font-bold text-lg text-white flex items-center gap-2">
+                     <Youtube className="text-red-500" size={20} />
+                     اكتشف قنوات المدرسين بالمنصة
+                   </h3>
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                     {allTeacherChannels.filter(c => c.teacherId !== student?.teacherId).map(channel => (
+                       <YoutubeChannelCard key={channel.teacherId} url={channel.url} />
+                     ))}
+                   </div>
+                 </div>
+               )}
+
+               <div className="pt-4 border-t border-white/10 mt-6">
+                 <h3 className="font-bold text-lg text-white mb-4">مقاطع فيديو مضافة</h3>
+                 {materials.filter(m => m.type === 'youtube').length === 0 ? (
+                 <div className="card-base p-16 text-center border-dashed border-2 border-white/5 bg-black/10">
+                   <div className="w-20 h-20 bg-red-500/5 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <Youtube size={32} className="text-red-500/30" />
+                   </div>
+                   <h3 className="text-lg font-bold text-gray-300 mb-2">لا يوجد مقاطع يوتيوب متاحة حالياً</h3>
+                 </div>
+               ) : (
+                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                   {materials.filter(m => m.type === 'youtube').sort((a, b) => a.sequence - b.sequence).map(material => {
+                      const getYoutubeVideoId = (url: string) => {
+                         const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
+                         const match = url.match(regExp);
+                         return (match && match[2].length === 11) ? match[2] : null;
+                      };
+                      const videoId = getYoutubeVideoId(material.url || '');
+                      const thumbnailUrl = videoId ? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg` : null;
+
+                      return (
+                         <div key={material.id} className="card-base overflow-hidden group hover:border-red-500/30 transition-all hover:-translate-y-1 shadow-lg bg-black/20 flex flex-col cursor-pointer" onClick={() => window.open(material.url, '_blank')}>
+                            {/* Thumbnail */}
+                            <div className="w-full h-44 bg-black relative border-b border-white/5 flex-shrink-0">
+                               {thumbnailUrl ? (
+                                 <img src={thumbnailUrl} alt={material.title} className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" />
+                               ) : (
+                                 <div className="w-full h-full flex items-center justify-center bg-gray-900">
+                                    <Youtube size={40} className="text-gray-700" />
+                                 </div>
+                               )}
+                               <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent" />
+                               
+                               {/* Play Overlay */}
+                               <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all bg-black/40 backdrop-blur-sm">
+                                  <PlayCircle size={56} className="text-red-500 drop-shadow-[0_0_15px_rgba(239,68,68,0.8)]" />
+                               </div>
+
+                               {/* Sequence Badge */}
+                               <div className="absolute top-3 right-3 w-8 h-8 rounded-lg bg-red-600 text-white flex items-center justify-center text-sm font-black shadow-lg">
+                                  {material.sequence}
+                               </div>
+
+                               {/* Status Badge */}
+                               <div className="absolute top-3 left-3 flex gap-1">
+                                  {material.isFree ? (
+                                    <span className="bg-green-500/80 backdrop-blur-md text-white text-[10px] px-2 py-1 rounded-md font-bold flex items-center gap-1 shadow-lg">
+                                      <Globe size={10} /> مجاني
+                                    </span>
+                                  ) : (
+                                    <span className="bg-black/70 backdrop-blur-md text-red-400 border border-red-500/30 text-[10px] px-2 py-1 rounded-md font-bold flex items-center gap-1 shadow-lg">
+                                      <Lock size={10} /> للمشتركين
+                                    </span>
+                                  )}
+                               </div>
+                            </div>
+
+                            <div className="p-4 flex flex-col flex-1">
+                               <h3 className="font-bold text-gray-100 mb-2 line-clamp-2 leading-snug group-hover:text-red-400 transition-colors" title={material.title}>{material.title}</h3>
+                               
+                               <div className="mt-auto pt-4 border-t border-white/5 text-xs text-gray-400 flex items-center gap-1 group-hover:text-red-400 transition-colors">
+                                  <PlayCircle size={14} /> مشاهدة الآن على يوتيوب
+                               </div>
+                            </div>
+                         </div>
+                      );
+                   })}
+                 </div>
+               )}
+               </div>
             </div>
           )}
 
@@ -1247,10 +1368,11 @@ export default function StudentPortal() {
                       <div className="p-4 border-t border-white/5 bg-black/20 space-y-3 animate-slide-up">
                         <h4 className="font-bold text-sm mb-3">تفاصيل الإجابات</h4>
                         {exam.questions?.map((q, i) => {
-                          const ans = att.answers?.find(a => a.questionId === q.id);
-                          if (!ans || ans.isCorrect) return null; // Only show wrong questions for AI Feedback
+                          const studentAns = att.answers?.[q.id];
+                          const isCorrect = studentAns !== undefined && (q.type === 'tf' ? ((studentAns === 1 && q.isTrue === true) || (studentAns === 0 && q.isTrue === false)) : studentAns === q.correct);
+                          if (studentAns === undefined || isCorrect) return null; // Only show wrong questions for AI Feedback
                           
-                          const feedbackText = localAIFeedbacks[`${att.id}_${q.id}`] || att.aiFeedback?.[q.id];
+                          const feedbackText = localAIFeedbacks[`${att.id}_${q.id}`] || (att.aiFeedback as any)?.[q.id];
                           const isExplaining = explainingQuestionId === q.id;
 
                           return (
@@ -1260,11 +1382,15 @@ export default function StudentPortal() {
                               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
                                 <div className="p-2 bg-red-500/10 rounded-lg">
                                   <span className="text-red-400 font-bold block mb-1">إجابتك (خاطئة)</span>
-                                  {q.options ? q.options[Number(ans.answer)] : String(ans.answer)}
+                                  {q.options 
+                                    ? q.options[studentAns] 
+                                    : (q.type === 'tf' ? (studentAns === 1 ? 'صح' : 'خطأ') : String(studentAns))}
                                 </div>
                                 <div className="p-2 bg-green-500/10 rounded-lg">
                                   <span className="text-green-400 font-bold block mb-1">الإجابة الصحيحة</span>
-                                  {q.options ? q.options[Number(q.correct)] : 'غير متوفرة'}
+                                  {q.options 
+                                    ? q.options[Number(q.correct)] 
+                                    : (q.type === 'tf' ? (q.isTrue ? 'صح' : 'خطأ') : 'غير متوفرة')}
                                 </div>
                               </div>
                               
@@ -1293,8 +1419,9 @@ export default function StudentPortal() {
                           );
                         })}
                         {exam.questions?.every(q => {
-                           const ans = att.answers?.find(a => a.questionId === q.id);
-                           return !ans || ans.isCorrect;
+                           const studentAns = att.answers?.[q.id];
+                           const isCorrect = studentAns !== undefined && (q.type === 'tf' ? ((studentAns === 1 && q.isTrue === true) || (studentAns === 0 && q.isTrue === false)) : studentAns === q.correct);
+                           return studentAns === undefined || isCorrect;
                         }) && (
                           <div className="text-center text-xs text-gray-400 p-4">لا توجد إجابات خاطئة، عمل ممتاز!</div>
                         )}
@@ -1320,7 +1447,7 @@ export default function StudentPortal() {
                 <div className="relative w-28 h-28 mb-4">
                   <div className="w-full h-full rounded-full border-4 border-gold shadow-[0_0_25px_rgba(245,197,24,0.4)] overflow-hidden relative">
                     {student.imageUrl ? (
-                      <img src={student.imageUrl} alt={student.name} className="w-full h-full rounded-full object-cover" />
+                      <img loading="lazy" src={student.imageUrl} alt={student.name} className="w-full h-full rounded-full object-cover" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center bg-gold/20">
                         <User size={48} className="text-gold" />
@@ -1495,7 +1622,7 @@ export default function StudentPortal() {
                   <div className="p-4 flex items-center gap-4">
                     <div className="w-12 h-12 rounded-full border-2 border-gold/30 overflow-hidden flex-shrink-0 bg-gold/10 flex items-center justify-center">
                       {teacherInfo.imageUrl ? (
-                        <img src={teacherInfo.imageUrl} alt={teacherInfo.name} className="w-full h-full object-cover" />
+                        <img loading="lazy" src={teacherInfo.imageUrl} alt={teacherInfo.name} className="w-full h-full object-cover" />
                       ) : (
                         <span className="text-gold font-black text-lg">{teacherInfo.name?.[0]}</span>
                       )}
@@ -1550,7 +1677,7 @@ export default function StudentPortal() {
       {/* ═══ LUXURIOUS CERTIFICATE MODAL ═══ */}
 
       {certData && (
-        <div className="modal-overlay" onClick={() => setCertData(null)}>
+        <div className="modal-overlay" >
            <div className="modal-content modal-content-sm !bg-white !p-0 overflow-hidden" onClick={e => e.stopPropagation()}>
              <div className="p-4 border-b flex justify-between items-center text-black bg-gray-50">
                <span className="font-bold text-sm">شهادة اجتياز معتمدة</span>

@@ -16,7 +16,7 @@ export default function ManageStudentsAdminPage() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
-  const [viewingStudent, setViewingStudent] = useState<Student | null>(null);
+  const [viewingStudent, setViewingStudent] = useState<(Student & { _allEnrollments?: Student[], _teacherIds?: string[] }) | null>(null);
   const [saving, setSaving] = useState(false);
 
   const [form, setForm] = useState({
@@ -60,8 +60,12 @@ export default function ManageStudentsAdminPage() {
       showToast('تمت تحديث بيانات الطالب بنجاح');
       setEditingStudent(null);
       loadData();
-    } catch(err) {
-      showToast('حدث خطأ أثناء الحفظ');
+    } catch(err: any) {
+      const msg = err.message || 'حدث خطأ أثناء الحفظ';
+      showToast(msg);
+      if (editingStudent && msg.includes('الكود')) {
+        setForm(f => ({ ...f, code: editingStudent.code || '' }));
+      }
     } finally { 
       setSaving(false); 
     }
@@ -78,15 +82,33 @@ export default function ManageStudentsAdminPage() {
     }
   };
 
-  const filteredStudents = students.filter(s => 
+  const getTeacherName = (teacherId: string) => {
+    return teachers.find(t => t.id === teacherId)?.name || 'غير معروف';
+  };
+
+  // Group students by phone, code, or name
+  const groupedStudentsMap = new Map<string, Student[]>();
+  students.forEach(s => {
+    const key = s.phone || s.code || s.name;
+    if (!groupedStudentsMap.has(key)) groupedStudentsMap.set(key, []);
+    groupedStudentsMap.get(key)!.push(s);
+  });
+
+  const groupedStudents = Array.from(groupedStudentsMap.values()).map(group => {
+    const primary = group[0];
+    const teacherIds = Array.from(new Set(group.map(g => g.teacherId)));
+    return {
+      ...primary,
+      _allEnrollments: group,
+      _teacherIds: teacherIds
+    };
+  });
+
+  const filteredStudents = groupedStudents.filter(s => 
     s.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
     s.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (s.phone && s.phone.includes(searchTerm))
   );
-
-  const getTeacherName = (teacherId: string) => {
-    return teachers.find(t => t.id === teacherId)?.name || 'غير معروف';
-  };
 
   return (
     <div className="space-y-8 pb-20">
@@ -186,24 +208,24 @@ export default function ManageStudentsAdminPage() {
       )}
 
       {viewingStudent && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
-          <div className="card-base w-full max-w-2xl border border-purple-500/30 overflow-hidden animate-scale-in">
-            <div className="bg-purple-500/10 p-6 border-b border-purple-500/20 flex justify-between items-center text-right" dir="rtl">
-               <div className="flex items-center gap-4">
-                  <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-2xl font-black text-white shadow-xl">
+        <div className="modal-overlay !z-50" >
+          <div className="modal-content modal-content-lg border-purple-500/30">
+            <div className="modal-header bg-purple-500/10 border-purple-500/20" dir="rtl">
+               <div className="flex items-center gap-3 sm:gap-4">
+                  <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-xl sm:text-2xl font-black text-white shadow-xl shrink-0">
                     {viewingStudent.name[0]}
                   </div>
                   <div>
-                    <h3 className="text-2xl font-black text-purple-400">{viewingStudent.name}</h3>
-                    <p className="text-sm text-gray-400">كود الطالب: {viewingStudent.code}</p>
+                    <h3 className="text-lg sm:text-2xl font-black text-purple-400">{viewingStudent.name}</h3>
+                    <p className="text-xs sm:text-sm text-gray-400">كود الطالب: {viewingStudent.code}</p>
                   </div>
                </div>
-               <button onClick={() => setViewingStudent(null)} className="text-gray-500 hover:text-white transition-colors">
-                  <X size={24} />
+               <button onClick={() => setViewingStudent(null)} className="text-gray-500 hover:text-white transition-colors shrink-0 p-2 mr-auto">
+                  <X size={20} />
                </button>
             </div>
             
-            <div className="p-8 grid grid-cols-1 md:grid-cols-2 gap-8 text-right" dir="rtl">
+            <div className="modal-body grid grid-cols-1 md:grid-cols-2 gap-8 text-right" dir="rtl">
                 <div className="space-y-6">
                    <div>
                       <h4 className="text-xs font-bold text-purple-400 uppercase tracking-widest mb-3">بيانات التواصل</h4>
@@ -222,33 +244,65 @@ export default function ManageStudentsAdminPage() {
                    </div>
 
                    <div>
-                      <h4 className="text-xs font-bold text-purple-400 uppercase tracking-widest mb-3">المعلم والأكاديمية</h4>
-                      <div className="flex items-center gap-3 text-sm">
-                         <Building size={16} className="text-orange-400" />
-                         <span className="text-gray-400 min-w-24">اسم المعلم:</span>
-                         <span className="font-bold">{getTeacherName(viewingStudent.teacherId)}</span>
+                      <h4 className="text-xs font-bold text-purple-400 uppercase tracking-widest mb-3">المعلمون المشترك معهم</h4>
+                      <div className="flex flex-col gap-2 text-sm">
+                         {viewingStudent._teacherIds?.map(tId => (
+                           <div key={tId} className="flex items-center gap-3 bg-white/5 p-2 rounded-xl">
+                             <Building size={16} className="text-orange-400" />
+                             <span className="font-bold">{getTeacherName(tId)}</span>
+                           </div>
+                         )) || (
+                           <div className="flex items-center gap-3">
+                             <Building size={16} className="text-orange-400" />
+                             <span className="font-bold">{getTeacherName(viewingStudent.teacherId)}</span>
+                           </div>
+                         )}
                       </div>
                    </div>
                 </div>
 
                 <div className="space-y-6">
                    <div>
-                      <h4 className="text-xs font-bold text-purple-400 uppercase tracking-widest mb-3">حالة الاشتراك</h4>
-                      <div className="bg-white/5 rounded-2xl p-4 border border-white/10 space-y-3">
-                         <div className="flex justify-between items-center text-sm">
-                            <span className="text-gray-400">نوع الباقة:</span>
-                            <span className="font-black text-emerald-400 uppercase">{viewingStudent.subType}</span>
-                         </div>
-                         <div className="flex justify-between items-center text-sm">
-                            <span className="text-gray-400">معدل الدفع:</span>
-                            <span className="font-black text-purple-400">{viewingStudent.subPrice || 0} ج.م</span>
-                         </div>
-                         {viewingStudent.subExpiry && (
-                           <div className="pt-2 border-t border-white/5 flex justify-between items-center text-[10px]">
-                              <span className="text-gray-500">تاريخ الانتهاء:</span>
-                              <span className="text-gray-300">{new Date(viewingStudent.subExpiry).toLocaleDateString('ar-EG')}</span>
-                           </div>
-                         )}
+                      <h4 className="text-xs font-bold text-purple-400 uppercase tracking-widest mb-3">حالة الاشتراكات</h4>
+                      <div className="space-y-3">
+                        {viewingStudent._allEnrollments?.map((enrollment, idx) => (
+                          <div key={enrollment.id} className="bg-white/5 rounded-2xl p-4 border border-white/10 space-y-3">
+                             <div className="text-xs font-bold text-orange-400 mb-2 pb-2 border-b border-white/5">
+                               معلم: {getTeacherName(enrollment.teacherId)}
+                             </div>
+                             <div className="flex justify-between items-center text-sm">
+                                <span className="text-gray-400">نوع الباقة:</span>
+                                <span className="font-black text-emerald-400 uppercase">{enrollment.subType}</span>
+                             </div>
+                             <div className="flex justify-between items-center text-sm">
+                                <span className="text-gray-400">معدل الدفع:</span>
+                                <span className="font-black text-purple-400">{enrollment.subPrice || 0} ج.م</span>
+                             </div>
+                             {enrollment.subExpiry && (
+                               <div className="pt-2 border-t border-white/5 flex justify-between items-center text-[10px]">
+                                  <span className="text-gray-500">تاريخ الانتهاء:</span>
+                                  <span className="text-gray-300">{new Date(enrollment.subExpiry).toLocaleDateString('ar-EG')}</span>
+                               </div>
+                             )}
+                          </div>
+                        )) || (
+                          <div className="bg-white/5 rounded-2xl p-4 border border-white/10 space-y-3">
+                             <div className="flex justify-between items-center text-sm">
+                                <span className="text-gray-400">نوع الباقة:</span>
+                                <span className="font-black text-emerald-400 uppercase">{viewingStudent.subType}</span>
+                             </div>
+                             <div className="flex justify-between items-center text-sm">
+                                <span className="text-gray-400">معدل الدفع:</span>
+                                <span className="font-black text-purple-400">{viewingStudent.subPrice || 0} ج.م</span>
+                             </div>
+                             {viewingStudent.subExpiry && (
+                               <div className="pt-2 border-t border-white/5 flex justify-between items-center text-[10px]">
+                                  <span className="text-gray-500">تاريخ الانتهاء:</span>
+                                  <span className="text-gray-300">{new Date(viewingStudent.subExpiry).toLocaleDateString('ar-EG')}</span>
+                               </div>
+                             )}
+                          </div>
+                        )}
                       </div>
                    </div>
 
@@ -259,7 +313,7 @@ export default function ManageStudentsAdminPage() {
                 </div>
             </div>
 
-            <div className="bg-white/5 p-4 flex justify-center">
+            <div className="modal-footer justify-center">
                <button onClick={() => setViewingStudent(null)} className="btn-gold bg-purple-600 px-12 py-2 shadow-lg shadow-purple-900/40">إغلاق النافذة</button>
             </div>
           </div>
@@ -287,10 +341,18 @@ export default function ManageStudentsAdminPage() {
                 <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-xl font-bold font-cairo text-white shadow-lg shadow-blue-500/20">
                   {s.name[0]}
                 </div>
-                <div className="flex flex-col items-end gap-2">
-                  <span className="text-[10px] text-gray-400 bg-white/5 px-2 py-1 rounded-md flex items-center gap-1">
-                    <Building size={10}/> {getTeacherName(s.teacherId)}
-                  </span>
+                <div className="flex flex-col items-end gap-2 max-w-[50%]">
+                  <div className="flex flex-wrap justify-end gap-1">
+                    {s._teacherIds?.map(tId => (
+                      <span key={tId} className="text-[9px] text-gray-400 bg-white/5 px-2 py-1 rounded-md flex items-center gap-1 truncate max-w-full">
+                        <Building size={8}/> {getTeacherName(tId)}
+                      </span>
+                    )) || (
+                      <span className="text-[10px] text-gray-400 bg-white/5 px-2 py-1 rounded-md flex items-center gap-1">
+                        <Building size={10}/> {getTeacherName(s.teacherId)}
+                      </span>
+                    )}
+                  </div>
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all transform translate-y-2 group-hover:translate-y-0">
                     <button 
                       onClick={() => setViewingStudent(s)}

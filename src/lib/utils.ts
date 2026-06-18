@@ -33,12 +33,19 @@ export function formatDateAr(date: string | number | Date, short = false): strin
 
 /** عرض مختصر لآخر ظهور (نشاط) بالعربية */
 export function formatRelativeLastSeenAr(timestamp: number): string {
+  if (!timestamp || isNaN(timestamp)) return 'غير متوفر';
   const diff = Date.now() - timestamp;
+  if (diff < 0) return 'الآن';
   if (diff < 60_000) return 'منذ لحظات';
   if (diff < 3600_000) return `منذ ${Math.floor(diff / 60_000)} د`;
   if (diff < 86400_000) return `منذ ${Math.floor(diff / 3600_000)} س`;
   if (diff < 604800_000) return `منذ ${Math.floor(diff / 86400_000)} يوم`;
-  return new Date(timestamp).toLocaleDateString('ar-EG', { month: 'short', day: 'numeric' });
+  
+  try {
+    return new Date(timestamp).toLocaleDateString('ar-EG', { month: 'short', day: 'numeric' });
+  } catch (err) {
+    return 'غير متوفر';
+  }
 }
 
 // Format time remaining (seconds → MM:SS)
@@ -286,7 +293,7 @@ export async function exportToPdf(elementId: string, filename: string) {
     const opt = {
       margin: 5,
       filename: filename,
-      image: { type: 'jpeg', quality: 0.98 },
+      image: { type: 'jpeg' as const, quality: 0.98 },
       html2canvas: {
         scale: 3,
         useCORS: true,
@@ -294,7 +301,7 @@ export async function exportToPdf(elementId: string, filename: string) {
         backgroundColor: '#ffffff',
         allowTaint: true,
       },
-      jsPDF: { unit: 'mm', format: 'a6', orientation: 'portrait' }
+      jsPDF: { unit: 'mm', format: 'a6', orientation: 'portrait' as const }
     };
 
     await html2pdf().from(element).set(opt).save();
@@ -323,7 +330,7 @@ export async function exportBulkToPdf(elementId: string, filename: string) {
     const opt = {
       margin: 0,
       filename: filename,
-      image: { type: 'jpeg', quality: 0.98 },
+      image: { type: 'jpeg' as const, quality: 0.98 },
       html2canvas: {
         scale: 2,
         useCORS: true,
@@ -331,7 +338,7 @@ export async function exportBulkToPdf(elementId: string, filename: string) {
         backgroundColor: '#ffffff',
         allowTaint: true,
       },
-      jsPDF: { unit: 'mm', format: 'a6', orientation: 'portrait' },
+      jsPDF: { unit: 'mm', format: 'a6', orientation: 'portrait' as const },
       pagebreak: { mode: ['css', 'legacy'] }
     };
 

@@ -107,11 +107,7 @@ export default function AssistantRegisterPage() {
       showToast('تم إرسال طلب التسجيل بنجاح');
     } catch (error: any) {
       console.error(error);
-      if (error.message && error.message.includes('unique')) {
-        showToast('اسم المستخدم أو رقم الهاتف مسجل مسبقاً');
-      } else {
-        showToast('حدث خطأ أثناء إرسال الطلب');
-      }
+      showToast(error.message || 'حدث خطأ أثناء إرسال الطلب');
     } finally {
       setSubmitting(false);
     }
@@ -196,7 +192,7 @@ export default function AssistantRegisterPage() {
               <div className="relative group">
                 <div className="w-24 h-24 rounded-full overflow-hidden border-2 border-dashed border-amber-500/30 flex items-center justify-center bg-white/5 relative">
                   {form.imageUrl ? (
-                    <img src={form.imageUrl} alt="Cropped profile" className="w-full h-full object-cover" />
+                    <img loading="lazy" src={form.imageUrl} alt="Cropped profile" className="w-full h-full object-cover" />
                   ) : (
                     <ImageIcon size={32} className="text-gray-500" />
                   )}
@@ -368,8 +364,8 @@ export default function AssistantRegisterPage() {
         <ImageCropperModal
           image={cropperImage}
           onCropComplete={handleCropComplete}
-          onClose={() => setShowCropper(false)}
-          aspectRatio={1}
+          onCancel={() => setShowCropper(false)}
+          aspect={1}
         />
       )}
     </div>

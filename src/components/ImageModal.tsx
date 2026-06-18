@@ -24,7 +24,7 @@ export function ImageModal({ src, alt, onClose }: ImageModalProps) {
   if (!src) return null;
 
   return (
-    <div className="modal-overlay !z-[200] !bg-black/95 !p-4 sm:!p-10" onClick={onClose}>
+    <div className="modal-overlay !z-[200] !bg-black/95 !p-4 sm:!p-10" >
       {/* Controls */}
       <div className="absolute top-6 right-6 flex items-center gap-3 z-10">
         <button 

@@ -183,23 +183,32 @@ export default function StaffPage() {
       return;
     }
     
+    const isNew = !form.id;
+    const tempId = form.id || crypto.randomUUID();
+    const newAssistant = {
+      ...form,
+      id: tempId,
+      teacherId: user.id,
+      status: isNew ? 'pending' : (form.status || 'active'),
+      createdAt: form.createdAt || Date.now()
+    } as Assistant;
+    
+    // Optimistic UI update
+    const previousAssistants = [...assistants];
+    if (isNew) setAssistants(prev => [...prev, newAssistant]);
+    else setAssistants(prev => prev.map(a => a.id === tempId ? newAssistant : a));
+
+    setShowModal(false);
+    setVerifiedAst(null);
+    setAstCode('');
+    showToast(isNew ? 'تم إرسال العرض للمساعد بانتظار موافقته' : 'تم حفظ بيانات المساعد بنجاح', 'success');
+
     try {
-      const isNew = !form.id;
-      const newAssistant = {
-        ...form,
-        teacherId: user.id,
-        status: isNew ? 'pending' : (form.status || 'active'),
-        createdAt: form.createdAt || Date.now()
-      } as Assistant;
-      
-      await saveAssistant(newAssistant);
-      await fetchAssistants();
-      
-      setShowModal(false);
-      setVerifiedAst(null);
-      setAstCode('');
-      showToast(isNew ? 'تم إرسال العرض للمساعد بانتظار موافقته' : 'تم حفظ بيانات المساعد بنجاح', 'success');
+      const realId = await saveAssistant(newAssistant);
+      setAssistants(prev => prev.map(a => a.id === tempId ? { ...a, id: realId || a.id } : a));
+      fetchAssistants(); // Silent fetch to ensure consistency
     } catch (err) {
+      setAssistants(previousAssistants);
       showToast('فشل الحفظ', 'error');
     }
   };
@@ -211,44 +220,65 @@ export default function StaffPage() {
       return;
     }
 
+    const tempId = jobForm.id || crypto.randomUUID();
+    const newJob = {
+      ...jobForm,
+      id: tempId,
+      teacherId: user.id,
+      teacherName: user.name,
+      teacherPhone: user.phone
+    } as AssistantJob;
+
+    // Optimistic UI
+    const previousJobs = [...jobs];
+    if (!jobForm.id) setJobs(prev => [...prev, newJob]);
+    else setJobs(prev => prev.map(j => j.id === tempId ? newJob : j));
+
+    setShowJobModal(false);
+    setJobForm({ title: '', description: '', requirements: '', salaryType: 'fixed', salaryValue: 0 });
+    showToast('تم نشر فرصة العمل بنجاح', 'success');
+
     try {
-      await saveAssistantJob({
-        ...jobForm,
-        teacherId: user.id,
-        teacherName: user.name,
-        teacherPhone: user.phone
-      } as AssistantJob);
-      
-      setShowJobModal(false);
-      setJobForm({ title: '', description: '', requirements: '', salaryType: 'fixed', salaryValue: 0 });
-      await fetchJobs();
-      showToast('تم نشر فرصة العمل بنجاح', 'success');
+      const realId = await saveAssistantJob(newJob);
+      setJobs(prev => prev.map(j => j.id === tempId ? { ...j, id: realId || j.id } : j));
+      fetchJobs(); // silent fetch
     } catch (err) {
+      setJobs(previousJobs);
       showToast('فشل نشر فرصة العمل', 'error');
     }
   };
 
   const handleToggleJobStatus = async (job: AssistantJob) => {
     const newStatus = job.status === 'open' ? 'closed' : 'open';
+    const previousJobs = [...jobs];
+    
+    // Optimistic Update
+    setJobs(prev => prev.map(j => j.id === job.id ? { ...j, status: newStatus } : j));
+    showToast(newStatus === 'open' ? 'تم إعادة فتح التقديم' : 'تم إغلاق التقديم', 'success');
+
     try {
       await saveAssistantJob({
         ...job,
         status: newStatus
       });
-      await fetchJobs();
-      showToast(newStatus === 'open' ? 'تم إعادة فتح التقديم' : 'تم إغلاق التقديم', 'success');
     } catch (err) {
+      setJobs(previousJobs);
       showToast('فشل تعديل حالة فرصة العمل', 'error');
     }
   };
 
   const handleDeleteJob = async (jobId: string) => {
     if (!confirm('هل أنت متأكد من حذف فرصة العمل هذه نهائياً؟')) return;
+    const previousJobs = [...jobs];
+    
+    // Optimistic Update
+    setJobs(prev => prev.filter(j => j.id !== jobId));
+    showToast('تم حذف فرصة العمل بنجاح', 'success');
+
     try {
       await deleteAssistantJob(jobId);
-      await fetchJobs();
-      showToast('تم حذف فرصة العمل بنجاح', 'success');
     } catch (err) {
+      setJobs(previousJobs);
       showToast('حدث خطأ أثناء الحذف', 'error');
     }
   };
@@ -261,6 +291,11 @@ export default function StaffPage() {
   const handleAcceptApplication = async (app: AssistantJobApplication, job: AssistantJob) => {
     if (!user) return;
     if (!confirm(`هل أنت متأكد من قبول طلب المساعد "${app.assistant?.name}" وتعيينه رسمياً؟`)) return;
+
+    // Optimistic Update
+    const previousApps = [...applications];
+    setApplications(prev => prev.map(a => a.id === app.id ? { ...a, status: 'accepted' } : a));
+    showToast('تم قبول طلب المساعد وربطه بفريق عملك بنجاح', 'success');
 
     try {
       // 1. Update application status
@@ -278,36 +313,47 @@ export default function StaffPage() {
         createdAt: Date.now()
       });
 
-      showToast('تم قبول طلب المساعد وربطه بفريق عملك بنجاح', 'success');
-      await fetchAssistants();
+      fetchAssistants(); // Silent fetch
       if (viewingAppsForJobId) {
-        await fetchApplications(viewingAppsForJobId);
+        fetchApplications(viewingAppsForJobId); // Silent fetch
       }
     } catch (err) {
+      setApplications(previousApps);
       showToast('فشل تعيين المساعد', 'error');
     }
   };
 
   const handleRejectApplication = async (appId: string) => {
     if (!confirm('هل أنت متأكد من رفض هذا الطلب؟')) return;
+    const previousApps = [...applications];
+    
+    // Optimistic Update
+    setApplications(prev => prev.map(a => a.id === appId ? { ...a, status: 'rejected' } : a));
+    showToast('تم رفض الطلب', 'success');
+
     try {
       await updateApplicationStatus(appId, 'rejected');
-      showToast('تم رفض الطلب', 'success');
       if (viewingAppsForJobId) {
-        await fetchApplications(viewingAppsForJobId);
+        fetchApplications(viewingAppsForJobId); // Silent fetch
       }
     } catch (err) {
+      setApplications(previousApps);
       showToast('فشل تعديل حالة الطلب', 'error');
     }
   };
 
   const handleDelete = async (id: string) => {
     if (!confirm('هل أنت متأكد من إلغاء تعاقد هذا المساعد وحذفه؟')) return;
+    const previousAssistants = [...assistants];
+    
+    // Optimistic Update
+    setAssistants(prev => prev.filter(a => a.id !== id));
+    showToast('تم الحذف', 'success');
+
     try {
       await deleteAssistant(id);
-      setAssistants(assistants.filter(a => a.id !== id));
-      showToast('تم الحذف', 'success');
     } catch (err) {
+      setAssistants(previousAssistants);
       showToast('فشل الحذف', 'error');
     }
   };
@@ -443,7 +489,7 @@ export default function StaffPage() {
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-center gap-3">
                     {assistant.imageUrl ? (
-                      <img src={assistant.imageUrl} alt={assistant.name} className="w-12 h-12 rounded-full object-cover border border-white/10 shrink-0" />
+                      <img loading="lazy" src={assistant.imageUrl} alt={assistant.name} className="w-12 h-12 rounded-full object-cover border border-white/10 shrink-0" />
                     ) : (
                       <div className="w-12 h-12 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-400 font-black text-xl border border-amber-500/20 shrink-0">
                         {assistant.name[0]}
@@ -541,7 +587,7 @@ export default function StaffPage() {
                   <div>
                     <div className="flex items-center gap-3 mb-4">
                       {profile.imageUrl ? (
-                        <img src={profile.imageUrl} alt={profile.name} className="w-12 h-12 rounded-full object-cover border border-white/10 shrink-0" />
+                        <img loading="lazy" src={profile.imageUrl} alt={profile.name} className="w-12 h-12 rounded-full object-cover border border-white/10 shrink-0" />
                       ) : (
                         <div className="w-12 h-12 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-400 font-bold text-xl border border-amber-500/20 shrink-0">
                           {profile.name[0]}
@@ -671,7 +717,7 @@ export default function StaffPage() {
                       <div className="flex items-start justify-between">
                         <div className="flex items-center gap-3">
                           {app.assistant?.imageUrl ? (
-                            <img src={app.assistant.imageUrl} alt={app.assistant.name} className="w-12 h-12 rounded-full object-cover border border-white/10 shrink-0" />
+                            <img loading="lazy" src={app.assistant.imageUrl} alt={app.assistant.name} className="w-12 h-12 rounded-full object-cover border border-white/10 shrink-0" />
                           ) : (
                             <div className="w-12 h-12 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-400 font-bold text-xl border border-amber-500/20 shrink-0">
                               {app.assistant?.name[0]}
@@ -842,7 +888,7 @@ export default function StaffPage() {
 
       {/* Main Staff Link Modal */}
       {showModal && (
-        <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && setShowModal(false)}>
+        <div className="modal-overlay" >
           <div className="modal-content border-amber-500/20">
             <div className="modal-header">
               <h3 className="font-bold text-lg text-amber-400 flex items-center gap-2">
@@ -995,7 +1041,7 @@ export default function StaffPage() {
 
       {/* Post Job Modal */}
       {showJobModal && (
-        <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && setShowJobModal(false)}>
+        <div className="modal-overlay" >
           <div className="modal-content border-amber-500/20 max-w-lg">
             <div className="modal-header">
               <h3 className="font-bold text-lg text-amber-400 flex items-center gap-2">

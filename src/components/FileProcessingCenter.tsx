@@ -90,7 +90,7 @@ export const FileProcessingCenter = () => {
   const failedCount = queue.filter(f => f.status === 'failed').length;
 
   return (
-    <div className="fixed bottom-4 left-4 z-[9999] w-80 max-w-[calc(100vw-2rem)]">
+    <div className="fixed bottom-4 left-4 z-[9999] w-80 max-w-[calc(100dvw-2rem)]">
       <div className="bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden">
         {/* Header */}
         <div 

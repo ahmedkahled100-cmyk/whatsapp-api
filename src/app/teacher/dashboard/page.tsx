@@ -51,7 +51,7 @@ export default function DashboardPage() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-4">
           {user?.imageUrl ? (
-            <img src={user.imageUrl} alt={user.name} className="w-12 h-12 rounded-2xl object-cover border-2 border-gold/30 shadow-lg shadow-gold/20" />
+            <img loading="lazy" src={user.imageUrl} alt={user.name} className="w-12 h-12 rounded-2xl object-cover border-2 border-gold/30 shadow-lg shadow-gold/20" />
           ) : (
             <div className="text-3xl">🏠</div>
           )}
@@ -77,16 +77,16 @@ export default function DashboardPage() {
       </div>
 
       {/* Expiry Warning */}
-      {user?.role === 'teacher' && user?.subExpiry && user.subType !== 'free' && new Date(user.subExpiry).getTime() > Date.now() && new Date(user.subExpiry).getTime() - Date.now() <= 7 * 24 * 60 * 60 * 1000 && (
+      {user?.role === 'teacher' && user?.subExpiry && user.subType !== 'free' && new Date(user.subExpiry).getTime() > Date.now() && new Date(user.subExpiry).getTime() - Date.now() <= 5 * 24 * 60 * 60 * 1000 && (
         <div className="card-base p-4 sm:p-5 bg-red-500/10 border-red-500/30 flex justify-between items-center flex-wrap gap-4 animate-pulse-slow">
            <div className="flex gap-3 items-start sm:items-center">
              <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center text-red-500 shrink-0 mt-0.5 sm:mt-0">
                <AlertCircle size={20} />
              </div>
              <div>
-               <div className="font-bold text-red-400">تنبيه اقتراب انتهاء اشتراك المنصة</div>
+               <div className="font-bold text-red-400">تنبيه تلقائي: اقتراب انتهاء اشتراك المنصة (5 أيام أو أقل)</div>
                <div className="text-sm text-red-300 mt-1 leading-relaxed">
-                 عزيزي المعلم، اشتراكك الحالي سينتهي يوم <strong>{formatDateAr(new Date(user.subExpiry).toISOString())}</strong>. يرجى التجديد لضمان استمرار وصولك للوحة التحكم وبوابة طلابك.
+                 عزيزي المعلم، اشتراكك الحالي سينتهي يوم <strong>{formatDateAr(new Date(user.subExpiry).toISOString())}</strong>. يرجى التجديد الآن لتجنب توقف حسابك بشكل فوري وضمان استمرار الوصول للوحة التحكم وبوابة طلابك.
                </div>
              </div>
            </div>
