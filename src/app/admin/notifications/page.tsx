@@ -231,39 +231,87 @@ export default function NotificationsSuperAdmin() {
                   </select>
 
                   {targetType === 'teacher' && (
-                    <select 
-                      multiple 
-                      className="input-base w-full mt-2 h-32 scrollbar-thin" 
-                      value={selectedTeachers} 
-                      onChange={e => {
-                        const values = Array.from(e.target.selectedOptions, option => option.value);
-                        setSelectedTeachers(values);
-                      }} 
-                      required
-                    >
-                      <option value="" disabled>-- اختر المعلم (يمكنك تحديد أكثر من واحد) --</option>
+                    <div className="mt-2 h-48 overflow-y-auto scrollbar-thin bg-white/5 border border-white/10 rounded-xl p-2 space-y-1">
+                      <div className="text-[11px] text-gray-400 font-bold mb-2 px-2 pb-2 border-b border-white/5 flex justify-between items-center">
+                        <span>اختر المعلمين المستهدفين</span>
+                        <button 
+                          type="button"
+                          onClick={() => {
+                            if (selectedTeachers.length === teachers.length) {
+                              setSelectedTeachers([]);
+                            } else {
+                              setSelectedTeachers(teachers.map(t => t.id));
+                            }
+                          }}
+                          className="text-gold hover:text-yellow-300 transition-colors"
+                        >
+                          {selectedTeachers.length === teachers.length ? 'إلغاء تحديد الكل' : 'تحديد الكل'}
+                        </button>
+                      </div>
                       {teachers.map(t => (
-                        <option key={t.id} value={t.id}>{t.name} - {t.phone || t.username}</option>
+                        <label key={t.id} className="flex items-center gap-3 p-2 hover:bg-white/5 rounded-lg cursor-pointer transition-colors group">
+                          <input 
+                            type="checkbox"
+                            className="w-4 h-4 rounded border-gray-600 text-gold focus:ring-gold bg-dark cursor-pointer"
+                            checked={selectedTeachers.includes(t.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedTeachers(prev => [...prev, t.id]);
+                              } else {
+                                setSelectedTeachers(prev => prev.filter(id => id !== t.id));
+                              }
+                            }}
+                          />
+                          <div className="flex flex-col">
+                            <span className="text-sm text-gray-200 group-hover:text-gold transition-colors">{t.name}</span>
+                            <span className="text-[10px] text-gray-400">{t.phone || t.username}</span>
+                          </div>
+                        </label>
                       ))}
-                    </select>
+                      {teachers.length === 0 && <div className="text-center text-xs text-gray-500 py-4">لا يوجد معلمين</div>}
+                    </div>
                   )}
 
                   {targetType === 'student' && (
-                    <select 
-                      multiple 
-                      className="input-base w-full mt-2 h-32 scrollbar-thin" 
-                      value={selectedStudents} 
-                      onChange={e => {
-                        const values = Array.from(e.target.selectedOptions, option => option.value);
-                        setSelectedStudents(values);
-                      }} 
-                      required
-                    >
-                      <option value="" disabled>-- اختر الطالب (يمكنك تحديد أكثر من واحد) --</option>
+                    <div className="mt-2 h-48 overflow-y-auto scrollbar-thin bg-white/5 border border-white/10 rounded-xl p-2 space-y-1">
+                      <div className="text-[11px] text-gray-400 font-bold mb-2 px-2 pb-2 border-b border-white/5 flex justify-between items-center">
+                        <span>اختر الطلاب المستهدفين</span>
+                        <button 
+                          type="button"
+                          onClick={() => {
+                            if (selectedStudents.length === students.length) {
+                              setSelectedStudents([]);
+                            } else {
+                              setSelectedStudents(students.map(s => s.id));
+                            }
+                          }}
+                          className="text-gold hover:text-yellow-300 transition-colors"
+                        >
+                          {selectedStudents.length === students.length ? 'إلغاء تحديد الكل' : 'تحديد الكل'}
+                        </button>
+                      </div>
                       {students.map(s => (
-                        <option key={s.id} value={s.id}>{s.name} - {s.phone}</option>
+                        <label key={s.id} className="flex items-center gap-3 p-2 hover:bg-white/5 rounded-lg cursor-pointer transition-colors group">
+                          <input 
+                            type="checkbox"
+                            className="w-4 h-4 rounded border-gray-600 text-gold focus:ring-gold bg-dark cursor-pointer"
+                            checked={selectedStudents.includes(s.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedStudents(prev => [...prev, s.id]);
+                              } else {
+                                setSelectedStudents(prev => prev.filter(id => id !== s.id));
+                              }
+                            }}
+                          />
+                          <div className="flex flex-col">
+                            <span className="text-sm text-gray-200 group-hover:text-gold transition-colors">{s.name}</span>
+                            <span className="text-[10px] text-gray-400">{s.phone || 'بدون رقم'}</span>
+                          </div>
+                        </label>
                       ))}
-                    </select>
+                      {students.length === 0 && <div className="text-center text-xs text-gray-500 py-4">لا يوجد طلاب</div>}
+                    </div>
                   )}
                 </div>
 
