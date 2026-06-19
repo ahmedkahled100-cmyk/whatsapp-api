@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useTeacherStore } from '@/lib/store';
-import { getNotificationLogs, saveNotificationLog, updateNotificationLog, dispatchNotification, subscribeToNotificationLogs, markNotificationRead, getTeachers } from '@/lib/db';
-import type { NotificationLog, TeacherUser } from '@/types';
+import { getNotificationLogs, saveNotificationLog, updateNotificationLog, dispatchNotification, subscribeToNotificationLogs, markNotificationRead, getTeachers, getAllStudents } from '@/lib/db';
+import type { NotificationLog, TeacherUser, Student } from '@/types';
 import { showToast } from '@/lib/toast';
 import { Send, AlertCircle, CheckCircle2, Search, RefreshCw, MessageSquare, Clock, Filter, Users, ShieldAlert, RotateCcw, Bell, Loader2 } from 'lucide-react';
 import { formatDateAr, getApiBase } from '@/lib/utils';
@@ -14,13 +14,15 @@ export default function NotificationsSuperAdmin() {
   const { user, adminNotifications } = useTeacherStore();
   const [logs, setLogs] = useState<NotificationLog[]>([]);
   const [teachers, setTeachers] = useState<TeacherUser[]>([]);
+  const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'compose' | 'logs'>('compose');
 
   // Compose State
   const [msg, setMsg] = useState('');
-  const [targetType, setTargetType] = useState<'all' | 'teacher'>('all');
-  const [selectedTeacher, setSelectedTeacher] = useState('');
+  const [targetType, setTargetType] = useState<'all' | 'teacher' | 'all_students' | 'student'>('all');
+  const [selectedTeachers, setSelectedTeachers] = useState<string[]>([]);
+  const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
   const [channels, setChannels] = useState({ inApp: true, whatsapp: false });
   const [sending, setSending] = useState(false);
   const [notifType, setNotifType] = useState<'info' | 'success' | 'warning' | 'error'>('info');
@@ -37,10 +39,11 @@ export default function NotificationsSuperAdmin() {
     if (!user) return;
     setLoading(true);
     
-    // Load teachers
+    // Load teachers and students
     getTeachers().then(data => {
       setTeachers(data.filter(t => t.role !== 'super_admin'));
     });
+    getAllStudents().then(data => setStudents(data));
 
     const unsub = subscribeToNotificationLogs(user.id, (data: any) => {
       setLogs(data);
@@ -59,7 +62,8 @@ export default function NotificationsSuperAdmin() {
     e.preventDefault();
     if (!msg.trim()) { showToast('الرجاء كتابة نص الإشعار'); return; }
     if (!channels.inApp && !channels.whatsapp) { showToast('الرجاء اختيار وسيلة إرسال واحدة على الأقل'); return; }
-    if (targetType === 'teacher' && !selectedTeacher) { showToast('الرجاء اختيار المعلم'); return; }
+    if (targetType === 'teacher' && selectedTeachers.length === 0) { showToast('الرجاء اختيار المعلمين المستهدفين'); return; }
+    if (targetType === 'student' && selectedStudents.length === 0) { showToast('الرجاء اختيار الطلاب المستهدفين'); return; }
 
     setSending(true);
     if (!user) return;
@@ -69,23 +73,38 @@ export default function NotificationsSuperAdmin() {
       let summaryText = 'الكل';
 
       if (targetType === 'teacher') {
-        const t = teachers.find(x => x.id === selectedTeacher);
-        if (t) {
-          targetUsers = [t.id];
-          if (t.phone || t.username) whatsappNumbers.push((t.phone || t.username) as string);
-          summaryText = t.name;
+        const selected = teachers.filter(x => selectedTeachers.includes(x.id));
+        if (selected.length > 0) {
+          targetUsers = selected.map(t => t.id);
+          selected.forEach(t => {
+            if (t.phone || t.username) whatsappNumbers.push((t.phone || t.username) as string);
+          });
+          summaryText = selected.length === 1 ? selected[0].name : `${selected.length} معلمين`;
         }
-      } else {
+      } else if (targetType === 'all') {
         targetUsers = [];
         whatsappNumbers = teachers.map(t => (t.phone || t.username) as string).filter(Boolean);
         summaryText = 'جميع المعلمين';
+      } else if (targetType === 'student') {
+        const selected = students.filter(x => selectedStudents.includes(x.id));
+        if (selected.length > 0) {
+          targetUsers = selected.map(s => s.id);
+          selected.forEach(s => {
+            if (s.phone) whatsappNumbers.push(s.phone as string);
+          });
+          summaryText = selected.length === 1 ? selected[0].name : `${selected.length} طلاب`;
+        }
+      } else if (targetType === 'all_students') {
+        targetUsers = [];
+        whatsappNumbers = students.map(s => s.phone as string).filter(Boolean);
+        summaryText = 'جميع الطلاب بالمنصة';
       }
 
       await dispatchNotification({
         teacherId: user.id,
         msg,
         type: notifType,
-        targetRoles: targetType === 'all' ? ['teacher'] : [],
+        targetRoles: (targetType === 'all' || targetType === 'teacher') ? ['teacher'] : ['student'],
         targetUsers: targetUsers.length > 0 ? targetUsers : undefined,
         channels: { inApp: channels.inApp, whatsapp: channels.whatsapp },
         whatsappNumbers: channels.whatsapp ? whatsappNumbers : []
@@ -206,14 +225,43 @@ export default function NotificationsSuperAdmin() {
                     onChange={(e: any) => setTargetType(e.target.value)}
                   >
                     <option value="all">جميع المعلمين</option>
-                    <option value="teacher">معلم محدد</option>
+                    <option value="teacher">معلمين محددين</option>
+                    <option value="all_students">جميع طلاب المنصة</option>
+                    <option value="student">طلاب محددين</option>
                   </select>
 
                   {targetType === 'teacher' && (
-                    <select className="input-base w-full mt-2" value={selectedTeacher} onChange={e => setSelectedTeacher(e.target.value)} required>
-                      <option value="">-- اختر المعلم --</option>
+                    <select 
+                      multiple 
+                      className="input-base w-full mt-2 h-32 scrollbar-thin" 
+                      value={selectedTeachers} 
+                      onChange={e => {
+                        const values = Array.from(e.target.selectedOptions, option => option.value);
+                        setSelectedTeachers(values);
+                      }} 
+                      required
+                    >
+                      <option value="" disabled>-- اختر المعلم (يمكنك تحديد أكثر من واحد) --</option>
                       {teachers.map(t => (
-                        <option key={t.id} value={t.id}>{t.name} - {t.username}</option>
+                        <option key={t.id} value={t.id}>{t.name} - {t.phone || t.username}</option>
+                      ))}
+                    </select>
+                  )}
+
+                  {targetType === 'student' && (
+                    <select 
+                      multiple 
+                      className="input-base w-full mt-2 h-32 scrollbar-thin" 
+                      value={selectedStudents} 
+                      onChange={e => {
+                        const values = Array.from(e.target.selectedOptions, option => option.value);
+                        setSelectedStudents(values);
+                      }} 
+                      required
+                    >
+                      <option value="" disabled>-- اختر الطالب (يمكنك تحديد أكثر من واحد) --</option>
+                      {students.map(s => (
+                        <option key={s.id} value={s.id}>{s.name} - {s.phone}</option>
                       ))}
                     </select>
                   )}

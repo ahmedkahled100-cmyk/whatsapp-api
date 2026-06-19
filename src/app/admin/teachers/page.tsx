@@ -71,7 +71,8 @@ export default function ManageTeachersPage() {
     subLink: '',
     subPrice: 0,
     imageUrl: '',
-    subject: ''
+    subject: '',
+    phone: ''
   });
 
   const [adminForm, setAdminForm] = useState({
@@ -194,7 +195,7 @@ export default function ManageTeachersPage() {
       setForm({
         name: '', username: '', password: '', code: '', role: 'teacher',
         permissions: AVAILABLE_PERMISSIONS.map(p => p.id),
-        subType: 'free', subExpiry: null, subLink: '', subPrice: 0, imageUrl: '', subject: ''
+        subType: 'free', subExpiry: null, subLink: '', subPrice: 0, imageUrl: '', subject: '', phone: ''
       });
 
       showToast(editingTeacher ? 'تم تحديث الحساب' : 'تمت إضافة الحساب بنجاح');
@@ -300,6 +301,7 @@ export default function ManageTeachersPage() {
             username: approvalForm.phone,
             password: approvalForm.password,
             code: approvalForm.code,
+            phone: approvalForm.phone,
             role: 'teacher',
             isActive: true,
             createdAt: Date.now(),
@@ -696,7 +698,7 @@ export default function ManageTeachersPage() {
                         name: t.name, username: t.username, password: '', code: t.code || '', role: t.role === 'super_admin' ? 'super_admin' : 'teacher',
                         permissions: t.permissions || AVAILABLE_PERMISSIONS.map(p => p.id),
                         subType: t.subType || 'free', subExpiry: t.subExpiry || null, subLink: t.subLink || '', 
-                        subPrice: t.subPrice || 0, imageUrl: t.imageUrl || '', subject: t.subject || ''
+                        subPrice: t.subPrice || 0, imageUrl: t.imageUrl || '', subject: t.subject || '', phone: t.phone || ''
                       });
                       setShowAddForm(true);
                       window.scrollTo({ top: 0, behavior: 'smooth' });
