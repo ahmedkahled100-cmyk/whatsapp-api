@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useTeacherStore } from '@/lib/store';
-import { getNotificationLogs, saveNotificationLog, updateNotificationLog, dispatchNotification, subscribeToNotificationLogs, markNotificationRead, getTeachers, getAllStudents } from '@/lib/db';
-import type { NotificationLog, TeacherUser, Student } from '@/types';
+import { getNotificationLogs, saveNotificationLog, updateNotificationLog, dispatchNotification, subscribeToNotificationLogs, markNotificationRead, getTeachers, getAllStudents, getAllAssistantProfiles } from '@/lib/db';
+import type { NotificationLog, TeacherUser, Student, AssistantProfile } from '@/types';
 import { showToast } from '@/lib/toast';
 import { Send, AlertCircle, CheckCircle2, Search, RefreshCw, MessageSquare, Clock, Filter, Users, ShieldAlert, RotateCcw, Bell, Loader2 } from 'lucide-react';
 import { formatDateAr, getApiBase } from '@/lib/utils';
@@ -15,14 +15,17 @@ export default function NotificationsSuperAdmin() {
   const [logs, setLogs] = useState<NotificationLog[]>([]);
   const [teachers, setTeachers] = useState<TeacherUser[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
+  const [assistants, setAssistants] = useState<AssistantProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'compose' | 'logs'>('compose');
 
   // Compose State
   const [msg, setMsg] = useState('');
-  const [targetType, setTargetType] = useState<'all' | 'teacher' | 'all_students' | 'student'>('all');
+  const [targetType, setTargetType] = useState<'all' | 'teacher' | 'all_students' | 'student' | 'teacher_students' | 'all_assistants' | 'assistant'>('all');
   const [selectedTeachers, setSelectedTeachers] = useState<string[]>([]);
   const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
+  const [selectedAssistants, setSelectedAssistants] = useState<string[]>([]);
+  const [selectedTeacherForStudents, setSelectedTeacherForStudents] = useState<string>('');
   const [channels, setChannels] = useState({ inApp: true, whatsapp: false });
   const [sending, setSending] = useState(false);
   const [notifType, setNotifType] = useState<'info' | 'success' | 'warning' | 'error'>('info');
@@ -44,6 +47,7 @@ export default function NotificationsSuperAdmin() {
       setTeachers(data.filter(t => t.role !== 'super_admin'));
     });
     getAllStudents().then(data => setStudents(data));
+    getAllAssistantProfiles().then(data => setAssistants(data));
 
     const unsub = subscribeToNotificationLogs(user.id, (data: any) => {
       setLogs(data);
@@ -64,6 +68,8 @@ export default function NotificationsSuperAdmin() {
     if (!channels.inApp && !channels.whatsapp) { showToast('الرجاء اختيار وسيلة إرسال واحدة على الأقل'); return; }
     if (targetType === 'teacher' && selectedTeachers.length === 0) { showToast('الرجاء اختيار المعلمين المستهدفين'); return; }
     if (targetType === 'student' && selectedStudents.length === 0) { showToast('الرجاء اختيار الطلاب المستهدفين'); return; }
+    if (targetType === 'teacher_students' && !selectedTeacherForStudents) { showToast('الرجاء اختيار المعلم لعرض طلابه'); return; }
+    if (targetType === 'assistant' && selectedAssistants.length === 0) { showToast('الرجاء اختيار المساعدين المستهدفين'); return; }
 
     setSending(true);
     if (!user) return;
@@ -98,13 +104,40 @@ export default function NotificationsSuperAdmin() {
         targetUsers = [];
         whatsappNumbers = students.map(s => s.phone as string).filter(Boolean);
         summaryText = 'جميع الطلاب بالمنصة';
+      } else if (targetType === 'teacher_students') {
+        const selected = students.filter(x => x.teacherId === selectedTeacherForStudents);
+        if (selected.length > 0) {
+          targetUsers = selected.map(s => s.id);
+          selected.forEach(s => {
+            if (s.phone) whatsappNumbers.push(s.phone as string);
+          });
+          const tName = teachers.find(t => t.id === selectedTeacherForStudents)?.name;
+          summaryText = `طلاب المعلم ${tName || ''} (${selected.length} طالب)`;
+        } else {
+          showToast('لا يوجد طلاب مسجلين مع هذا المعلم');
+          setSending(false);
+          return;
+        }
+      } else if (targetType === 'all_assistants') {
+        targetUsers = [];
+        whatsappNumbers = assistants.map(a => a.phone as string).filter(Boolean);
+        summaryText = 'جميع المساعدين بالمنصة';
+      } else if (targetType === 'assistant') {
+        const selected = assistants.filter(x => selectedAssistants.includes(x.id));
+        if (selected.length > 0) {
+          targetUsers = selected.map(a => a.id);
+          selected.forEach(a => {
+            if (a.phone) whatsappNumbers.push(a.phone as string);
+          });
+          summaryText = selected.length === 1 ? selected[0].name : `${selected.length} مساعدين`;
+        }
       }
 
       await dispatchNotification({
         teacherId: user.id,
         msg,
         type: notifType,
-        targetRoles: (targetType === 'all' || targetType === 'teacher') ? ['teacher'] : ['student'],
+        targetRoles: (targetType === 'all' || targetType === 'teacher') ? ['teacher'] : (targetType === 'all_assistants' || targetType === 'assistant') ? ['assistant'] : ['student'],
         targetUsers: targetUsers.length > 0 ? targetUsers : undefined,
         channels: { inApp: channels.inApp, whatsapp: channels.whatsapp },
         whatsappNumbers: channels.whatsapp ? whatsappNumbers : []
@@ -228,6 +261,9 @@ export default function NotificationsSuperAdmin() {
                     <option value="teacher">معلمين محددين</option>
                     <option value="all_students">جميع طلاب المنصة</option>
                     <option value="student">طلاب محددين</option>
+                    <option value="teacher_students">طلاب لمعلم محدد</option>
+                    <option value="all_assistants">جميع المساعدين</option>
+                    <option value="assistant">مساعدين محددين</option>
                   </select>
 
                   {targetType === 'teacher' && (
@@ -311,6 +347,83 @@ export default function NotificationsSuperAdmin() {
                         </label>
                       ))}
                       {students.length === 0 && <div className="text-center text-xs text-gray-500 py-4">لا يوجد طلاب</div>}
+                    </div>
+                  )}
+
+                  {targetType === 'teacher_students' && (
+                    <div className="mt-2 space-y-2">
+                      <select 
+                        className="input-base w-full"
+                        value={selectedTeacherForStudents}
+                        onChange={e => setSelectedTeacherForStudents(e.target.value)}
+                        required
+                      >
+                        <option value="" disabled>-- اختر المعلم لعرض طلابه --</option>
+                        {teachers.map(t => (
+                          <option key={t.id} value={t.id}>{t.name}</option>
+                        ))}
+                      </select>
+                      
+                      {selectedTeacherForStudents && (
+                        <div className="h-32 overflow-y-auto scrollbar-thin bg-white/5 border border-white/10 rounded-xl p-2">
+                          <div className="text-[11px] text-gray-400 font-bold mb-2 px-2 pb-2 border-b border-white/5">
+                            سيرسل هذا الإشعار لجميع طلاب المعلم المحدد تلقائياً
+                          </div>
+                          {students.filter(s => s.teacherId === selectedTeacherForStudents).map(s => (
+                            <div key={s.id} className="flex items-center gap-3 p-2 hover:bg-white/5 rounded-lg transition-colors">
+                              <div className="flex flex-col">
+                                <span className="text-sm text-gray-200">{s.name}</span>
+                                <span className="text-[10px] text-gray-400">{s.phone || 'بدون رقم'}</span>
+                              </div>
+                            </div>
+                          ))}
+                          {students.filter(s => s.teacherId === selectedTeacherForStudents).length === 0 && (
+                            <div className="text-center text-xs text-gray-500 py-4">لا يوجد طلاب مسجلين مع هذا المعلم</div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {targetType === 'assistant' && (
+                    <div className="mt-2 h-48 overflow-y-auto scrollbar-thin bg-white/5 border border-white/10 rounded-xl p-2 space-y-1">
+                      <div className="text-[11px] text-gray-400 font-bold mb-2 px-2 pb-2 border-b border-white/5 flex justify-between items-center">
+                        <span>اختر المساعدين المستهدفين</span>
+                        <button 
+                          type="button"
+                          onClick={() => {
+                            if (selectedAssistants.length === assistants.length) {
+                              setSelectedAssistants([]);
+                            } else {
+                              setSelectedAssistants(assistants.map(a => a.id));
+                            }
+                          }}
+                          className="text-gold hover:text-yellow-300 transition-colors"
+                        >
+                          {selectedAssistants.length === assistants.length ? 'إلغاء تحديد الكل' : 'تحديد الكل'}
+                        </button>
+                      </div>
+                      {assistants.map(a => (
+                        <label key={a.id} className="flex items-center gap-3 p-2 hover:bg-white/5 rounded-lg cursor-pointer transition-colors group">
+                          <input 
+                            type="checkbox"
+                            className="w-4 h-4 rounded border-gray-600 text-gold focus:ring-gold bg-dark cursor-pointer"
+                            checked={selectedAssistants.includes(a.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedAssistants(prev => [...prev, a.id]);
+                              } else {
+                                setSelectedAssistants(prev => prev.filter(id => id !== a.id));
+                              }
+                            }}
+                          />
+                          <div className="flex flex-col">
+                            <span className="text-sm text-gray-200 group-hover:text-gold transition-colors">{a.name}</span>
+                            <span className="text-[10px] text-gray-400">{a.phone}</span>
+                          </div>
+                        </label>
+                      ))}
+                      {assistants.length === 0 && <div className="text-center text-xs text-gray-500 py-4">لا يوجد مساعدين</div>}
                     </div>
                   )}
                 </div>
