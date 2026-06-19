@@ -4,23 +4,34 @@
  * Utility for sending WhatsApp messages via the local whatsapp-web.js microservice.
  */
 export async function sendWhatsAppMessage(targetPhone: string, message: string) {
-  const apiUrl = process.env.WHATSAPP_API_URL || 'http://localhost:3001';
+  const apiUrl = process.env.WHATSAPP_API_URL || 'https://whatsapp-api-2026.up.railway.app';
 
   try {
     const url = `${apiUrl}/send`;
     
+    let formattedPhone = targetPhone.replace(/\D/g, '');
+    if (formattedPhone.startsWith('01') && formattedPhone.length === 11) {
+      formattedPhone = `2${formattedPhone}`;
+    }
+
     const body = {
-      number: targetPhone,
+      number: formattedPhone,
       message: message
     };
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
 
     const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(body)
+      body: JSON.stringify(body),
+      signal: controller.signal
     });
+    
+    clearTimeout(timeoutId);
 
     const data = await response.json();
 

@@ -16,12 +16,11 @@ export default function WhatsAppAdminPage() {
 
   const fetchStatus = async () => {
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_WHATSAPP_API_URL || 'http://localhost:3001';
-      const res = await fetch(`${apiUrl}/status`);
+      const res = await fetch('/api/whatsapp/status');
       const data = await res.json();
       setStatus({
-        isConnected: data.isConnected,
-        qrCode: data.qrCode,
+        isConnected: data.isConnected || false,
+        qrCode: data.qrCode || null,
       });
     } catch (error) {
       console.error('Error fetching WhatsApp status:', error);

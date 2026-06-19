@@ -1,0 +1,5 @@
+[providers.node]
+nodeVersion = "18"
+
+[phases.setup]
+nixPkgs = ["...", "chromium", "nss", "freetype", "harfbuzz", "pango", "xorg.libX11", "xorg.libXext", "xorg.libXfixes", "xorg.libXrender", "xorg.libXcomposite", "xorg.libXcursor", "xorg.libXdamage", "xorg.libXi", "xorg.libXtst", "alsa-lib", "atk", "cups", "dbus", "expat", "glib", "nspr"]
