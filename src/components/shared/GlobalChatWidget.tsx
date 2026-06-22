@@ -54,6 +54,10 @@ export function GlobalChatWidget({ currentUser, conversations, contacts, superAd
   const [showNewChat, setShowNewChat] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
 
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const dragStartPos = useRef({ x: 0, y: 0 });
+  const [panelPos, setPanelPos] = useState<{ left?: number, bottom?: number, right?: number }>({ right: 16, bottom: 40 });
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -181,6 +185,40 @@ export function GlobalChatWidget({ currentUser, conversations, contacts, superAd
       return () => cancelAnimationFrame(id);
     }
   }, [messages, isOpen]);
+
+  useEffect(() => {
+    const handleResize = () => setIsOpen(false);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  const openPanel = () => {
+    if (!isOpen && buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      const ww = window.innerWidth;
+      const wh = window.innerHeight;
+      
+      const panelWidth = Math.min(360, ww - 32);
+      const panelHeight = Math.min(600, wh * 0.8);
+
+      let targetLeft = rect.left + rect.width / 2 - panelWidth / 2;
+      if (targetLeft < 16) targetLeft = 16;
+      if (targetLeft + panelWidth > ww - 16) targetLeft = ww - panelWidth - 16;
+
+      let targetBottom = wh - rect.top + 16; // Place above the button
+      if (targetBottom + panelHeight > wh - 16) {
+        // Doesn't fit above, place below
+        targetBottom = wh - rect.bottom - panelHeight - 16;
+        if (targetBottom < 16) {
+          // Doesn't fit below either, center vertically
+          targetBottom = (wh - panelHeight) / 2;
+        }
+      }
+
+      setPanelPos({ left: targetLeft, bottom: targetBottom });
+    }
+    setIsOpen(!isOpen);
+  };
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -384,6 +422,7 @@ export function GlobalChatWidget({ currentUser, conversations, contacts, superAd
       {/* Floating Button */}
       {/* Floating Button */}
       <motion.button 
+        ref={buttonRef}
         drag
         dragMomentum={false}
         style={{ x, y }}
@@ -395,8 +434,17 @@ export function GlobalChatWidget({ currentUser, conversations, contacts, superAd
         animate={{ 
           rotate: isOpen ? 90 : 0
         }}
-        onTap={() => setIsOpen(!isOpen)}
-        className={`fixed bottom-[100px] lg:bottom-10 right-4 lg:right-10 z-[100] w-14 h-14 rounded-full bg-gradient-to-tr from-gold to-amber-400 text-black shadow-xl shadow-gold/20 flex items-center justify-center ${isOpen ? 'pointer-events-none' : ''}`}
+        onPointerDown={(e) => {
+          dragStartPos.current = { x: e.clientX, y: e.clientY };
+        }}
+        onPointerUp={(e) => {
+          const dx = e.clientX - dragStartPos.current.x;
+          const dy = e.clientY - dragStartPos.current.y;
+          if (Math.sqrt(dx * dx + dy * dy) < 5) {
+            openPanel();
+          }
+        }}
+        className={`fixed bottom-[100px] lg:bottom-10 right-4 lg:right-10 z-[110] w-14 h-14 rounded-full bg-gradient-to-tr from-gold to-amber-400 text-black shadow-xl shadow-gold/20 flex items-center justify-center`}
       >
         <MessageSquare size={28} />
         {unreadTotal > 0 && (
@@ -408,7 +456,12 @@ export function GlobalChatWidget({ currentUser, conversations, contacts, superAd
 
       {/* Chat Widget Panel */}
       <div 
-        className={`fixed bottom-[100px] lg:bottom-10 right-4 lg:right-10 z-[100] w-[360px] h-[600px] max-h-[80vh] max-w-[calc(100dvw-32px)] bg-[#0a0f1c]/95 backdrop-blur-xl border border-white/10 rounded-3xl shadow-2xl flex flex-col overflow-hidden transition-all duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] ${isOpen ? 'translate-y-0 opacity-100 scale-100' : 'translate-y-20 opacity-0 scale-95 pointer-events-none'}`}
+        style={{
+          left: panelPos.left !== undefined ? `${panelPos.left}px` : undefined,
+          bottom: panelPos.bottom !== undefined ? `${panelPos.bottom}px` : undefined,
+          right: panelPos.right !== undefined ? `${panelPos.right}px` : undefined,
+        }}
+        className={`fixed z-[100] w-[360px] h-[600px] max-h-[80vh] max-w-[calc(100dvw-32px)] bg-[#0a0f1c]/95 backdrop-blur-xl border border-white/10 rounded-3xl shadow-2xl flex flex-col overflow-hidden transition-all duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] ${isOpen ? 'translate-y-0 opacity-100 scale-100 pointer-events-auto' : 'translate-y-20 opacity-0 scale-95 pointer-events-none'}`}
       >
         {/* Header */}
         <div className="p-4 bg-gradient-to-r from-white/5 to-transparent border-b border-white/5 flex items-center justify-between shrink-0">
