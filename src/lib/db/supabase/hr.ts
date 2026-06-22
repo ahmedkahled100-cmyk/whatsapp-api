@@ -293,8 +293,8 @@ export const saveAssistantJob = async (job: Omit<AssistantJob, 'id'> & { id?: st
   });
   
   // Clean up fields that might not exist in the DB schema
+  // teacher_name exists and is NOT NULL, but teacher_phone does not exist
   delete (payload as any).teacher_phone;
-  delete (payload as any).teacher_name;
 
   const { error } = await supabase
     .from(ASSISTANT_JOBS)
