@@ -1640,8 +1640,16 @@ export default function StudentPortal() {
               )}
 
               {/* WhatsApp + Logout */}
+              {/* WhatsApp + Logout */}
               {teacherInfo && teacherInfo.phone && (
-                <a href={`https://wa.me/${teacherInfo.phone.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" className="flex w-full items-center justify-center gap-3 font-bold text-white py-4 rounded-2xl shadow-lg shadow-[#25D366]/20" style={{ background: '#25D366' }}>
+                <a href={`https://wa.me/${teacherInfo.phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(
+                  `السلام عليكم ورحمة الله وبركاته،\n\n` +
+                  `أنا الطالب(ة): ${student.name}\n` +
+                  `الكود الخاص بي: ${student.code}\n` +
+                  (student.grade ? `الصف الدراسي: ${student.grade}\n` : '') +
+                  (student.phone ? `رقم الهاتف: ${student.phone}\n` : '') +
+                  (student.parentPhone ? `رقم ولي الأمر: ${student.parentPhone}` : '')
+                )}`} target="_blank" rel="noopener noreferrer" className="flex w-full items-center justify-center gap-3 font-bold text-white py-4 rounded-2xl shadow-lg shadow-[#25D366]/20" style={{ background: '#25D366' }}>
                   <MessageCircle size={22} /> تواصل مع المعلم عبر واتساب
                 </a>
               )}
