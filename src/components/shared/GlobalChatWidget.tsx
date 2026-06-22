@@ -35,7 +35,6 @@ export function GlobalChatWidget({ currentUser, conversations, contacts, superAd
   
   const x = useMotionValue(0);
   const y = useMotionValue(0);
-  const isDragging = useRef(false);
 
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [sending, setSending] = useState(false);
@@ -388,9 +387,7 @@ export function GlobalChatWidget({ currentUser, conversations, contacts, superAd
         drag
         dragMomentum={false}
         style={{ x, y }}
-        onDragStart={() => { isDragging.current = true; }}
         onDragEnd={() => { 
-          setTimeout(() => { isDragging.current = false; }, 100);
           localStorage.setItem(`chatWidgetPos_${currentUser?.id}`, JSON.stringify({ x: x.get(), y: y.get() }));
         }}
         whileHover={{ scale: 1.1 }}
@@ -399,7 +396,7 @@ export function GlobalChatWidget({ currentUser, conversations, contacts, superAd
           rotate: isOpen ? 90 : 0, 
           opacity: isOpen ? 0 : 1 
         }}
-        onClick={() => { if (!isDragging.current) setIsOpen(!isOpen); }}
+        onTap={() => setIsOpen(!isOpen)}
         className={`fixed bottom-[100px] lg:bottom-10 right-4 lg:right-10 z-[100] w-14 h-14 rounded-full bg-gradient-to-tr from-gold to-amber-400 text-black shadow-xl shadow-gold/20 flex items-center justify-center ${isOpen ? 'pointer-events-none' : ''}`}
       >
         <MessageSquare size={28} />
@@ -410,10 +407,14 @@ export function GlobalChatWidget({ currentUser, conversations, contacts, superAd
         )}
       </motion.button>
 
-      {/* Chat Widget Panel */}
-      <div 
-        className={`fixed bottom-[100px] lg:bottom-10 right-4 lg:right-10 z-[100] w-[360px] h-[600px] max-h-[80vh] max-w-[calc(100dvw-32px)] bg-[#0a0f1c]/95 backdrop-blur-xl border border-white/10 rounded-3xl shadow-2xl flex flex-col overflow-hidden transition-all duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] ${isOpen ? 'translate-y-0 opacity-100 scale-100' : 'translate-y-20 opacity-0 scale-95 pointer-events-none'}`}
+      {/* Chat Widget Panel Wrapper for Position Tracking */}
+      <motion.div
+        style={{ x, y }}
+        className="fixed bottom-[100px] lg:bottom-10 right-4 lg:right-10 z-[100] w-[360px] max-w-[calc(100dvw-32px)] flex flex-col justify-end pointer-events-none"
       >
+        <div 
+          className={`w-full h-[600px] max-h-[80vh] bg-[#0a0f1c]/95 backdrop-blur-xl border border-white/10 rounded-3xl shadow-2xl flex flex-col overflow-hidden transition-all duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] ${isOpen ? 'translate-y-0 opacity-100 scale-100 pointer-events-auto' : 'translate-y-20 opacity-0 scale-95 pointer-events-none'}`}
+        >
         {/* Header */}
         <div className="p-4 bg-gradient-to-r from-white/5 to-transparent border-b border-white/5 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
@@ -766,8 +767,8 @@ export function GlobalChatWidget({ currentUser, conversations, contacts, superAd
               </form>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      </motion.div>
 
       {PreviewModal}
 
