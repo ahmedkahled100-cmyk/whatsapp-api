@@ -56,7 +56,7 @@ export default function AppSettingsPage() {
 
   /* ─── Slider helpers ─── */
   const addSlide = () => {
-    const newSlide: SliderItem = { id: generateId(), imageUrl: '', title: '', link: '', order: settings.sliders.length };
+    const newSlide: SliderItem = { id: generateId(), imageUrl: '', videoUrl: '', title: '', link: '', order: settings.sliders.length };
     setSettings(s => s ? { ...s, sliders: [...s.sliders, newSlide] } : s);
   };
 
@@ -71,6 +71,11 @@ export default function AppSettingsPage() {
   const handleSlideImageUpload = async (file: File, slideId: string) => {
     const url = await uploadFileToStorage(file, `app-sliders/${Date.now()}_${file.name}`);
     updateSlide(slideId, { imageUrl: url });
+  };
+
+  const handleSlideVideoUpload = async (file: File, slideId: string) => {
+    const url = await uploadFileToStorage(file, `app-sliders/videos/${Date.now()}_${file.name}`);
+    updateSlide(slideId, { videoUrl: url });
   };
 
   /* ─── Category helpers ─── */
@@ -192,21 +197,39 @@ export default function AppSettingsPage() {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs mb-1 opacity-70">صورة السلايد</label>
-                  {slide.imageUrl ? (
-                    <div className="relative">
-                      <img loading="lazy" src={slide.imageUrl} alt="" className="w-full h-32 object-cover rounded-xl border border-white/10" />
-                      <button onClick={() => updateSlide(slide.id, { imageUrl: '' })}
-                        className="absolute top-2 left-2 w-7 h-7 rounded-full bg-black/60 flex items-center justify-center text-red-400">
-                        <X size={14} />
-                      </button>
-                    </div>
-                  ) : (
-                    <GlobalFileUpload accept="image/*"
-                      onChange={async e => { const f = e.target.files?.[0]; if (f) await handleSlideImageUpload(f, slide.id); }}
-                      variant="normal" label="رفع صورة السلايد" />
-                  )}
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs mb-1 opacity-70">صورة السلايد</label>
+                    {slide.imageUrl ? (
+                      <div className="relative">
+                        <img loading="lazy" src={slide.imageUrl} alt="" className="w-full h-32 object-cover rounded-xl border border-white/10" />
+                        <button onClick={() => updateSlide(slide.id, { imageUrl: '' })}
+                          className="absolute top-2 left-2 w-7 h-7 rounded-full bg-black/60 flex items-center justify-center text-red-400">
+                          <X size={14} />
+                        </button>
+                      </div>
+                    ) : (
+                      <GlobalFileUpload accept="image/*"
+                        onChange={async e => { const f = e.target.files?.[0]; if (f) await handleSlideImageUpload(f, slide.id); }}
+                        variant="normal" label="رفع صورة السلايد" />
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-xs mb-1 opacity-70">فيديو السلايد (اختياري)</label>
+                    {slide.videoUrl ? (
+                      <div className="relative">
+                        <video src={slide.videoUrl} controls className="w-full h-32 object-cover rounded-xl border border-white/10" />
+                        <button onClick={() => updateSlide(slide.id, { videoUrl: '' })}
+                          className="absolute top-2 left-2 w-7 h-7 rounded-full bg-black/60 flex items-center justify-center text-red-400">
+                          <X size={14} />
+                        </button>
+                      </div>
+                    ) : (
+                      <GlobalFileUpload accept="video/*"
+                        onChange={async e => { const f = e.target.files?.[0]; if (f) await handleSlideVideoUpload(f, slide.id); }}
+                        variant="normal" label="رفع فيديو السلايد" />
+                    )}
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <div>

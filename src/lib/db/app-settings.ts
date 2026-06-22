@@ -7,10 +7,12 @@ import { fromDB, toDB } from './supabase/dbUtils';
 
 export const APP_HOME_SETTINGS_KEY = 'app_home';
 export const APP_HOME_DOC = 'config';
+export const STAFF_HOME_DOC = 'staff_config';
 
 export type SliderItem = {
   id: string;
   imageUrl: string;
+  videoUrl?: string;
   title?: string;
   link?: string;
   order: number;
@@ -116,6 +118,38 @@ export const updateAppHomeSettings = async (settings: Partial<AppHomeSettings>):
   const payload = toDB({
     ...settings,
     id: APP_HOME_DOC
+  });
+
+  const { error } = await supabase
+    .from(APP_HOME)
+    .upsert([payload], { onConflict: 'id' });
+
+  if (error) throw error;
+};
+
+export const getStaffHomeSettings = async (): Promise<AppHomeSettings> => {
+  try {
+    const { data, error } = await supabase
+      .from(APP_HOME)
+      .select('*')
+      .eq('id', STAFF_HOME_DOC)
+      .maybeSingle();
+
+    if (error) throw error;
+    if (data) {
+      return { ...defaultSettings, ...fromDB<AppHomeSettings>(data) } as AppHomeSettings;
+    }
+    return defaultSettings;
+  } catch (e: any) {
+    console.error('getStaffHomeSettings error:', e);
+    return defaultSettings;
+  }
+};
+
+export const updateStaffHomeSettings = async (settings: Partial<AppHomeSettings>): Promise<void> => {
+  const payload = toDB({
+    ...settings,
+    id: STAFF_HOME_DOC
   });
 
   const { error } = await supabase

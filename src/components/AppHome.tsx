@@ -20,7 +20,7 @@ interface Props {
 export function AppHome({ settings, onCategoryClick, examsCount = 0, coursesCount = 0, assignmentsCount = 0, studentName }: Props) {
   const [currentSlide, setCurrentSlide] = useState(0);
   const sliderRef = useRef<any>(null);
-  const slidersWithContent = settings.sliders.filter(s => s.imageUrl || s.title);
+  const slidersWithContent = settings.sliders.filter(s => s.imageUrl || s.videoUrl || s.title);
 
   // Auto-advance slider
   useEffect(() => {
@@ -77,6 +77,15 @@ export function AppHome({ settings, onCategoryClick, examsCount = 0, coursesCoun
                     </div>
                   </div>
                 </div>
+              ) : slide.videoUrl ? (
+                <video
+                  src={slide.videoUrl}
+                  className="w-full h-full object-cover"
+                  autoPlay
+                  muted
+                  loop
+                  playsInline
+                />
               ) : slide.imageUrl ? (
                 <Image
                   src={slide.imageUrl}
@@ -107,7 +116,7 @@ export function AppHome({ settings, onCategoryClick, examsCount = 0, coursesCoun
                 />
               )}
               {/* Slide title */}
-              {slide.title && slide.imageUrl && !slide.youtubeData && (
+              {slide.title && (slide.imageUrl || slide.videoUrl) && !slide.youtubeData && (
                 <div className="absolute bottom-8 right-4 left-4">
                   <div className="font-cairo font-black text-2xl text-white drop-shadow-lg">{slide.title}</div>
                 </div>

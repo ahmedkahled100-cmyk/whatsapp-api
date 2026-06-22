@@ -5,6 +5,7 @@ import {
   MessageSquare, X, Send, Paperclip, ImageIcon, FileText, 
   Search, Users, Loader2, Check, CheckCheck, Trash2, ArrowRight
 } from 'lucide-react';
+import { motion } from 'framer-motion';
 import { 
   sendMessage, subscribeToMessages, markMessagesAsRead, 
   subscribeToUserOnlineStatus, uploadFileToStorage, dispatchNotification,
@@ -345,9 +346,18 @@ export function GlobalChatWidget({ currentUser, conversations, contacts, superAd
   return (
     <>
       {/* Floating Button */}
-      <button 
+      {/* Floating Button */}
+      <motion.button 
+        drag
+        dragMomentum={false}
+        whileHover={{ scale: 1.1 }}
+        whileTap={{ scale: 0.95 }}
+        animate={{ 
+          rotate: isOpen ? 90 : 0, 
+          opacity: isOpen ? 0 : 1 
+        }}
         onClick={() => setIsOpen(!isOpen)}
-        className={`fixed bottom-6 right-6 lg:right-10 z-[100] w-14 h-14 rounded-full bg-gradient-to-tr from-gold to-amber-400 text-black shadow-xl shadow-gold/20 flex items-center justify-center transform transition-all duration-300 hover:scale-110 active:scale-95 ${isOpen ? 'rotate-90 opacity-0 pointer-events-none' : 'rotate-0 opacity-100'}`}
+        className={`fixed bottom-6 right-6 lg:right-10 z-[100] w-14 h-14 rounded-full bg-gradient-to-tr from-gold to-amber-400 text-black shadow-xl shadow-gold/20 flex items-center justify-center ${isOpen ? 'pointer-events-none' : ''}`}
       >
         <MessageSquare size={28} />
         {unreadTotal > 0 && (
@@ -355,7 +365,7 @@ export function GlobalChatWidget({ currentUser, conversations, contacts, superAd
             {unreadTotal > 9 ? '9+' : unreadTotal}
           </span>
         )}
-      </button>
+      </motion.button>
 
       {/* Chat Widget Panel */}
       <div 

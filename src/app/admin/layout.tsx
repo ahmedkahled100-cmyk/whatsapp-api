@@ -18,6 +18,7 @@ const NAV_ITEMS = [
   { href: '/admin/notifications', icon: Bell, label: 'إدارة الإشعارات' },
   { href: '/admin/whatsapp', icon: MessageCircle, label: 'إدارة الواتساب' },
   { href: '/admin/app-settings', icon: Smartphone, label: 'تخصيص التطبيق' },
+  { href: '/admin/staff-settings', icon: Smartphone, label: 'تخصيص لوحات العمل' },
   { href: '/admin/settings', icon: Settings, label: 'إعدادات المنصة' },
   { href: '/teacher/dashboard', icon: GraduationCap, label: 'لوحة المعلم الخاصة بي' },
 ];

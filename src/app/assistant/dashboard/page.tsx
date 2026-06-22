@@ -21,6 +21,9 @@ import { Message, Conversation } from '@/types';
 import { GlobalChatWidget } from '@/components/shared/GlobalChatWidget';
 import { GlobalNotificationWidget } from '@/components/shared/GlobalNotificationWidget';
 import { filterNotificationsForAssistant } from '@/lib/notification-audience';
+import { getStaffHomeSettings } from '@/lib/db/app-settings';
+import type { AppHomeSettings } from '@/lib/db/app-settings';
+import { StaffHomeSlider } from '@/components/StaffHomeSlider';
 
 export default function AssistantDashboard() {
   const router = useRouter();
@@ -29,6 +32,7 @@ export default function AssistantDashboard() {
   const [links, setLinks] = useState<{ link: any; teacher: any }[]>([]);
   const [loading, setLoading] = useState(true);
   const [mounted, setMounted] = useState(false);
+  const [staffSettings, setStaffSettings] = useState<AppHomeSettings | null>(null);
   
   // Navigation tabs
   const [activeTab, setActiveTab] = useState<'academies' | 'jobs' | 'profile' | 'messages'>('academies');
@@ -141,6 +145,10 @@ export default function AssistantDashboard() {
       // 3. Load platform Super Admin for contact feature
       const admin = await getSuperAdmin();
       setSuperAdmin(admin);
+
+      // 4. Fetch Staff Home Settings
+      const sSettings = await getStaffHomeSettings();
+      setStaffSettings(sSettings);
       
     } catch (err) {
       console.error(err);
@@ -566,6 +574,9 @@ export default function AssistantDashboard() {
     <div className="min-h-screen bg-[#0a0f1c] text-white p-4 sm:p-8" dir="rtl">
       <div className="max-w-6xl mx-auto space-y-8">
         
+        {/* Slider & Ticker */}
+        {staffSettings && <StaffHomeSlider settings={staffSettings} />}
+
         {/* Header Profile Section */}
         <div className="card-base p-6 sm:p-8 border-amber-500/20 bg-gradient-to-l from-amber-500/5 via-transparent to-transparent flex flex-col sm:flex-row justify-between items-center gap-6 rounded-2xl relative overflow-hidden">
           <div className="absolute top-0 right-0 w-24 h-24 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />

@@ -6,9 +6,18 @@ import Link from 'next/link';
 import { useTeacherStore } from '@/lib/store';
 import { formatDateAr, scoreLabel, gradeColor } from '@/lib/utils';
 import { Users, FileText, TrendingUp, Clock, PlusCircle, Eye, Share2, ChevronLeft, AlertCircle } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { getStaffHomeSettings } from '@/lib/db/app-settings';
+import type { AppHomeSettings } from '@/lib/db/app-settings';
+import { StaffHomeSlider } from '@/components/StaffHomeSlider';
 
 export default function DashboardPage() {
   const { user, exams, students, attempts, groups, notifications, registrationRequests } = useTeacherStore();
+  const [staffSettings, setStaffSettings] = useState<AppHomeSettings | null>(null);
+
+  useEffect(() => {
+    getStaffHomeSettings().then(setStaffSettings);
+  }, []);
 
   const stats = useMemo(() => {
     const completed = attempts.filter(a => a.completed);
@@ -47,6 +56,9 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
+      {/* Slider & Ticker */}
+      {staffSettings && <StaffHomeSlider settings={staffSettings} />}
+
       {/* Welcome */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-4">
