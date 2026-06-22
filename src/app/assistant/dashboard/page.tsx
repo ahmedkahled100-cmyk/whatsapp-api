@@ -39,6 +39,7 @@ export default function AssistantDashboard() {
 
   // Super Admin state for Contact Admin feature
   const [superAdmin, setSuperAdmin] = useState<any>(null);
+  const [superAdminSettings, setSuperAdminSettings] = useState<any>(null);
   
   // Account Suspension state
   const [profileSuspended, setProfileSuspended] = useState(false);
@@ -149,6 +150,10 @@ export default function AssistantDashboard() {
       // 3. Load platform Super Admin for contact feature
       const admin = await getSuperAdmin();
       setSuperAdmin(admin);
+      if (admin) {
+        const adminSettings = await getSettings(admin.id);
+        setSuperAdminSettings(adminSettings);
+      }
 
       // 4. Fetch Staff Home Settings
       const sSettings = await getStaffHomeSettings();
@@ -582,7 +587,7 @@ export default function AssistantDashboard() {
         {staffSettings && <StaffHomeSlider settings={staffSettings} />}
 
         {/* Header Profile Section */}
-        <div className="card-base p-6 sm:p-8 border-amber-500/20 bg-gradient-to-l from-amber-500/5 via-transparent to-transparent flex flex-col sm:flex-row justify-between items-center gap-6 rounded-2xl relative z-10">
+        <div className="card-base !overflow-visible p-6 sm:p-8 border-amber-500/20 bg-gradient-to-l from-amber-500/5 via-transparent to-transparent flex flex-col sm:flex-row justify-between items-center gap-6 rounded-2xl relative z-10">
           <div className="absolute top-0 right-0 w-24 h-24 bg-amber-500/10 rounded-full blur-3xl pointer-events-none -z-10 overflow-hidden" />
           <div className="flex items-center gap-4 text-center sm:text-right flex-col sm:flex-row">
             {profileForm.imageUrl ? (
@@ -616,9 +621,9 @@ export default function AssistantDashboard() {
               currentUser={user} 
               teacherId={user?.id} 
             />
-            {superAdmin?.phone && (
+            {(superAdmin?.phone || superAdminSettings?.whatsappNumber) && (
               <a 
-                href={`https://wa.me/20${superAdmin.phone.replace(/^0/, '')}?text=${encodeURIComponent(
+                href={`https://wa.me/20${(superAdminSettings?.whatsappNumber || superAdmin?.phone).replace(/^0/, '')}?text=${encodeURIComponent(
                   `مرحباً إدارة منصة A-N Academy، أنا المساعد ${user?.name} (كود: ${user?.code})، أود التواصل معكم.`
                 )}`}
                 target="_blank" 
