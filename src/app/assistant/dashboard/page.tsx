@@ -52,7 +52,8 @@ export default function AssistantDashboard() {
     cvUrl: '',
     roleTitle: '',
     imageUrl: '',
-    salaryPaymentMethod: 'fixed'
+    salaryPaymentMethod: 'fixed',
+    phone: ''
   });
   const [uploadingCV, setUploadingCV] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
@@ -115,6 +116,7 @@ export default function AssistantDashboard() {
         roleTitle: dbProfile.role_title || '',
         imageUrl: dbProfile.image_url || '',
         salaryPaymentMethod: dbProfile.salary_payment_method || 'fixed',
+        phone: dbProfile.phone || user.phone || '',
         isSuspended: !!dbProfile.is_suspended,
         suspensionReason: dbProfile.suspension_reason || ''
       } : {
@@ -125,6 +127,7 @@ export default function AssistantDashboard() {
         roleTitle: (user as any).roleTitle || '',
         imageUrl: (user as any).imageUrl || '',
         salaryPaymentMethod: (user as any).salaryPaymentMethod || 'fixed',
+        phone: user.phone || '',
         isSuspended: false,
         suspensionReason: ''
       };
@@ -136,7 +139,8 @@ export default function AssistantDashboard() {
         cvUrl: mergedProfile.cvUrl,
         roleTitle: mergedProfile.roleTitle,
         imageUrl: mergedProfile.imageUrl,
-        salaryPaymentMethod: mergedProfile.salaryPaymentMethod
+        salaryPaymentMethod: mergedProfile.salaryPaymentMethod,
+        phone: mergedProfile.phone
       });
 
       setProfileSuspended(mergedProfile.isSuspended);
@@ -578,8 +582,8 @@ export default function AssistantDashboard() {
         {staffSettings && <StaffHomeSlider settings={staffSettings} />}
 
         {/* Header Profile Section */}
-        <div className="card-base p-6 sm:p-8 border-amber-500/20 bg-gradient-to-l from-amber-500/5 via-transparent to-transparent flex flex-col sm:flex-row justify-between items-center gap-6 rounded-2xl relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-24 h-24 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="card-base p-6 sm:p-8 border-amber-500/20 bg-gradient-to-l from-amber-500/5 via-transparent to-transparent flex flex-col sm:flex-row justify-between items-center gap-6 rounded-2xl relative z-10">
+          <div className="absolute top-0 right-0 w-24 h-24 bg-amber-500/10 rounded-full blur-3xl pointer-events-none -z-10 overflow-hidden" />
           <div className="flex items-center gap-4 text-center sm:text-right flex-col sm:flex-row">
             {profileForm.imageUrl ? (
               <img loading="lazy" src={profileForm.imageUrl} alt={user?.name} className="w-20 h-20 rounded-2xl object-cover border-2 border-amber-500/30 shrink-0" />
@@ -621,9 +625,16 @@ export default function AssistantDashboard() {
                 rel="noopener noreferrer"
                 className="btn-outline border-green-500/20 text-green-400 hover:bg-green-500/10 flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-bold transition"
               >
-                <Phone size={14} /> تواصل مع الإدارة
+                <Phone size={14} /> واتساب الإدارة
               </a>
             )}
+
+            <button 
+              onClick={() => setActiveTab('messages')}
+              className="btn-outline border-blue-500/20 text-blue-400 hover:bg-blue-500/10 flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-bold transition"
+            >
+              <MessageSquare size={14} /> مراسلة المنصة
+            </button>
 
             <button 
               onClick={handleLogout}
@@ -931,6 +942,18 @@ export default function AssistantDashboard() {
                   </label>
                   <p className="text-[10px] text-gray-500">صورة مربعة واضحة (PNG أو JPG)</p>
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-text-muted mb-1.5">رقم الهاتف (الواتساب)</label>
+                <input 
+                  type="text" 
+                  value={profileForm.phone} 
+                  onChange={e => setProfileForm({ ...profileForm, phone: e.target.value })}
+                  placeholder="رقم الهاتف الخاص بك للتواصل" 
+                  className="input-base w-full text-right"
+                  dir="ltr"
+                />
               </div>
 
               <div>

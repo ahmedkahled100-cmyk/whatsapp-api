@@ -24,6 +24,10 @@ export default function AdminAssistantsPage() {
   const [subStart, setSubStart] = useState('');
   const [subExpiry, setSubExpiry] = useState('');
   
+  // Edit Profile States
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [editForm, setEditForm] = useState<Partial<AssistantProfile>>({});
+  
   // Suspension action states
   const [showSuspensionPrompt, setShowSuspensionPrompt] = useState(false);
   const [suspensionReason, setSuspensionReason] = useState('');
@@ -127,6 +131,28 @@ export default function AdminAssistantsPage() {
       if (msg.includes('الكود') || msg.includes('DUPLICATE_CODE') || msg.includes('مسجل مسبقاً')) {
          setEditedCode(viewingAssistant.code || '');
       }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveProfileData = async () => {
+    if (!viewingAssistant) return;
+    if (!editForm.name?.trim() || !editForm.phone?.trim() || !editForm.username?.trim()) {
+      showToast('الاسم ورقم الهاتف واسم المستخدم مطلوبة', 'error');
+      return;
+    }
+    setSaving(true);
+    try {
+      const updated = { ...viewingAssistant, ...editForm };
+      await saveAssistantProfile(updated as AssistantProfile);
+      showToast('✅ تم تحديث بيانات المساعد بنجاح', 'success');
+      setViewingAssistant(updated as AssistantProfile);
+      setIsEditingProfile(false);
+      void loadData(false);
+    } catch (e: any) {
+      console.error(e);
+      showToast(e.message || 'فشل تحديث البيانات، قد يكون الهاتف أو اسم المستخدم مكرر', 'error');
     } finally {
       setSaving(false);
     }
@@ -366,6 +392,7 @@ export default function AdminAssistantsPage() {
                     setSubExpiry(ast.subExpiry ? new Date(ast.subExpiry).toISOString().split('T')[0] : '');
                     setShowSuspensionPrompt(false);
                     setSuspensionReason('');
+                    setIsEditingProfile(false);
                   }}
                   className="w-full bg-white/5 hover:bg-amber-500 hover:text-black text-white font-bold py-2 rounded-xl text-xs transition flex items-center justify-center gap-1.5 border border-white/10 hover:border-amber-500"
                 >
@@ -439,17 +466,54 @@ export default function AdminAssistantsPage() {
                     {viewingAssistant.name[0]}
                   </div>
                 )}
-                <div className="space-y-1 text-center sm:text-right">
-                  <h4 className="text-xl font-bold text-white flex items-center gap-2 justify-center sm:justify-start">
-                    {viewingAssistant.name}
-                    {viewingAssistant.isSuspended && (
-                      <span className="px-2 py-0.5 rounded-lg text-xs font-bold bg-red-500/20 text-red-400 border border-red-500/20">موقف</span>
-                    )}
-                  </h4>
-                  <p className="text-xs text-text-muted">@{viewingAssistant.username} | {viewingAssistant.roleTitle || 'مساعد مادة'}</p>
-                  <p className="text-xs font-mono font-bold text-gray-400 mt-1 flex items-center gap-1 justify-center sm:justify-start">
-                    <Phone size={12} /> {viewingAssistant.phone}
-                  </p>
+                <div className="space-y-1 text-center sm:text-right w-full">
+                  {!isEditingProfile ? (
+                    <>
+                      <h4 className="text-xl font-bold text-white flex items-center gap-2 justify-center sm:justify-start">
+                        {viewingAssistant.name}
+                        {viewingAssistant.isSuspended && (
+                          <span className="px-2 py-0.5 rounded-lg text-xs font-bold bg-red-500/20 text-red-400 border border-red-500/20">موقف</span>
+                        )}
+                      </h4>
+                      <p className="text-xs text-text-muted">@{viewingAssistant.username} | {viewingAssistant.roleTitle || 'مساعد مادة'}</p>
+                      <p className="text-xs font-mono font-bold text-gray-400 mt-1 flex items-center gap-1 justify-center sm:justify-start">
+                        <Phone size={12} /> {viewingAssistant.phone}
+                      </p>
+                      <button 
+                        onClick={() => { setIsEditingProfile(true); setEditForm(viewingAssistant); }} 
+                        className="mt-3 text-xs font-bold bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-lg text-amber-500 transition"
+                      >
+                        تعديل البيانات الأساسية
+                      </button>
+                    </>
+                  ) : (
+                    <div className="space-y-3 bg-black/20 p-3 rounded-xl border border-white/5">
+                      <div>
+                        <label className="block text-[10px] text-gray-400 mb-1">الاسم</label>
+                        <input type="text" value={editForm.name || ''} onChange={e => setEditForm({...editForm, name: e.target.value})} className="input-base w-full text-sm" />
+                      </div>
+                      <div className="flex gap-2">
+                        <div className="flex-1">
+                          <label className="block text-[10px] text-gray-400 mb-1">اسم المستخدم</label>
+                          <input type="text" value={editForm.username || ''} onChange={e => setEditForm({...editForm, username: e.target.value})} className="input-base w-full text-xs text-left" dir="ltr" />
+                        </div>
+                        <div className="flex-1">
+                          <label className="block text-[10px] text-gray-400 mb-1">الهاتف</label>
+                          <input type="text" value={editForm.phone || ''} onChange={e => setEditForm({...editForm, phone: e.target.value})} className="input-base w-full text-xs font-mono text-left" dir="ltr" />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] text-gray-400 mb-1">المسمى المهني / التخصص</label>
+                        <input type="text" value={editForm.roleTitle || ''} onChange={e => setEditForm({...editForm, roleTitle: e.target.value})} className="input-base w-full text-xs" />
+                      </div>
+                      <div className="flex justify-end gap-2 mt-2 pt-2 border-t border-white/5">
+                        <button onClick={() => setIsEditingProfile(false)} className="px-3 py-1.5 text-xs bg-white/10 hover:bg-white/20 rounded-lg transition font-bold">إلغاء</button>
+                        <button onClick={handleSaveProfileData} disabled={saving} className="px-3 py-1.5 text-xs bg-amber-500 text-black font-bold hover:bg-amber-600 rounded-lg flex items-center gap-1 transition">
+                          {saving ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />} حفظ التعديلات
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 

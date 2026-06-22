@@ -56,7 +56,8 @@ export default function ManageTeachersPage() {
     subExpiry: '',
     name: '',
     subject: '',
-    phone: ''
+    phone: '',
+    permissions: [] as string[]
   });
 
   const [form, setForm] = useState({
@@ -284,7 +285,8 @@ export default function ManageTeachersPage() {
       subExpiry: expiryStr,
       name: req.name,
       subject: req.subject || '',
-      phone: req.phone || ''
+      phone: req.phone || '',
+      permissions: AVAILABLE_PERMISSIONS.map(p => p.id)
     });
     setPendingApproval(req);
   };
@@ -309,7 +311,8 @@ export default function ManageTeachersPage() {
             subExpiry: subExpiry,
             subPrice: approvalForm.subPrice,
             imageUrl: pendingApproval.imageUrl || '',
-            subject: approvalForm.subject
+            subject: approvalForm.subject,
+            permissions: approvalForm.permissions
         };
 
         // Optimistic update for immediate UI response
@@ -428,6 +431,13 @@ export default function ManageTeachersPage() {
 
   const togglePermission = (id: string) => {
     setForm(f => ({
+      ...f,
+      permissions: f.permissions.includes(id) ? f.permissions.filter(p => p !== id) : [...f.permissions, id]
+    }));
+  };
+
+  const toggleApprovalPermission = (id: string) => {
+    setApprovalForm(f => ({
       ...f,
       permissions: f.permissions.includes(id) ? f.permissions.filter(p => p !== id) : [...f.permissions, id]
     }));
@@ -1088,6 +1098,27 @@ export default function ManageTeachersPage() {
                             </div>
                         </div>
                     )}
+                </div>
+
+                {/* Section 4: Permissions */}
+                <div className="space-y-4 bg-purple-500/5 p-4 rounded-2xl border border-purple-500/10">
+                    <div className="flex items-center gap-2 pb-2 border-b border-purple-500/10">
+                       <Shield size={16} className="text-purple-400" />
+                       <h3 className="text-sm font-bold text-purple-400">الصلاحيات الممنوحة للمعلم</h3>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                       {AVAILABLE_PERMISSIONS.map(p => (
+                          <button key={p.id} type="button" onClick={() => toggleApprovalPermission(p.id)} 
+                             className={`p-2.5 rounded-xl border text-[11px] font-bold flex items-center gap-2 transition-all ${
+                                approvalForm.permissions.includes(p.id) 
+                                ? 'bg-purple-500/20 border-purple-500/40 text-purple-300 shadow-lg shadow-purple-500/5' 
+                                : 'bg-white/5 border-transparent text-gray-500 hover:bg-white/10'
+                             }`}>
+                             <p.icon size={14} className={approvalForm.permissions.includes(p.id) ? 'text-purple-400' : 'text-gray-600'} /> 
+                             {p.label}
+                          </button>
+                       ))}
+                    </div>
                 </div>
             </div>
 
