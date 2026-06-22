@@ -228,7 +228,8 @@ if (typeof window !== 'undefined') {
   // Listen to local state changes and broadcast them
   useTeacherStore.subscribe((state) => {
     if (isTeacherSyncing) return;
-    const serializableState = Object.fromEntries(Object.entries(state).filter(([_, v]) => typeof v !== 'function'));
+    // Only sync auth and global settings to prevent workspace overlapping for assistants with multiple tabs
+    const serializableState = { user: state.user, settings: state.settings };
     try { syncChannel.postMessage({ type: 'TEACHER_SYNC', state: serializableState }); } catch(e){}
   });
 

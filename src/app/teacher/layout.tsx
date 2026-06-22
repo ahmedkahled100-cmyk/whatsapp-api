@@ -550,7 +550,7 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
             <GlobalNotificationWidget 
               notifications={filterNotificationsForTeacherInbox(notifications)} 
               currentUser={user} 
-              teacherId={user.id} 
+              teacherId={user.role === 'assistant' && activeTeacherId ? activeTeacherId : user.id} 
             />
 
             {/* Live sync indicator */}
