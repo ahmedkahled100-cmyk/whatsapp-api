@@ -75,7 +75,8 @@ export { wipeAllData, wipeStudentInteraction } from './admin';
 
 export {
   getAttendanceSessions, createAttendanceSession, updateAttendanceSessionStatus,
-  getAttendanceRecords, saveAttendanceRecord, getStudentAttendanceHistory
+  getAttendanceRecords, saveAttendanceRecord, getStudentAttendanceHistory,
+  deleteAttendanceSession
 } from './supabase/attendance';
 
 export {

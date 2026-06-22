@@ -45,6 +45,24 @@ export const updateAttendanceSessionStatus = async (sessionId: string, status: '
   if (error) throw error;
 };
 
+export const deleteAttendanceSession = async (sessionId: string): Promise<void> => {
+  // First, delete related records
+  const { error: recordsError } = await supabase
+    .from(ATTENDANCE_RECORDS)
+    .delete()
+    .eq('session_id', sessionId);
+    
+  if (recordsError) throw recordsError;
+
+  // Then delete the session
+  const { error } = await supabase
+    .from(ATTENDANCE_SESSIONS)
+    .delete()
+    .eq('id', sessionId);
+    
+  if (error) throw error;
+};
+
 export const getAttendanceRecords = async (sessionId: string): Promise<AttendanceRecord[]> => {
   if (!sessionId) return [];
   const { data, error } = await supabase

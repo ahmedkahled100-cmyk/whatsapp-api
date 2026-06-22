@@ -1,9 +1,9 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
 import { useTeacherStore } from '@/lib/store';
-import { getAttendanceSessions, createAttendanceSession, updateAttendanceSessionStatus, getAttendanceRecords, saveAttendanceRecord } from '@/lib/db';
+import { getAttendanceSessions, createAttendanceSession, updateAttendanceSessionStatus, getAttendanceRecords, saveAttendanceRecord, deleteAttendanceSession } from '@/lib/db';
 import { AttendanceSession, AttendanceRecord, Student } from '@/types';
-import { PlusCircle, Search, QrCode, CheckCircle, XCircle, Clock, Save, ChevronRight, User, FileSpreadsheet, Printer, X } from 'lucide-react';
+import { PlusCircle, Search, QrCode, CheckCircle, XCircle, Clock, Save, ChevronRight, User, FileSpreadsheet, Printer, X, Trash2 } from 'lucide-react';
 import { showToast } from '@/lib/toast';
 import { printHtml, openStudentCardForPrint } from '@/lib/utils';
 import { QRCodeSVG } from 'qrcode.react';
@@ -81,6 +81,23 @@ export default function AttendancePage() {
       showToast('تم إغلاق الجلسة بنجاح', 'success');
     } catch (err) {
       showToast('خطأ في إغلاق الجلسة', 'error');
+    }
+  };
+
+  const handleDeleteSession = async (session: AttendanceSession, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm('هل أنت متأكد من حذف هذه الجلسة؟ سيتم حذف جميع سجلات الحضور الخاصة بها ولن يمكنك التراجع عن هذا الإجراء.')) return;
+    
+    try {
+      await deleteAttendanceSession(session.id);
+      setSessions(sessions.filter(s => s.id !== session.id));
+      if (activeSession?.id === session.id) {
+        setActiveSession(null);
+      }
+      showToast('تم حذف الجلسة بنجاح', 'success');
+    } catch (err) {
+      console.error(err);
+      showToast('خطأ في حذف الجلسة', 'error');
     }
   };
 
@@ -184,9 +201,20 @@ export default function AttendancePage() {
                 <div className="w-10 h-10 rounded-xl bg-gold/10 flex items-center justify-center text-gold group-hover:scale-110 transition-transform">
                   <Clock size={20} />
                 </div>
-                <span className={`badge ${session.status === 'open' ? 'badge-green' : 'badge-red'}`}>
-                  {session.status === 'open' ? 'مفتوحة' : 'مغلقة'}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className={`badge ${session.status === 'open' ? 'badge-green' : 'badge-red'}`}>
+                    {session.status === 'open' ? 'مفتوحة' : 'مغلقة'}
+                  </span>
+                  {session.status === 'closed' && (
+                    <button 
+                      onClick={(e) => handleDeleteSession(session, e)} 
+                      className="w-7 h-7 rounded-lg bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white flex items-center justify-center transition-colors"
+                      title="حذف الجلسة"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  )}
+                </div>
               </div>
               <h3 className="font-bold text-lg mb-1">{session.title || session.date}</h3>
               <p className="text-sm font-bold text-gold/80 mb-2">{session.groupId ? groups.find(g => g.id === session.groupId)?.name : 'كل المجموعات'}</p>
