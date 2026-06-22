@@ -58,7 +58,8 @@ export {
   sendMessage, subscribeToConversations, subscribeToMessages, 
   markMessagesAsRead, setUserOnlineStatus, subscribeToUserOnlineStatus,
   heartbeatUserOnlineStatus, setUserOfflineBeacon, loadOlderMessages,
-  broadcastTyping, subscribeToTyping
+  broadcastTyping, subscribeToTyping, deleteConversation,
+  toggleConversationPin, toggleConversationArchive
 } from './supabase/messages';
 
 export { 

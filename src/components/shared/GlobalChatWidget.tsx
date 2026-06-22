@@ -3,14 +3,16 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   MessageSquare, X, Send, Paperclip, ImageIcon, FileText, 
-  Search, Users, Loader2, Check, CheckCheck, Trash2, ArrowRight
+  Search, Users, Loader2, Check, CheckCheck, Trash2, ArrowRight,
+  Archive, Pin
 } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { motion, useMotionValue } from 'framer-motion';
 import { 
   sendMessage, subscribeToMessages, markMessagesAsRead, 
   subscribeToUserOnlineStatus, uploadFileToStorage, dispatchNotification,
   broadcastTyping, subscribeToTyping,
-  setUserOnlineStatus, heartbeatUserOnlineStatus, setUserOfflineBeacon
+  setUserOnlineStatus, heartbeatUserOnlineStatus, setUserOfflineBeacon, deleteConversation,
+  toggleConversationPin, toggleConversationArchive
 } from '@/lib/db';
 import { showToast } from '@/lib/toast';
 import { formatRelativeLastSeenAr } from '@/lib/utils';
@@ -31,6 +33,10 @@ export function GlobalChatWidget({ currentUser, conversations, contacts, superAd
   const [newMessage, setNewMessage] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   
+  const x = useMotionValue(0);
+  const y = useMotionValue(0);
+  const isDragging = useRef(false);
+
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [sending, setSending] = useState(false);
   
@@ -47,6 +53,7 @@ export function GlobalChatWidget({ currentUser, conversations, contacts, superAd
   const [typingName, setTypingName] = useState<string | null>(null);
 
   const [showNewChat, setShowNewChat] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -59,6 +66,26 @@ export function GlobalChatWidget({ currentUser, conversations, contacts, superAd
     }
     return acc;
   }, 0);
+
+  // Restore widget position
+  useEffect(() => {
+    const savedPos = localStorage.getItem(`chatWidgetPos_${currentUser?.id}`);
+    if (savedPos) {
+      try {
+        let { x: savedX, y: savedY } = JSON.parse(savedPos);
+        
+        // Prevent widget from being placed off-screen on smaller devices
+        const ww = window.innerWidth;
+        const wh = window.innerHeight;
+        
+        if (savedX > 50 || savedX < -ww + 50) savedX = 0;
+        if (savedY > 50 || savedY < -wh + 100) savedY = 0;
+
+        x.set(savedX);
+        y.set(savedY);
+      } catch (e) {}
+    }
+  }, [currentUser?.id, x, y]);
 
   // Global presence tracking
   useEffect(() => {
@@ -309,9 +336,19 @@ export function GlobalChatWidget({ currentUser, conversations, contacts, superAd
     };
   };
 
+  const isConvArchived = (c: Conversation) => !!c.archivedBy?.includes(currentUser.id);
+  const isConvPinned = (c: Conversation) => !!c.pinnedBy?.includes(currentUser.id);
+
   const filteredConversations = conversations.filter(c => 
-    !searchQuery || c.participantNames?.some(name => name?.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
+    (!searchQuery || c.participantNames?.some(name => name?.toLowerCase().includes(searchQuery.toLowerCase()))) &&
+    (showArchived ? isConvArchived(c) : !isConvArchived(c))
+  ).sort((a, b) => {
+    const pinA = isConvPinned(a);
+    const pinB = isConvPinned(b);
+    if (pinA && !pinB) return -1;
+    if (!pinA && pinB) return 1;
+    return b.updatedAt - a.updatedAt;
+  });
 
   const filteredContacts = contacts.filter(c => 
     !searchQuery || c.name?.toLowerCase().includes(searchQuery.toLowerCase())
@@ -350,14 +387,20 @@ export function GlobalChatWidget({ currentUser, conversations, contacts, superAd
       <motion.button 
         drag
         dragMomentum={false}
+        style={{ x, y }}
+        onDragStart={() => { isDragging.current = true; }}
+        onDragEnd={() => { 
+          setTimeout(() => { isDragging.current = false; }, 100);
+          localStorage.setItem(`chatWidgetPos_${currentUser?.id}`, JSON.stringify({ x: x.get(), y: y.get() }));
+        }}
         whileHover={{ scale: 1.1 }}
         whileTap={{ scale: 0.95 }}
         animate={{ 
           rotate: isOpen ? 90 : 0, 
           opacity: isOpen ? 0 : 1 
         }}
-        onClick={() => setIsOpen(!isOpen)}
-        className={`fixed bottom-6 right-6 lg:right-10 z-[100] w-14 h-14 rounded-full bg-gradient-to-tr from-gold to-amber-400 text-black shadow-xl shadow-gold/20 flex items-center justify-center ${isOpen ? 'pointer-events-none' : ''}`}
+        onClick={() => { if (!isDragging.current) setIsOpen(!isOpen); }}
+        className={`fixed bottom-[100px] lg:bottom-10 right-4 lg:right-10 z-[100] w-14 h-14 rounded-full bg-gradient-to-tr from-gold to-amber-400 text-black shadow-xl shadow-gold/20 flex items-center justify-center ${isOpen ? 'pointer-events-none' : ''}`}
       >
         <MessageSquare size={28} />
         {unreadTotal > 0 && (
@@ -369,7 +412,7 @@ export function GlobalChatWidget({ currentUser, conversations, contacts, superAd
 
       {/* Chat Widget Panel */}
       <div 
-        className={`fixed bottom-6 right-6 lg:right-10 z-[100] w-[360px] h-[600px] max-h-[85vh] max-w-[calc(100dvw-32px)] bg-[#0a0f1c]/95 backdrop-blur-xl border border-white/10 rounded-3xl shadow-2xl flex flex-col overflow-hidden transition-all duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] ${isOpen ? 'translate-y-0 opacity-100 scale-100' : 'translate-y-20 opacity-0 scale-95 pointer-events-none'}`}
+        className={`fixed bottom-[100px] lg:bottom-10 right-4 lg:right-10 z-[100] w-[360px] h-[600px] max-h-[80vh] max-w-[calc(100dvw-32px)] bg-[#0a0f1c]/95 backdrop-blur-xl border border-white/10 rounded-3xl shadow-2xl flex flex-col overflow-hidden transition-all duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] ${isOpen ? 'translate-y-0 opacity-100 scale-100' : 'translate-y-20 opacity-0 scale-95 pointer-events-none'}`}
       >
         {/* Header */}
         <div className="p-4 bg-gradient-to-r from-white/5 to-transparent border-b border-white/5 flex items-center justify-between shrink-0">
@@ -390,17 +433,38 @@ export function GlobalChatWidget({ currentUser, conversations, contacts, superAd
               </p>
             </div>
           </div>
-          <button onClick={() => setIsOpen(false)} className="text-gray-400 hover:text-white p-1">
-            <X size={20} />
-          </button>
+          <div className="flex items-center gap-2">
+            {selectedConv && (
+              <button 
+                onClick={async () => {
+                  if (confirm('هل أنت متأكد من حذف هذه المحادثة بالكامل؟ لا يمكن التراجع عن هذا الإجراء.')) {
+                    try {
+                      await deleteConversation(selectedConv.id);
+                      setSelectedConv(null);
+                      showToast('تم حذف المحادثة بنجاح');
+                    } catch (err) {
+                      showToast('فشل حذف المحادثة');
+                    }
+                  }
+                }} 
+                className="text-red-400 hover:text-red-300 p-1 bg-red-400/10 hover:bg-red-400/20 rounded-lg transition-colors"
+                title="حذف المحادثة"
+              >
+                <Trash2 size={16} />
+              </button>
+            )}
+            <button onClick={() => setIsOpen(false)} className="text-gray-400 hover:text-white p-1">
+              <X size={20} />
+            </button>
+          </div>
         </div>
 
         {/* Content */}
         {!selectedConv ? (
           // Conversations List
           <div className="flex-1 flex flex-col overflow-hidden relative">
-            <div className="p-3 border-b border-white/5 shrink-0">
-              <div className="relative">
+            <div className="flex gap-2 p-3 border-b border-white/5 shrink-0">
+              <div className="relative flex-1">
                 <Search size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500" />
                 <input 
                   type="text" 
@@ -410,6 +474,15 @@ export function GlobalChatWidget({ currentUser, conversations, contacts, superAd
                   onChange={e => setSearchQuery(e.target.value)}
                 />
               </div>
+              {!showNewChat && (
+                <button 
+                  onClick={() => setShowArchived(!showArchived)} 
+                  className={`p-2 rounded-xl transition-colors flex items-center justify-center shrink-0 ${showArchived ? 'bg-gold/20 text-gold' : 'bg-white/5 text-gray-400 hover:text-white'}`}
+                  title={showArchived ? 'العودة للمحادثات الرئيسية' : 'الأرشيف'}
+                >
+                  <Archive size={18} />
+                </button>
+              )}
             </div>
 
             <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-1 relative">
@@ -457,7 +530,7 @@ export function GlobalChatWidget({ currentUser, conversations, contacts, superAd
                   {filteredConversations.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-40 text-center opacity-50">
                       <MessageSquare size={32} className="mb-2 text-gold" />
-                      <p className="text-xs">لا توجد رسائل سابقة</p>
+                      <p className="text-xs">{showArchived ? 'لا توجد محادثات مؤرشفة' : 'لا توجد محادثات سابقة'}</p>
                     </div>
                   ) : (
                     filteredConversations.map(conv => {
@@ -465,10 +538,10 @@ export function GlobalChatWidget({ currentUser, conversations, contacts, superAd
                       const hasUnread = conv.lastMessage && !conv.lastMessage.isRead && conv.lastMessage.receiverId === currentUser.id;
 
                       return (
-                        <button 
+                        <div 
                           key={conv.id}
+                          className="w-full p-2.5 rounded-2xl flex items-center gap-3 hover:bg-white/5 transition-colors text-right relative group cursor-pointer"
                           onClick={() => setSelectedConv(conv)}
-                          className="w-full p-3 rounded-2xl flex items-center gap-3 hover:bg-white/5 transition-colors text-right relative group"
                         >
                           <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg shrink-0 border ${hasUnread ? 'bg-gold text-black border-gold' : 'bg-white/5 text-gray-400 border-white/10'}`}>
                             {other.name[0]}
@@ -476,16 +549,36 @@ export function GlobalChatWidget({ currentUser, conversations, contacts, superAd
                           <div className="flex-1 min-w-0">
                             <div className="flex justify-between items-center mb-1">
                               <span className={`font-bold text-sm truncate ${hasUnread ? 'text-white' : 'text-gray-300'}`}>{other.name}</span>
-                              {conv.lastMessage && <span className="text-[9px] text-gray-500 shrink-0">{new Date(conv.lastMessage.timestamp).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}</span>}
+                              <div className="flex flex-col items-end gap-1">
+                                {conv.lastMessage && <span className="text-[9px] text-gray-500 shrink-0">{new Date(conv.lastMessage.timestamp).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}</span>}
+                                {hasUnread && <div className="w-2 h-2 rounded-full bg-gold shadow-[0_0_8px_var(--gold)] shrink-0" />}
+                              </div>
                             </div>
-                            <div className="flex justify-between items-center">
+                            <div className="flex justify-between items-center pr-14">
                               <p className={`text-xs truncate ${hasUnread ? 'text-gold font-bold' : 'text-gray-500'}`}>
                                 {conv.lastMessage?.content || (conv.lastMessage?.type === 'image' ? '📸 صورة' : conv.lastMessage?.type === 'file' ? '📁 ملف' : 'رسالة جديدة')}
                               </p>
-                              {hasUnread && <div className="w-2 h-2 rounded-full bg-gold shadow-[0_0_8px_var(--gold)] shrink-0" />}
                             </div>
                           </div>
-                        </button>
+                          
+                          {/* Pin / Archive Actions */}
+                          <div className="absolute left-2 top-1/2 -translate-y-1/2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity bg-[#0a0f1c]/80 backdrop-blur-sm p-1 rounded-xl shadow-lg border border-white/5">
+                            <button 
+                              onClick={(e) => { e.stopPropagation(); toggleConversationPin(conv.id, currentUser.id, !isConvPinned(conv)); }}
+                              className={`p-1.5 rounded-lg transition-colors ${isConvPinned(conv) ? 'text-gold bg-gold/10' : 'text-gray-400 hover:text-white hover:bg-white/10'}`}
+                              title={isConvPinned(conv) ? 'إلغاء التثبيت' : 'تثبيت'}
+                            >
+                              <Pin size={14} className={isConvPinned(conv) ? 'fill-gold' : ''} />
+                            </button>
+                            <button 
+                              onClick={(e) => { e.stopPropagation(); toggleConversationArchive(conv.id, currentUser.id, !isConvArchived(conv)); }}
+                              className={`p-1.5 rounded-lg transition-colors ${isConvArchived(conv) ? 'text-blue-400 bg-blue-400/10' : 'text-gray-400 hover:text-white hover:bg-white/10'}`}
+                              title={isConvArchived(conv) ? 'استعادة من الأرشيف' : 'أرشفة'}
+                            >
+                              <Archive size={14} />
+                            </button>
+                          </div>
+                        </div>
                       );
                     })
                   )}

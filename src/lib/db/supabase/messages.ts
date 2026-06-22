@@ -27,6 +27,15 @@ export const sendMessage = async (msg: Omit<Message, 'id' | 'timestamp' | 'isRea
     .single();
   if (msgError) throw msgError;
 
+  if (msgError) throw msgError;
+
+  // Fetch existing conversation to keep pinned/archived states and unarchive
+  const { data: existingConv } = await supabase.from(CONVERSATIONS).select('*').eq('id', convId).maybeSingle();
+
+  let newArchivedBy = existingConv?.archived_by || [];
+  // Unarchive for both sender and receiver on new message
+  newArchivedBy = newArchivedBy.filter((id: string) => id !== msg.senderId && id !== msg.receiverId);
+
   // Upsert conversation (last message preview)
   const convData = toDB({
     id: convId,
@@ -35,12 +44,49 @@ export const sendMessage = async (msg: Omit<Message, 'id' | 'timestamp' | 'isRea
     lastMessage: { ...messageData, id: msgData.id },
     updatedAt: Date.now(),
     teacherId: msg.teacherId,
+    pinnedBy: existingConv?.pinned_by || [],
+    archivedBy: newArchivedBy,
   });
 
   const { error: convError } = await supabase.from(CONVERSATIONS).upsert(convData);
   if (convError) throw convError;
 
   return msgData.id as string;
+};
+
+// ─── Delete Conversation ─────────────────────────────────────────────────────────
+export const deleteConversation = async (conversationId: string) => {
+  const { error: msgErr } = await supabase.from(MESSAGES).delete().eq('conversation_id', conversationId);
+  if (msgErr) throw msgErr;
+  const { error: convErr } = await supabase.from(CONVERSATIONS).delete().eq('id', conversationId);
+  if (convErr) throw convErr;
+};
+
+// ─── Pin / Archive Conversations ─────────────────────────────────────────────
+export const toggleConversationPin = async (conversationId: string, userId: string, isPinned: boolean) => {
+  const { data: conv } = await supabase.from(CONVERSATIONS).select('pinned_by').eq('id', conversationId).maybeSingle();
+  if (!conv) return;
+  let pinnedBy = conv.pinned_by || [];
+  if (isPinned) {
+    if (!pinnedBy.includes(userId)) pinnedBy.push(userId);
+  } else {
+    pinnedBy = pinnedBy.filter((id: string) => id !== userId);
+  }
+  const { error } = await supabase.from(CONVERSATIONS).update({ pinned_by: pinnedBy }).eq('id', conversationId);
+  if (error) throw error;
+};
+
+export const toggleConversationArchive = async (conversationId: string, userId: string, isArchived: boolean) => {
+  const { data: conv } = await supabase.from(CONVERSATIONS).select('archived_by').eq('id', conversationId).maybeSingle();
+  if (!conv) return;
+  let archivedBy = conv.archived_by || [];
+  if (isArchived) {
+    if (!archivedBy.includes(userId)) archivedBy.push(userId);
+  } else {
+    archivedBy = archivedBy.filter((id: string) => id !== userId);
+  }
+  const { error } = await supabase.from(CONVERSATIONS).update({ archived_by: archivedBy }).eq('id', conversationId);
+  if (error) throw error;
 };
 
 // ─── Subscribe to Conversations ──────────────────────────────────────────────

@@ -341,6 +341,8 @@ export interface Conversation {
   lastMessage?: Message;
   updatedAt: number;
   unreadCount?: number;
+  pinnedBy?: string[];
+  archivedBy?: string[];
 }
 
 export interface CalendarEvent {
