@@ -289,9 +289,12 @@ export const saveAssistantJob = async (job: Omit<AssistantJob, 'id'> & { id?: st
     ...job,
     id: newId,
     status: job.status || 'open',
-    teacherPhone: job.teacherPhone,
     createdAt: job.createdAt || Date.now()
   });
+  
+  // Clean up fields that might not exist in the DB schema
+  delete (payload as any).teacher_phone;
+  delete (payload as any).teacher_name;
 
   const { error } = await supabase
     .from(ASSISTANT_JOBS)
@@ -328,7 +331,27 @@ export const getAssistantJobs = async (): Promise<AssistantJob[]> => {
     console.error('Error fetching assistant jobs:', error);
     return [];
   }
-  return manyFromDB<AssistantJob>(data);
+  
+  const jobs = manyFromDB<AssistantJob>(data);
+  
+  // Backfill teacher details if missing from database
+  const missingTeacherIds = [...new Set(jobs.filter(j => !j.teacherName || !j.teacherPhone).map(j => j.teacherId))];
+  if (missingTeacherIds.length > 0) {
+    const { data: teachers } = await supabase.from('teachers').select('id, name, phone').in('id', missingTeacherIds);
+    if (teachers) {
+      jobs.forEach(job => {
+        if (!job.teacherName || !job.teacherPhone) {
+          const t = teachers.find(t => t.id === job.teacherId);
+          if (t) {
+            job.teacherName = job.teacherName || t.name;
+            job.teacherPhone = job.teacherPhone || t.phone;
+          }
+        }
+      });
+    }
+  }
+  
+  return jobs;
 };
 
 // 13. Get all jobs posted by a specific teacher
@@ -343,7 +366,21 @@ export const getJobsByTeacher = async (teacherId: string): Promise<AssistantJob[
     console.error('Error fetching jobs by teacher:', error);
     return [];
   }
-  return manyFromDB<AssistantJob>(data);
+  
+  const jobs = manyFromDB<AssistantJob>(data);
+  
+  // Backfill teacher details if missing
+  if (jobs.some(j => !j.teacherName || !j.teacherPhone)) {
+    const { data: teacher } = await supabase.from('teachers').select('name, phone').eq('id', teacherId).single();
+    if (teacher) {
+      jobs.forEach(job => {
+        job.teacherName = job.teacherName || teacher.name;
+        job.teacherPhone = job.teacherPhone || teacher.phone;
+      });
+    }
+  }
+  
+  return jobs;
 };
 
 // 14. Save/update a job application
