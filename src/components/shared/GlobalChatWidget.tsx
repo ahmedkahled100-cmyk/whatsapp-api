@@ -393,8 +393,7 @@ export function GlobalChatWidget({ currentUser, conversations, contacts, superAd
         whileHover={{ scale: 1.1 }}
         whileTap={{ scale: 0.95 }}
         animate={{ 
-          rotate: isOpen ? 90 : 0, 
-          opacity: isOpen ? 0 : 1 
+          rotate: isOpen ? 90 : 0
         }}
         onTap={() => setIsOpen(!isOpen)}
         className={`fixed bottom-[100px] lg:bottom-10 right-4 lg:right-10 z-[100] w-14 h-14 rounded-full bg-gradient-to-tr from-gold to-amber-400 text-black shadow-xl shadow-gold/20 flex items-center justify-center ${isOpen ? 'pointer-events-none' : ''}`}
@@ -767,6 +766,7 @@ export function GlobalChatWidget({ currentUser, conversations, contacts, superAd
               </form>
             </div>
           </div>
+        )}
         </div>
       </motion.div>
 
