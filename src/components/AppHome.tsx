@@ -83,7 +83,6 @@ export function AppHome({ settings, onCategoryClick, examsCount = 0, coursesCoun
                   className="w-full h-full object-cover"
                   autoPlay
                   muted
-                  loop
                   playsInline
                 />
               ) : slide.imageUrl ? (

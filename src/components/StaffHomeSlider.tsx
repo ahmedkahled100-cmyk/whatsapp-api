@@ -65,7 +65,6 @@ export function StaffHomeSlider({ settings }: Props) {
                   className="w-full h-full object-cover"
                   autoPlay
                   muted
-                  loop
                   playsInline
                 />
               ) : slide.imageUrl ? (
