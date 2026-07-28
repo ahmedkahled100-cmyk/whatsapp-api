@@ -24,7 +24,8 @@ export {
 export { 
   getStudents, getAllStudents, getStudentByCode, getStudentByParentPhone, 
   getEnrollmentsByParentPhone, getEnrollmentsByPhone, getStudentByPhoneAnywhere,
-  getRegistrationRequestsByPhone, saveStudent, deleteStudent, 
+  getRegistrationRequestsByPhone, checkRegistrationStatusByPhone, type RegistrationStatusResult,
+  saveStudent, deleteStudent, 
   subscribeToStudents, subscribeToAllStudents, subscribeToStudent,
   subscribeToStudentByPhone, subscribeToRegistrationRequestByPhone,
   getGroups, saveGroup, deleteGroup, subscribeToGroups, getRegistrationRequests, 

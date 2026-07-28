@@ -137,6 +137,21 @@ export const getStudentByPhoneAnywhere = async (phone: string): Promise<Student 
   return student;
 };
 
+export interface RegistrationStatusResult {
+  id: string;
+  role: 'teacher' | 'student' | 'assistant';
+  name: string;
+  phone: string;
+  status: 'pending' | 'approved' | 'rejected';
+  createdAt?: number;
+  subType?: string;
+  subject?: string;
+  roleTitle?: string;
+  code?: string;
+  rejectionReason?: string;
+  paymentRef?: string;
+}
+
 /** البحث عن كافة طلبات التسجيل (الحالية والسابقة) لرقم هاتف */
 export const getRegistrationRequestsByPhone = async (phone: string): Promise<RegistrationRequest[]> => {
   if (!phone) return [];
@@ -147,6 +162,97 @@ export const getRegistrationRequestsByPhone = async (phone: string): Promise<Reg
     .eq('phone', normalized);
   if (error) throw error;
   return manyFromDB<RegistrationRequest>(data);
+};
+
+/** استعلام متكامل عن حالة طلبات التسجيل للمعلم أو الطالب أو المساعد برقم الهاتف */
+export const checkRegistrationStatusByPhone = async (phoneStr: string): Promise<RegistrationStatusResult[]> => {
+  if (!phoneStr || !phoneStr.trim()) return [];
+  const normalized = normalizePhone(phoneStr);
+  const rawPhone = phoneStr.trim();
+  const results: RegistrationStatusResult[] = [];
+
+  // 1. البحث في جدول طلبات التسجيل (للطلاب والمعلمين)
+  try {
+    const { data: regData } = await supabase
+      .from(REG_REQUESTS)
+      .select('*')
+      .or(`phone.eq.${normalized},phone.eq.${rawPhone}`);
+    
+    if (regData && regData.length > 0) {
+      const regList = manyFromDB<RegistrationRequest>(regData);
+      for (const r of regList) {
+        results.push({
+          id: r.id,
+          role: r.type === 'teacher' ? 'teacher' : 'student',
+          name: r.name,
+          phone: r.phone,
+          status: r.status,
+          createdAt: r.createdAt,
+          subType: r.subType,
+          subject: r.subject,
+          paymentRef: r.paymentRef,
+          rejectionReason: r.notes || (r as any).cancelReason || (r as any).cancel_reason,
+        });
+      }
+    }
+  } catch (e) {
+    console.error('Error querying registration_requests:', e);
+  }
+
+  // 2. البحث في جدول المساعدين (assistants_profiles)
+  try {
+    const { data: astData } = await supabase
+      .from('assistants_profiles')
+      .select('*')
+      .or(`phone.eq.${normalized},phone.eq.${rawPhone}`);
+      
+    if (astData && astData.length > 0) {
+      for (const a of astData) {
+        results.push({
+          id: a.id,
+          role: 'assistant',
+          name: a.name,
+          phone: a.phone,
+          status: a.status || 'pending',
+          createdAt: a.created_at || a.createdAt,
+          roleTitle: a.role_title || a.roleTitle,
+          code: a.code,
+        });
+      }
+    }
+  } catch (e) {
+    console.error('Error querying assistants_profiles:', e);
+  }
+
+  // 3. البحث في جدول المعلمين النشطين (teachers)
+  try {
+    const { data: teacherData } = await supabase
+      .from('teachers')
+      .select('*')
+      .or(`username.eq.${normalized},username.eq.${rawPhone}`);
+      
+    if (teacherData && teacherData.length > 0) {
+      for (const t of teacherData) {
+        const isSuspended = t.is_suspended || t.isSuspended;
+        if (!results.some(r => r.role === 'teacher')) {
+          results.push({
+            id: t.id,
+            role: 'teacher',
+            name: t.name,
+            phone: t.username,
+            status: isSuspended ? 'rejected' : 'approved',
+            subject: t.subject,
+            code: t.code,
+            rejectionReason: isSuspended ? 'الحساب معطل أو موقوف حالياً' : undefined,
+          });
+        }
+      }
+    }
+  } catch (e) {
+    console.error('Error querying teachers:', e);
+  }
+
+  return results;
 };
 
 export const getEnrollmentsByParentPhone = async (parentPhone: string): Promise<Student[]> => {

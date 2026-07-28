@@ -266,13 +266,10 @@ export default function ManageTeachersPage() {
     const subType = (req.subType as 'monthly' | 'yearly' | 'free') || 'monthly';
     const subStart = new Date().toISOString().split('T')[0];
     
-    // Calculate price based on type
-    let price = 0;
-    if (subType === 'monthly') {
-      price = platformSettings?.monthlyPrice || 0;
-    } else if (subType === 'yearly') {
-      price = platformSettings?.yearlyPrice || 0;
-    }
+    // Calculate price based on promo discount if present, or default platform settings
+    let price = typeof req.subPrice === 'number' && req.subPrice >= 0
+      ? req.subPrice
+      : (subType === 'monthly' ? platformSettings?.monthlyPrice || 0 : subType === 'yearly' ? platformSettings?.yearlyPrice || 0 : 0);
 
     const expiryStr = calculateExpiryDate(subStart, subType);
 
@@ -297,6 +294,7 @@ export default function ManageTeachersPage() {
     try {
         const subStart = approvalForm.subStart ? new Date(approvalForm.subStart).getTime() : Date.now();
         const subExpiry = approvalForm.subType === 'free' ? null : (approvalForm.subExpiry ? new Date(approvalForm.subExpiry).getTime() : (subStart + 30 * 24 * 60 * 60 * 1000));
+        const approvedPrice = approvalForm.subPrice || 0;
         
         const newTeacher: Partial<TeacherUser> = {
             name: approvalForm.name,
@@ -309,7 +307,9 @@ export default function ManageTeachersPage() {
             createdAt: Date.now(),
             subType: approvalForm.subType,
             subExpiry: subExpiry,
-            subPrice: approvalForm.subPrice,
+            subPrice: approvedPrice,
+            totalPaid: approvedPrice,
+            paymentHistory: approvedPrice > 0 ? [{ date: Date.now(), amount: approvedPrice, type: approvalForm.subType }] : [],
             imageUrl: pendingApproval.imageUrl || '',
             subject: approvalForm.subject,
             permissions: approvalForm.permissions

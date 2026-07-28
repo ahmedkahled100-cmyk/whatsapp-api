@@ -6,11 +6,12 @@ import { FileProcessor } from '@/lib/file-processor';
 import { useFileProcessingStore } from '@/lib/store';
 import type { Settings, TeacherUser } from '@/types';
 import { showToast } from '@/lib/toast';
-import { GraduationCap, ShieldCheck, Mail, Phone, Calculator, CheckCircle2, User, FileText, Upload, Image as ImageIcon, Loader2, BookOpen, Sparkles, CreditCard, X } from 'lucide-react';
+import { GraduationCap, ShieldCheck, Mail, Phone, Calculator, CheckCircle2, User, FileText, Upload, Image as ImageIcon, Loader2, BookOpen, Sparkles, CreditCard, X, Search } from 'lucide-react';
 import { GlobalFileUpload } from '@/components/GlobalFileUpload';
 import { PDFCompressionModal } from '@/components/PDFCompressionModal';
 import ImageCropperModal from '@/components/ImageCropperModal';
 import { PromoCodeInput } from '@/components/PromoCodeInput';
+import { CheckStatusModal } from '@/components/CheckStatusModal';
 
 export default function TeacherRegisterPage() {
   const { queue } = useFileProcessingStore();
@@ -19,6 +20,7 @@ export default function TeacherRegisterPage() {
   const [superAdmin, setSuperAdmin] = useState<TeacherUser | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [showStatusModal, setShowStatusModal] = useState(false);
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [teacherImageFile, setTeacherImageFile] = useState<File | null>(null);
@@ -178,12 +180,23 @@ export default function TeacherRegisterPage() {
   return (
     <div className="min-h-screen bg-[#0a0f1c] text-white p-4 sm:p-8" dir="rtl">
       <div className="max-w-4xl mx-auto space-y-6">
-        <div className="text-center space-y-2">
-          <div className="w-20 h-20 bg-purple-500/20 rounded-3xl flex items-center justify-center mx-auto mb-4 border border-purple-500/30">
+        <div className="text-center space-y-3">
+          <div className="w-20 h-20 bg-purple-500/20 rounded-3xl flex items-center justify-center mx-auto mb-2 border border-purple-500/30">
             <Sparkles size={40} className="text-purple-400" />
           </div>
           <h1 className="text-3xl font-black gold-text">انضم إلينا كمعلم</h1>
           <p className="text-gray-400">ابدأ الآن في بناء أكاديميتك الإلكترونية الخاصة بكل سهولة واحترافية.</p>
+
+          <div className="pt-2">
+            <button
+              type="button"
+              onClick={() => setShowStatusModal(true)}
+              className="px-4 py-2 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 rounded-2xl text-xs font-bold transition inline-flex items-center gap-2 shadow-sm"
+            >
+              <Search size={15} />
+              <span>متابعة / الاستعلام عن حالة طلب سابق برقم الهاتف</span>
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -357,6 +370,11 @@ export default function TeacherRegisterPage() {
             circular={true}
           />
         )}
+
+        <CheckStatusModal
+          isOpen={showStatusModal}
+          onClose={() => setShowStatusModal(false)}
+        />
       </div>
     </div>
   );

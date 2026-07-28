@@ -321,11 +321,14 @@ export default function SubscriptionsPage() {
       if (type === 'new') {
         const existingStudent = students.find(s => normalizePhone(s.phone) === normalizePhone(req.phone));
         const code = existingStudent ? existingStudent.code : (approvalForm.code || req.existingCode || generateCode());
-        
+        const effectivePrice = typeof req.subPrice === 'number' && req.subPrice >= 0 ? req.subPrice : 0;
+
         finalStudentObj = {
           name: req.name, phone: req.phone, parentPhone: req.parentPhone,
           grade: req.grade, code, subType: req.subType, subExpiry, subStart,
-          subPrice: req.subPrice || 0, imageUrl: req.imageUrl || '',
+          subPrice: effectivePrice, imageUrl: req.imageUrl || '',
+          totalPaid: effectivePrice,
+          paymentHistory: effectivePrice > 0 ? [{ date: Date.now(), amount: effectivePrice, type: req.subType }] : [],
           teacherId: req.teacherId, teacherCode: req.teacherCode || '',
           email: '', groupIds: [],
           notes: `تم طلب التسجيل إلكترونياً. مرجع: ${req.paymentRef || 'لا يوجد'}`,

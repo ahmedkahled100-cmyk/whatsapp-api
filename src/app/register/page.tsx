@@ -16,10 +16,11 @@ import { useFileProcessingStore } from '@/lib/store';
 import { normalizePhone } from '@/lib/utils';
 import type { Settings, TeacherUser } from '@/types';
 import { showToast } from '@/lib/toast';
-import { GraduationCap, ShieldCheck, Mail, Phone, Calculator, CheckCircle2, User, FileText, Upload, Image as ImageIcon, Loader2 } from 'lucide-react';
+import { GraduationCap, ShieldCheck, Mail, Phone, Calculator, CheckCircle2, User, FileText, Upload, Image as ImageIcon, Loader2, Search } from 'lucide-react';
 import { PDFCompressionModal } from '@/components/PDFCompressionModal';
 import { GlobalFileUpload } from '@/components/GlobalFileUpload';
 import { PromoCodeInput } from '@/components/PromoCodeInput';
+import { CheckStatusModal } from '@/components/CheckStatusModal';
 
 export default function RegisterPage() {
   return (
@@ -277,9 +278,19 @@ function RegisterForm() {
 
         {/* Registration Form */}
         <div className="card-base p-5 sm:p-8">
-          <div className="text-center mb-6 sm:mb-8">
-            <h1 className="text-xl sm:text-2xl font-black mb-2 gold-text">طلب اشتراك جديد</h1>
+          <div className="text-center mb-6 sm:mb-8 space-y-2">
+            <h1 className="text-xl sm:text-2xl font-black gold-text">طلب اشتراك جديد</h1>
             <p className="text-xs sm:text-sm text-gray-400">انضم إلينا الآن للبدء في رحلة التعلم</p>
+            <div className="pt-1">
+              <button
+                type="button"
+                onClick={() => setShowStatusModal(true)}
+                className="px-3.5 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 rounded-xl text-xs font-bold transition inline-flex items-center gap-1.5 shadow-sm"
+              >
+                <Search size={14} />
+                <span>الاستعلام عن حالة طلب سابق</span>
+              </button>
+            </div>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">
