@@ -115,13 +115,9 @@ export default function NotificationsAdmin() {
     setLogs(logs.map(l => l.id === log.id ? { ...l, status: 'pending' } : l));
     
     try {
-      const res = await fetch(`${getApiBase()}/api/whatsapp/send`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: log.target, message: log.message })
-      });
-      
-      const result = await res.json();
+      const { sendWhatsAppMessageClient } = await import('@/lib/whatsapp-client');
+      const result = await sendWhatsAppMessageClient(log.target, log.message);
+
       if (result.success) {
         await updateNotificationLog(log.id!, { status: 'sent', error: undefined });
         setLogs(logs.map(l => l.id === log.id ? { ...l, status: 'sent', error: undefined } : l));
@@ -129,13 +125,14 @@ export default function NotificationsAdmin() {
       } else {
         await updateNotificationLog(log.id!, { status: 'failed', error: result.error });
         setLogs(logs.map(l => l.id === log.id ? { ...l, status: 'failed', error: result.error } : l));
-        showToast('فشلت إعادة الإرسال');
+        showToast('فشلت إعادة الإرسال: ' + (result.error || 'تعذر الاتصال بخادم الواتساب'));
       }
     } catch (e: any) {
       setLogs(logs.map(l => l.id === log.id ? { ...l, status: 'failed', error: 'استثناء الشبكة' } : l));
       showToast('حدث خطأ أثناء إعادة المحاولة');
     }
   };
+
 
   const displayedNotifications = notifications.filter(n => {
     const isAdminNotif = isAdminDirectedNotification(n);

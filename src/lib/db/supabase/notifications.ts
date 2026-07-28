@@ -68,8 +68,7 @@ export const dispatchNotification = async (options: DispatchOptions) => {
   }
 
   if (channels.whatsapp && whatsappNumbers && whatsappNumbers.length > 0) {
-    const { getApiBase } = await import('@/lib/utils');
-    const apiBase = getApiBase();
+    const { sendWhatsAppMessageClient } = await import('@/lib/whatsapp-client');
 
     // Send WhatsApp concurrently in the background so the caller doesn't wait
     const sendWhatsapp = async (phone: string) => {
@@ -83,13 +82,8 @@ export const dispatchNotification = async (options: DispatchOptions) => {
           createdAt: Date.now()
         } as any);
 
-        const res = await fetch(`${apiBase}/api/whatsapp/send`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ phone, message: msg })
-        });
+        const result = await sendWhatsAppMessageClient(phone, msg);
         
-        const result = await res.json();
         if (result.success) {
           await updateNotificationLog(logId, { status: 'sent' });
         } else {
@@ -106,6 +100,7 @@ export const dispatchNotification = async (options: DispatchOptions) => {
       }
     });
   }
+
 };
 
 export const markNotificationRead = async (id: string) => {
