@@ -173,6 +173,9 @@ export const saveAssistantProfile = async (profile: Omit<AssistantProfile, 'id'>
   const newId = profile.id || crypto.randomUUID();
   const payload = toDB({ ...profile, id: newId, status: profile.status || 'pending', createdAt: profile.createdAt || Date.now() });
 
+  delete payload.promo_code;
+  delete payload.discount_amount;
+
   await checkUserUniqueness(profile.code, profile.username, profile.id, profile.phone);
 
   const { error } = await supabase

@@ -50,3 +50,13 @@ CREATE POLICY "Allow all access on promo_codes for public"
 ON public.promo_codes FOR ALL 
 USING (true) 
 WITH CHECK (true);
+
+-- Ensure all optional columns exist on REGISTRATION_REQUESTS table
+ALTER TABLE public.registration_requests ADD COLUMN IF NOT EXISTS notes TEXT;
+ALTER TABLE public.registration_requests ADD COLUMN IF NOT EXISTS subject TEXT;
+ALTER TABLE public.registration_requests ADD COLUMN IF NOT EXISTS sub_price DOUBLE PRECISION;
+ALTER TABLE public.registration_requests ADD COLUMN IF NOT EXISTS image_url TEXT;
+ALTER TABLE public.registration_requests ADD COLUMN IF NOT EXISTS student_id TEXT;
+ALTER TABLE public.registration_requests ADD COLUMN IF NOT EXISTS existing_code TEXT;
+ALTER TABLE public.registration_requests ADD COLUMN IF NOT EXISTS promo_code TEXT;
+ALTER TABLE public.registration_requests ADD COLUMN IF NOT EXISTS discount_amount DOUBLE PRECISION;

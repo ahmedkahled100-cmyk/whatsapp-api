@@ -459,10 +459,18 @@ export const getRegistrationRequests = async (teacherId: string): Promise<Regist
 
 export const saveRegistrationRequest = async (req: Omit<RegistrationRequest, 'id'> & { id?: string }): Promise<string> => {
   const payload = toDB({ ...req });
+
+  // Safely encode promo code details into payment_ref if present
+  if (payload.promo_code) {
+    const promoTag = `[كود خصم: ${payload.promo_code}${payload.discount_amount ? ` | قيمة الخصم: ${payload.discount_amount} ج.م` : ''}]`;
+    payload.payment_ref = payload.payment_ref ? `${payload.payment_ref}\n${promoTag}` : promoTag;
+  }
   
-  // Remove fields that strictly don't exist in the database (like cached teacher details if passed)
+  // Remove fields that strictly don't exist as columns in registration_requests table
   delete payload.teacher_code;
   delete payload.teacher_name;
+  delete payload.promo_code;
+  delete payload.discount_amount;
 
   Object.keys(payload).forEach(k => payload[k] === undefined && delete payload[k]);
 
