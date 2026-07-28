@@ -19,16 +19,15 @@ export const getMaterials = async (teacherId: string): Promise<CourseMaterial[]>
 export const saveMaterial = async (material: Omit<CourseMaterial, 'id'> & { id?: string }): Promise<string> => {
   const payload = toDB({ ...material });
   Object.keys(payload).forEach(k => payload[k] === undefined && delete payload[k]);
-  if (material.id) {
-    const { error } = await supabase.from(MATERIALS).update(payload).eq('id', material.id);
-    if (error) throw error;
-    return material.id;
-  } else {
-    const newId = crypto.randomUUID();
-    const { data, error } = await supabase.from(MATERIALS).insert([{ ...payload, id: newId, created_at: Date.now() }]).select().single();
-    if (error) throw error;
-    return data.id;
+  
+  if (!payload.id) {
+    payload.id = crypto.randomUUID();
+    payload.created_at = Date.now();
   }
+  
+  const { data, error } = await supabase.from(MATERIALS).upsert(payload).select('id').single();
+  if (error) throw error;
+  return data?.id || payload.id;
 };
 
 export const deleteMaterial = async (id: string) => {

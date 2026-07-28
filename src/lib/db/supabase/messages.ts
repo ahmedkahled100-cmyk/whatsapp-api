@@ -110,8 +110,15 @@ export const subscribeToConversations = (userId: string, callback: (convs: Conve
     .subscribe();
 
   void fetch();
+
+  // Periodic polling (every 5 seconds) to ensure list updates when WebSockets are blocked by ISP
+  const pollInterval = setInterval(() => {
+    void fetch();
+  }, 5000);
+
   return () => {
     cancelled = true;
+    clearInterval(pollInterval);
     supabase.removeChannel(channel);
   };
 };
@@ -176,8 +183,15 @@ export const subscribeToMessages = (
     .subscribe();
 
   void fetch();
+
+  // Periodic polling (every 3 seconds) to ensure real-time message sync when WebSockets are blocked by ISP
+  const pollInterval = setInterval(() => {
+    void fetch();
+  }, 3000);
+
   return () => {
     cancelled = true;
+    clearInterval(pollInterval);
     supabase.removeChannel(channel);
   };
 };
@@ -248,7 +262,10 @@ export const setUserOnlineStatus = async (userId: string, role: string, isOnline
 export const setUserOfflineBeacon = (userId: string, role: string) => {
   if (!userId || !role) return;
   const table = role === 'student' ? 'students' : 'teachers';
-  const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/${table}?id=eq.${userId}`;
+  const baseUrl = typeof window !== 'undefined'
+    ? `${window.location.origin}/api/supabase-proxy`
+    : (process.env.NEXT_PUBLIC_SUPABASE_URL || '');
+  const url = `${baseUrl}/rest/v1/${table}?id=eq.${userId}`;
   const apiKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
   fetch(url, {
@@ -284,8 +301,18 @@ export const subscribeToUserOnlineStatus = (
 ) => {
   // Online = is_online flag OR was active within 1 minute
   const ONLINE_WINDOW_MS = 1 * 60 * 1000;
-
   const table = role === 'student' ? 'students' : 'teachers';
+
+  const checkStatus = () => {
+    supabase.from(table).select('is_online, last_active').eq('id', userId).maybeSingle()
+      .then(({ data }) => {
+        if (data) {
+          const isRecentlyActive = data.last_active ? (Date.now() - data.last_active < ONLINE_WINDOW_MS) : false;
+          callback(!!data.is_online || isRecentlyActive, data.last_active);
+        }
+      });
+  };
+
   const channel = supabase
     .channel(`presence:${userId}`)
     .on('postgres_changes', { event: 'UPDATE', schema: 'public', table, filter: `id=eq.${userId}` }, (payload) => {
@@ -296,15 +323,15 @@ export const subscribeToUserOnlineStatus = (
     .subscribe();
 
   // Initial fetch
-  supabase.from(table).select('is_online, last_active').eq('id', userId).maybeSingle()
-    .then(({ data }) => {
-      if (data) {
-        const isRecentlyActive = data.last_active ? (Date.now() - data.last_active < ONLINE_WINDOW_MS) : false;
-        callback(!!data.is_online || isRecentlyActive, data.last_active);
-      }
-    });
+  checkStatus();
 
-  return () => supabase.removeChannel(channel);
+  // Periodic polling (every 10 seconds) to ensure status updates even if WebSockets are blocked by ISP
+  const pollInterval = setInterval(checkStatus, 10000);
+
+  return () => {
+    clearInterval(pollInterval);
+    supabase.removeChannel(channel);
+  };
 };
 
 // ─── Typing Indicator (Broadcast — no DB writes) ──────────────────────────────

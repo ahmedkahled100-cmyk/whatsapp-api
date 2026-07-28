@@ -50,12 +50,29 @@ async function handleRequest(req: NextRequest, { params }: { params: { path: str
   }
 
   try {
-    const response = await fetch(targetUrl, {
-      method: req.method,
-      headers,
-      body,
-      cache: 'no-store',
-    });
+    let response: Response;
+    let attempts = 0;
+    const maxAttempts = 3;
+    const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+    while (true) {
+      try {
+        attempts++;
+        response = await fetch(targetUrl, {
+          method: req.method,
+          headers,
+          body,
+          cache: 'no-store',
+        });
+        break;
+      } catch (err: any) {
+        if (attempts >= maxAttempts) {
+          throw err;
+        }
+        console.warn(`[Supabase Proxy Warning] Attempt ${attempts} failed: ${err.message}. Retrying...`);
+        await delay(300 * attempts);
+      }
+    }
 
     const responseHeaders = new Headers(await corsHeaders());
     response.headers.forEach((value, key) => {

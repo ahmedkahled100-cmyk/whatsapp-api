@@ -1,10 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { getSettings, saveAssistantProfile, uploadFileToStorage, dispatchNotification, getSuperAdmin } from '@/lib/db';
+import { getSettings, saveAssistantProfile, uploadFileToStorage, dispatchNotification, getSuperAdmin, usePromoCode } from '@/lib/db';
 import { showToast } from '@/lib/toast';
 import { GraduationCap, ShieldCheck, Mail, Phone, Calculator, CheckCircle2, User, FileText, Upload, Image as ImageIcon, Loader2, BookOpen, Sparkles, Key, KeyRound, ArrowRight, Coins } from 'lucide-react';
 import ImageCropperModal from '@/components/ImageCropperModal';
+import { PromoCodeInput } from '@/components/PromoCodeInput';
 
 export default function AssistantRegisterPage() {
   const [loading, setLoading] = useState(true);
@@ -62,6 +63,8 @@ export default function AssistantRegisterPage() {
     }
   };
 
+  const [appliedPromo, setAppliedPromo] = useState<{ code: string; discountAmount: number; finalPrice: number } | null>(null);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.name.trim() || !form.phone.trim() || !form.username.trim() || !form.password.trim() || !form.roleTitle.trim()) {
@@ -81,6 +84,8 @@ export default function AssistantRegisterPage() {
         imageUrl: form.imageUrl,
         cvUrl: form.cvUrl,
         salaryPaymentMethod: form.salaryPaymentMethod,
+        promoCode: appliedPromo?.code || null,
+        discountAmount: appliedPromo?.discountAmount || 0,
         code: `AST-${Math.floor(100000 + Math.random() * 900000)}`,
         status: 'pending' as const,
         createdAt: Date.now(),
@@ -88,15 +93,19 @@ export default function AssistantRegisterPage() {
 
       await saveAssistantProfile(assistantData);
 
+      if (appliedPromo?.code) {
+        await usePromoCode(appliedPromo.code);
+      }
+
       // Notify Super Admin
       if (superAdmin) {
         try {
           await dispatchNotification({
             teacherId: superAdmin.id,
-            msg: `طلب تسجيل مساعد جديد: ${form.name} (${form.roleTitle})`,
+            msg: `طلب تسجيل مساعد جديد: ${form.name} (${form.roleTitle})${appliedPromo ? ` [كود خصم: ${appliedPromo.code}]` : ''}`,
             targetRoles: ['super_admin'],
             channels: { inApp: true, whatsapp: false },
-            actionPath: '/admin/assistants' // point directly to the new assistants page!
+            actionPath: '/admin/assistants'
           });
         } catch (e) {
           console.error(e);
@@ -309,6 +318,13 @@ export default function AssistantRegisterPage() {
                   </div>
                 </div>
               </div>
+
+              <PromoCodeInput
+                role="assistant"
+                originalPrice={0}
+                onApply={(res) => setAppliedPromo(res)}
+                onClear={() => setAppliedPromo(null)}
+              />
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-white/5">
                 {/* Username */}

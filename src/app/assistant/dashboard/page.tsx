@@ -7,7 +7,8 @@ import {
   getTeachersForAssistant, getAssistantJobs, saveJobApplication, 
   getApplicationsForAssistant, updateAssistantProfile, uploadFileToStorage,
   sendMessage, subscribeToConversations, subscribeToMessages, markMessagesAsRead,
-  getSuperAdmin, updateAssistantLinkStatus, getSettings, subscribeToNotifications
+  getSuperAdmin, updateAssistantLinkStatus, getSettings, subscribeToNotifications,
+  subscribeToAssistantProfile
 } from '@/lib/db';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
@@ -183,6 +184,20 @@ export default function AssistantDashboard() {
     }
     loadInitialData();
   }, [user, router, mounted]);
+
+  // ⚡ Real-time assistant profile status listener (detect immediate suspension/activation by admin)
+  useEffect(() => {
+    if (!user?.id) return;
+    const unsub = subscribeToAssistantProfile(user.id, (freshProfile) => {
+      if (freshProfile) {
+        setProfileSuspended(!!freshProfile.isSuspended);
+        setProfileSuspensionReason(freshProfile.suspensionReason || '');
+      }
+    });
+    return () => {
+      if (unsub) unsub();
+    };
+  }, [user?.id]);
 
   // Load jobs and applications when Jobs tab is selected
   useEffect(() => {

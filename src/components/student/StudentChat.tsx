@@ -41,6 +41,7 @@ export function StudentChat({ student, conversations, siteSettings }: StudentCha
 
   // File Upload states
   const [chatUploadingFile, setChatUploadingFile] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [chatAttachmentUrl, setChatAttachmentUrl] = useState('');
   const [chatAttachmentType, setChatAttachmentType] = useState<'text' | 'image' | 'file'>('text');
 
@@ -50,6 +51,21 @@ export function StudentChat({ student, conversations, siteSettings }: StudentCha
   const [compressionMessage, setCompressionMessage] = useState('');
 
   const [sending, setSending] = useState(false);
+
+  // Super Admin / Higher Administration Settings state
+  const [adminWhatsApp, setAdminWhatsApp] = useState<string | null>(null);
+
+  useEffect(() => {
+    import('@/lib/db').then(({ getSuperAdmin, getSettings }) => {
+      getSuperAdmin().then(admin => {
+        if (admin) {
+          getSettings(admin.id).then(s => {
+            if (s?.whatsappNumber) setAdminWhatsApp(s.whatsappNumber);
+          });
+        }
+      });
+    });
+  }, []);
 
   const chatEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -184,9 +200,12 @@ export function StudentChat({ student, conversations, siteSettings }: StudentCha
 
     const uploadFile = async (fileToUpload: File | Blob) => {
       setChatUploadingFile(true);
+      setUploadProgress(0);
       try {
         const path = `chat-attachments/${Date.now()}_${file.name}`;
-        const url = await uploadFileToStorage(fileToUpload, path);
+        const url = await uploadFileToStorage(fileToUpload, path, (progress) => {
+          setUploadProgress(progress);
+        });
         setChatAttachmentUrl(url);
         setChatAttachmentType(detectedType);
         showToast('✅ تم إرفاق الملف بنجاح');
@@ -194,6 +213,7 @@ export function StudentChat({ student, conversations, siteSettings }: StudentCha
         showToast('❌ فشل رفع الملف: ' + (err?.message || 'تحقق من الاتصال'));
       } finally {
         setChatUploadingFile(false);
+        setUploadProgress(0);
         e.target.value = '';
       }
     };
@@ -314,27 +334,64 @@ export function StudentChat({ student, conversations, siteSettings }: StudentCha
           <div className="w-16 h-16 bg-gold/5 rounded-full flex items-center justify-center border border-gold/10">
             <MessageSquare size={32} className="text-gold/20" />
           </div>
-          <button
-            onClick={() => {
-              const convId = [student.id, student.teacherId].sort().join('_');
-              const existing = conversations.find(c => c.id === convId);
-              setSelectedConv(existing || {
-                id: convId,
-                participants: [student.id, student.teacherId],
-                participantNames: [student.name, student.teacherName || 'المعلم'],
-                updatedAt: Date.now(),
-              } as Conversation);
-            }}
-            className="w-full p-4 rounded-2xl bg-gold/5 border border-gold/10 flex items-center gap-3 hover:bg-gold/10 transition-all text-right cursor-pointer"
-          >
-            <div className="w-10 h-10 rounded-xl bg-gold flex items-center justify-center text-black font-black shrink-0">
-              {(student.teacherName || 'م')[0]}
-            </div>
-            <div className="flex-1">
-              <p className="font-bold text-sm text-gold">المعلم: {student.teacherName || 'غير معروف'}</p>
-              <p className="text-[10px] text-gray-500">تواصل مباشر مع معلمك</p>
-            </div>
-          </button>
+          <div className="w-full space-y-3 max-w-sm">
+            <button
+              onClick={() => {
+                const convId = [student.id, student.teacherId].sort().join('_');
+                const existing = conversations.find(c => c.id === convId);
+                setSelectedConv(existing || {
+                  id: convId,
+                  participants: [student.id, student.teacherId],
+                  participantNames: [student.name, student.teacherName || 'المعلم'],
+                  updatedAt: Date.now(),
+                } as Conversation);
+              }}
+              className="w-full p-4 rounded-2xl bg-gold/5 border border-gold/10 flex items-center gap-3 hover:bg-gold/10 transition-all text-right cursor-pointer"
+            >
+              <div className="w-10 h-10 rounded-xl bg-gold flex items-center justify-center text-black font-black shrink-0">
+                {(student.teacherName || 'م')[0]}
+              </div>
+              <div className="flex-1">
+                <p className="font-bold text-sm text-gold">المعلم: {student.teacherName || 'غير معروف'}</p>
+                <p className="text-[10px] text-gray-500">تواصل مباشر مع معلمك</p>
+              </div>
+            </button>
+
+            {(adminWhatsApp || siteSettings?.whatsappNumber) && (
+              (() => {
+                const targetNumber = adminWhatsApp || siteSettings.whatsappNumber;
+                const cleanNumber = targetNumber.replace(/[^0-9]/g, '');
+                const formattedNumber = cleanNumber.startsWith('2') ? cleanNumber : '2' + cleanNumber;
+                return (
+                  <a
+                    href={`https://wa.me/${formattedNumber}?text=${encodeURIComponent(
+                      `السلام عليكم ورحمة الله وبركاته،\n\n` +
+                      `أود التواصل مع إدارة المنصة العليا.\n\n` +
+                      `*بيانات الطالب:*\n` +
+                      `• الاسم: ${student.name}\n` +
+                      `• الكود: ${student.code}\n` +
+                      (student.grade ? `• الصف الدراسي: ${student.grade}\n` : '') +
+                      (student.phone ? `• رقم الهاتف: ${student.phone}\n` : '') +
+                      (student.parentPhone ? `• رقم ولي الأمر: ${student.parentPhone}\n` : '') +
+                      (student.teacherName ? `• المعلم الحالي: أ. ${student.teacherName}\n` : '') +
+                      (student.level ? `• المستوى: ${student.level} | النقاط: ${student.points || 0}` : '')
+                    )}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center gap-3 hover:bg-emerald-500/20 transition-all text-right cursor-pointer animate-fade-in"
+                  >
+                    <div className="w-10 h-10 rounded-xl bg-emerald-500 flex items-center justify-center text-white shrink-0">
+                      <MessageCircle size={22} className="text-white" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-bold text-sm text-emerald-400">الإدارة العليا (الدعم الفني)</p>
+                      <p className="text-[10px] text-gray-500">تواصل مباشر مع الإدارة عبر واتساب</p>
+                    </div>
+                  </a>
+                );
+              })()
+            )}
+          </div>
         </div>
       ) : (
         <>
@@ -464,6 +521,22 @@ export function StudentChat({ student, conversations, siteSettings }: StudentCha
 
           {/* ── Input Area ── */}
           <div className="p-3 bg-white/5 flex flex-col gap-2 relative shrink-0">
+            {/* Upload Progress Bar */}
+            {chatUploadingFile && (
+              <div className="flex items-center gap-4 bg-gold/10 border border-gold/20 p-3 rounded-xl mb-1 animate-fade-in shadow-glow">
+                <div className="w-8 h-8 rounded-full border-2 border-gold/30 border-t-gold animate-spin shrink-0 shadow-[0_0_10px_var(--gold)]" />
+                <div className="flex-1">
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="text-xs font-bold text-gold">جاري رفع الملف...</span>
+                    <span className="text-[10px] text-gold font-black bg-gold/10 px-2 py-0.5 rounded-md">{uploadProgress}%</span>
+                  </div>
+                  <div className="h-1.5 w-full bg-black/40 rounded-full overflow-hidden">
+                    <div className="h-full bg-gold transition-all duration-300" style={{ width: `${uploadProgress}%` }} />
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* iLovePDF Compression Progress */}
             {isCompressing && (
               <div className="flex items-center gap-4 bg-gold/10 border border-gold/20 p-3 rounded-xl mb-1 animate-fade-in shadow-glow">

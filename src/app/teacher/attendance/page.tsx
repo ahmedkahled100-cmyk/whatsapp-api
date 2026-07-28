@@ -231,38 +231,40 @@ export default function AttendancePage() {
           <div className="modal-overlay" >
             <div className="modal-content max-w-md">
               <div className="modal-header">
-                <h3 className="font-bold text-lg gold-text flex items-center gap-2">
+                <h3 className="font-cairo font-black text-lg text-gold flex items-center gap-2">
                   <PlusCircle size={20} /> بدء جلسة جديدة
                 </h3>
-                <button onClick={() => setShowCreateModal(false)} className="text-gray-400 hover:text-white"><X size={20} /></button>
+                <button onClick={() => setShowCreateModal(false)} className="text-gray-400 hover:text-white transition-colors"><X size={20} /></button>
               </div>
-              <form onSubmit={handleCreateSession} className="modal-body space-y-4">
-                <div>
-                  <label className="block text-sm mb-1 text-gray-300">اسم الجلسة (اختياري)</label>
-                  <input
-                    type="text"
-                    value={newSessionTitle}
-                    onChange={e => setNewSessionTitle(e.target.value)}
-                    placeholder="مثال: حصة المراجعة النهائية"
-                    className="input-base"
-                  />
+              <form onSubmit={handleCreateSession} className="flex flex-col flex-1 overflow-hidden">
+                <div className="modal-body space-y-4">
+                  <div>
+                    <label className="block text-xs font-bold text-text-muted mb-1.5 uppercase tracking-wider">اسم الجلسة (اختياري)</label>
+                    <input
+                      type="text"
+                      value={newSessionTitle}
+                      onChange={e => setNewSessionTitle(e.target.value)}
+                      placeholder="مثال: حصة المراجعة النهائية"
+                      className="input-base"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-text-muted mb-1.5 uppercase tracking-wider">المجموعة (اختياري)</label>
+                    <select
+                      value={newSessionGroupId}
+                      onChange={e => setNewSessionGroupId(e.target.value)}
+                      className="input-base"
+                    >
+                      <option value="">-- كل المجموعات --</option>
+                      {groups.map(g => (
+                        <option key={g.id} value={g.id}>{g.name}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-sm mb-1 text-gray-300">المجموعة (اختياري)</label>
-                  <select
-                    value={newSessionGroupId}
-                    onChange={e => setNewSessionGroupId(e.target.value)}
-                    className="input-base"
-                  >
-                    <option value="">-- كل المجموعات --</option>
-                    {groups.map(g => (
-                      <option key={g.id} value={g.id}>{g.name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="flex gap-2 pt-4">
-                  <button type="submit" className="btn-gold flex-1">بدء الجلسة</button>
-                  <button type="button" onClick={() => setShowCreateModal(false)} className="btn-outline flex-1">إلغاء</button>
+                <div className="modal-footer">
+                  <button type="button" onClick={() => setShowCreateModal(false)} className="btn-outline flex-1 py-2.5">إلغاء</button>
+                  <button type="submit" className="btn-gold flex-[2] py-2.5 justify-center">بدء الجلسة</button>
                 </div>
               </form>
             </div>

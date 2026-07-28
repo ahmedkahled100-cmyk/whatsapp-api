@@ -488,33 +488,42 @@ function QBankPageContent() {
       {showQuickExamModal && (
         <div className="modal-overlay" >
           <div className="modal-content modal-content-sm" onClick={e => e.stopPropagation()}>
-            <h3 className="text-xl font-bold mb-4 font-cairo">إنشاء اختبار سريع</h3>
-            <p className="text-sm text-gray-400 mb-4">
-               سيتم اختيار أسئلة عشوائية من النتائج المفلترة حالياً ({filtered.length} سؤال متاح).
-            </p>
+            <div className="modal-header">
+              <h3 className="font-cairo font-black text-lg text-gold flex items-center gap-2">
+                <Database size={20} />
+                إنشاء اختبار سريع
+              </h3>
+              <button onClick={() => setShowQuickExamModal(false)} className="text-gray-400 hover:text-white transition-colors"><X size={20} /></button>
+            </div>
             
-            <div className="mb-6">
-              <label className="block text-sm mb-2 opacity-70">عدد الأسئلة المطلوبة</label>
-              <input 
-                type="number" 
-                className="input-base w-full text-center text-lg font-bold" 
-                min="1" 
-                max={filtered.length}
-                value={quickExamCount}
-                onChange={e => setQuickExamCount(Number(e.target.value))}
-              />
+            <div className="modal-body space-y-4">
+              <p className="text-sm text-gray-400 leading-relaxed">
+                 سيتم اختيار أسئلة عشوائية من النتائج المفلترة حالياً ({filtered.length} سؤال متاح).
+              </p>
+              
+              <div className="bg-white/5 p-4 rounded-xl border border-white/5">
+                <label className="block text-xs font-bold text-text-muted mb-2 uppercase tracking-wider">عدد الأسئلة المطلوبة</label>
+                <input 
+                  type="number" 
+                  className="input-base w-full text-center text-lg font-bold" 
+                  min="1" 
+                  max={filtered.length}
+                  value={quickExamCount}
+                  onChange={e => setQuickExamCount(Number(e.target.value))}
+                />
+              </div>
             </div>
 
-            <div className="flex gap-3">
+            <div className="modal-footer">
               <button 
                 onClick={() => setShowQuickExamModal(false)} 
-                className="btn-outline flex-1"
+                className="btn-outline flex-1 py-2.5"
               >
                 إلغاء
               </button>
               <button 
                 onClick={handleQuickExam} 
-                className="btn-gold flex-1"
+                className="btn-gold flex-1 py-2.5 justify-center"
                 disabled={filtered.length === 0}
               >
                 إنشاء الآن

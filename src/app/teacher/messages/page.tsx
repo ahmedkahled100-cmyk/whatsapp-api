@@ -40,6 +40,7 @@ export default function TeacherMessagesPage() {
   const [loadingOlder, setLoadingOlder] = useState(false);
 
   const [uploadingFile, setUploadingFile] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [attachmentUrl, setAttachmentUrl] = useState('');
   const [attachmentType, setAttachmentType] = useState<'text' | 'image' | 'file'>('text');
   
@@ -275,9 +276,12 @@ export default function TeacherMessagesPage() {
 
     const uploadFile = async (fileToUpload: File | Blob) => {
       setUploadingFile(true);
+      setUploadProgress(0);
       try {
         const path = `chat-attachments/${Date.now()}_${file.name.replace(/\.[^/.]+$/, "").replace(/[^a-z0-9]/gi, '_').toLowerCase()}`;
-        const url = await uploadFileToStorage(fileToUpload, path);
+        const url = await uploadFileToStorage(fileToUpload, path, (progress) => {
+          setUploadProgress(progress);
+        });
         setAttachmentUrl(url);
         setAttachmentType(type);
         showToast('تم إرفاق الملف بنجاح');
@@ -285,6 +289,7 @@ export default function TeacherMessagesPage() {
         showToast('فشل رفع الملف');
       } finally {
         setUploadingFile(false);
+        setUploadProgress(0);
         e.target.value = '';
       }
     };
@@ -553,6 +558,22 @@ export default function TeacherMessagesPage() {
             {/* Input Area */}
             <div className="p-4 border-t border-white/5 bg-white/5 flex flex-col gap-2 relative">
               
+              {/* Upload Progress Bar */}
+              {uploadingFile && (
+                <div className="flex items-center gap-4 bg-gold/10 border border-gold/20 p-3 rounded-xl mb-1 animate-fade-in shadow-glow">
+                  <div className="w-8 h-8 rounded-full border-2 border-gold/30 border-t-gold animate-spin shrink-0 shadow-[0_0_10px_var(--gold)]" />
+                  <div className="flex-1">
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="text-xs font-bold text-gold">جاري رفع الملف...</span>
+                      <span className="text-[10px] text-gold font-black bg-gold/10 px-2 py-0.5 rounded-md">{uploadProgress}%</span>
+                    </div>
+                    <div className="h-1.5 w-full bg-black/40 rounded-full overflow-hidden">
+                      <div className="h-full bg-gold transition-all duration-300" style={{ width: `${uploadProgress}%` }} />
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Inline ILovePDF Compression Progress UI */}
               {isCompressing && (
                 <div className="flex items-center gap-4 bg-gold/10 border border-gold/20 p-3 rounded-xl mb-1 animate-fade-in shadow-glow">

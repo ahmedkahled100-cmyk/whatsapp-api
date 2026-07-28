@@ -6,7 +6,7 @@ import { useTeacherStore } from '@/lib/store';
 import { saveGroup, deleteGroup } from '@/lib/db';
 import { showToast } from '@/lib/toast';
 import type { Group } from '@/types';
-import { PlusCircle, Trash2, Users, Edit, Save, X } from 'lucide-react';
+import { PlusCircle, Trash2, Users, Edit, Save, X, School } from 'lucide-react';
 import { generateId } from '@/lib/utils';
 
 export default function GroupsPage() {
@@ -90,14 +90,18 @@ export default function GroupsPage() {
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-cairo font-black gold-text">🏫 الفصول والمجموعات</h1>
+        <h1 className="text-2xl font-cairo font-black gold-text flex items-center gap-2">
+          <School size={24} /> الفصول والمجموعات
+        </h1>
         <button onClick={openAdd} className="btn-gold"><PlusCircle size={15} /> فصل جديد</button>
       </div>
 
       {groups.length === 0 ? (
-        <div className="card-base p-12 text-center">
-          <div className="text-5xl mb-3">🏫</div>
-          <p style={{ color: 'var(--text-muted)' }}>لا توجد فصول بعد</p>
+        <div className="card-base p-12 text-center text-text-muted">
+          <div className="w-16 h-16 mx-auto mb-3 opacity-20 flex items-center justify-center">
+            <School size={40} />
+          </div>
+          <p>لا توجد فصول بعد</p>
           <button onClick={openAdd} className="btn-gold inline-flex mt-4 text-sm">
             <PlusCircle size={14} /> أنشئ أول فصل
           </button>
@@ -148,56 +152,59 @@ export default function GroupsPage() {
       {showModal && (
         <div className="modal-overlay" >
           <div className="modal-content modal-content-sm" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-cairo font-bold" style={{ color: 'var(--gold)' }}>
-                {editingGroup ? '✏️ تعديل الفصل' : '➕ فصل جديد'}
+            <div className="modal-header">
+              <h3 className="font-cairo font-black text-lg text-gold flex items-center gap-2">
+                <Users size={20} />
+                {editingGroup ? 'تعديل الفصل' : 'فصل جديد'}
               </h3>
-              <button onClick={() => setShowModal(false)} className="opacity-50 hover:opacity-100"><X size={18} /></button>
+              <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-white transition-colors"><X size={20} /></button>
             </div>
 
-            <div className="space-y-3 mb-4">
-              <div>
-                <label className="block text-sm mb-1" style={{ color: 'var(--text-muted)' }}>اسم الفصل *</label>
-                <input value={name} onChange={e => setName(e.target.value)} placeholder="مثال: الصف الأول أ" className="input-base" />
+            <div className="modal-body space-y-4">
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs font-bold text-text-muted mb-1.5 uppercase tracking-wider">اسم الفصل *</label>
+                  <input value={name} onChange={e => setName(e.target.value)} placeholder="مثال: الصف الأول أ" className="input-base" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-text-muted mb-1.5 uppercase tracking-wider">وصف (اختياري)</label>
+                  <input value={desc} onChange={e => setDesc(e.target.value)} placeholder="وصف الفصل..." className="input-base" />
+                </div>
               </div>
-              <div>
-                <label className="block text-sm mb-1" style={{ color: 'var(--text-muted)' }}>وصف (اختياري)</label>
-                <input value={desc} onChange={e => setDesc(e.target.value)} placeholder="وصف الفصل..." className="input-base" />
-              </div>
-            </div>
 
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="text-sm font-medium" style={{ color: 'var(--text-muted)' }}>
-                  الطلاب ({selectedStudents.length} مختار)
-                </label>
-                <button onClick={() => setSelectedStudents(selectedStudents.length === students.length ? [] : students.map(s => s.id))}
-                  className="text-xs" style={{ color: 'var(--gold)' }}>
-                  {selectedStudents.length === students.length ? 'إلغاء الكل' : 'اختيار الكل'}
-                </button>
-              </div>
-              <div className="rounded-xl overflow-hidden max-h-48 overflow-y-auto" style={{ border: '1px solid rgba(255,255,255,0.08)' }}>
-                {students.length === 0 ? (
-                  <div className="p-4 text-center text-sm" style={{ color: 'var(--text-muted)' }}>لا يوجد طلاب مسجلون</div>
-                ) : students.map(s => (
-                  <div key={s.id} onClick={() => toggleStudent(s.id)}
-                    className="flex items-center gap-3 px-3 py-2 cursor-pointer transition-all"
-                    style={{ background: selectedStudents.includes(s.id) ? 'rgba(245,197,24,0.08)' : 'transparent', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-                    <div className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-all`}
-                      style={{ borderColor: selectedStudents.includes(s.id) ? 'var(--gold)' : 'rgba(255,255,255,0.2)', background: selectedStudents.includes(s.id) ? 'var(--gold)' : 'transparent' }}>
-                      {selectedStudents.includes(s.id) && <div className="w-2 h-2 rounded-sm bg-black" />}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-bold text-text-muted uppercase tracking-wider">
+                    الطلاب ({selectedStudents.length} مختار)
+                  </label>
+                  <button onClick={() => setSelectedStudents(selectedStudents.length === students.length ? [] : students.map(s => s.id))}
+                    className="text-xs font-bold text-gold hover:underline">
+                    {selectedStudents.length === students.length ? 'إلغاء الكل' : 'اختيار الكل'}
+                  </button>
+                </div>
+                <div className="rounded-xl overflow-hidden max-h-48 overflow-y-auto border border-white/5 bg-black/20">
+                  {students.length === 0 ? (
+                    <div className="p-4 text-center text-sm text-text-muted">لا يوجد طلاب مسجلون</div>
+                  ) : students.map(s => (
+                    <div key={s.id} onClick={() => toggleStudent(s.id)}
+                      className="flex items-center gap-3 px-3 py-2.5 cursor-pointer transition-all hover:bg-white/[0.02]"
+                      style={{ background: selectedStudents.includes(s.id) ? 'rgba(245,197,24,0.08)' : 'transparent', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                      <div className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-all`}
+                        style={{ borderColor: selectedStudents.includes(s.id) ? 'var(--gold)' : 'rgba(255,255,255,0.2)', background: selectedStudents.includes(s.id) ? 'var(--gold)' : 'transparent' }}>
+                        {selectedStudents.includes(s.id) && <div className="w-2 h-2 rounded-sm bg-black" />}
+                      </div>
+                      <span className="text-sm font-medium">{s.name}</span>
+                      <code className="text-xs mr-auto text-text-muted">{s.code}</code>
                     </div>
-                    <span className="text-sm">{s.name}</span>
-                    <code className="text-xs mr-auto" style={{ color: 'var(--text-muted)' }}>{s.code}</code>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             </div>
 
-            <div className="flex gap-2 mt-5">
-              <button onClick={() => setShowModal(false)} className="btn-outline flex-1">إلغاء</button>
-              <button onClick={handleSave} disabled={saving} className="btn-gold flex-1 justify-center disabled:opacity-60">
-                <Save size={14} /> {saving ? 'جاري الحفظ...' : 'حفظ'}
+            <div className="modal-footer">
+              <button onClick={() => setShowModal(false)} className="btn-outline flex-1 py-2.5">إلغاء</button>
+              <button onClick={handleSave} disabled={saving} className="btn-gold flex-1 justify-center py-2.5 disabled:opacity-60">
+                <Save size={14} /> {saving ? 'جاري الحفظ...' : 'حفظ الفصل'}
               </button>
             </div>
           </div>

@@ -46,7 +46,7 @@ import { FileProcessor } from '@/lib/file-processor';
 import { showToast } from '@/lib/toast';
 import type { Settings } from '@/types';
 import type { Exam, Attempt, CourseMaterial, Assignment, AssignmentSubmission, Notification, Message, Conversation, CalendarEvent, Student } from '@/types';
-import { GraduationCap, LogOut, BookOpen, BarChart2, ClipboardList, Download, Award, Video, FileText, Link as LinkIcon, BookMarked, Globe, Lock, Upload, MessageCircle, MessageSquare, Loader2, Bell, Send, Check, CheckCheck, X, Plus, ShieldCheck, AlertCircle, Paperclip, Image as ImageIcon, Trash2, User, Gamepad2, Layers, Trophy, Star, Languages, Brain, Zap, ChevronRight, ChevronDown, ChevronUp, Sparkles, Bot, Calendar, Clock, Camera, Youtube, PlayCircle } from 'lucide-react';
+import { GraduationCap, LogOut, BookOpen, BarChart2, ClipboardList, Download, Award, Video, FileText, Link as LinkIcon, BookMarked, Globe, Lock, Upload, MessageCircle, MessageSquare, Loader2, Bell, Send, Check, CheckCheck, X, Plus, ShieldCheck, AlertCircle, Paperclip, Image as ImageIcon, Trash2, User, Gamepad2, Layers, Trophy, Star, Languages, Brain, Zap, ChevronRight, ChevronDown, ChevronUp, Sparkles, Bot, Calendar, Clock, Camera, Youtube, PlayCircle, Phone } from 'lucide-react';
 import { YoutubeChannelCard } from '@/components/YoutubeChannelCard';
 import { PDFCompressionModal, usePDFCompression } from '@/components/PDFCompressionModal';
 import Link from 'next/link';
@@ -636,7 +636,9 @@ export default function StudentPortal() {
       <div className="min-h-screen flex items-center justify-center p-4 sm:p-8" style={{ background: 'var(--dark)' }}>
         <div className="w-full max-w-2xl space-y-8 animate-scale-in text-right" dir="rtl">
           <div className="text-center space-y-2">
-            <div className="text-5xl">🏰</div>
+            <div className="w-16 h-16 bg-gold/10 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-gold/20">
+              <GraduationCap size={36} className="text-gold" />
+            </div>
             <h1 className="text-2xl font-black gold-text">اختر الأكاديمية</h1>
             <p className="text-sm text-text-muted">أهلاً بك مجدداً، يرجى اختيار المعلم الذي تود متابعته الآن</p>
           </div>
@@ -654,7 +656,7 @@ export default function StudentPortal() {
                     {en.teacherImage ? (
                       <img loading="lazy" src={en.teacherImage} alt={en.teacherName} className="w-full h-full object-cover" />
                     ) : (
-                      en.teacherName?.[0] || '👨‍🏫'
+                      en.teacherName?.[0] || 'T'
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
@@ -673,22 +675,22 @@ export default function StudentPortal() {
                         const isActiveSub = en.subType !== 'none' && en.subType !== 'free' && !isExpiredSub;
 
                         if (isCancelledByTeacher) {
-                          return <span className="text-[10px] px-2 py-0.5 rounded-md bg-red-500/10 text-red-400 border border-red-500/20 font-black">⛔ ملغى</span>;
+                          return <span className="text-[10px] px-2 py-0.5 rounded-md bg-red-500/10 text-red-400 border border-red-500/20 font-black">ملغى</span>;
                         }
                         if (isFreeAccount) {
-                          return <span className="text-[10px] px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-400 border border-blue-500/20 font-bold">✨ مجاني</span>;
+                          return <span className="text-[10px] px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-400 border border-blue-500/20 font-bold">مجاني</span>;
                         }
                         if (isPendingNoSub) {
-                          return <span className="text-[10px] px-2 py-0.5 rounded-md bg-gray-500/10 text-gray-500 border border-white/5 font-bold">⏳ بانتظار</span>;
+                          return <span className="text-[10px] px-2 py-0.5 rounded-md bg-gray-500/10 text-gray-500 border border-white/5 font-bold">بانتظار</span>;
                         }
                         if (isExpiredSub) {
                           return (
                             <span className="text-[10px] px-2 py-0.5 rounded-md bg-orange-500/10 text-orange-400 border border-orange-500/20 font-black">
-                              ⚠️ منتهي{en.subExpiry ? ` (${new Date(en.subExpiry).toLocaleDateString('ar-EG')})` : ''}
+                              منتهي{en.subExpiry ? ` (${new Date(en.subExpiry).toLocaleDateString('ar-EG')})` : ''}
                             </span>
                           );
                         }
-                        return <span className="text-[10px] px-2 py-0.5 rounded-md bg-green-500/10 text-green-400 border border-green-500/20 font-bold">✅ نشط</span>;
+                        return <span className="text-[10px] px-2 py-0.5 rounded-md bg-green-500/10 text-green-400 border border-green-500/20 font-bold">نشط</span>;
                       })()}
                     </div>
                   </div>
@@ -718,9 +720,9 @@ export default function StudentPortal() {
           <div className="text-center pt-4">
             <button 
               onClick={() => { logout(); setAllEnrollments([]); }}
-              className="text-xs text-red-400 hover:text-red-300 transition-colors flex items-center gap-1 mx-auto"
+              className="text-xs text-red-400 hover:text-red-300 transition-colors flex items-center gap-2 mx-auto"
             >
-              🚪 تسجيل الخروج وتبديل الحساب
+              <LogOut size={14} /> تسجيل الخروج وتبديل الحساب
             </button>
           </div>
         </div>
@@ -739,7 +741,9 @@ export default function StudentPortal() {
         <div className="relative w-full max-w-sm animate-scale-in">
           <div className="card-base p-5 sm:p-7 text-center hover-premium"
             style={{ boxShadow: '0 25px 80px rgba(0,0,0,0.5), 0 0 0 1px rgba(245,197,24,0.12)' }}>
-            <div className="text-4xl sm:text-5xl mb-3">🎓</div>
+            <div className="w-16 h-16 bg-gold/10 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-gold/20">
+              <GraduationCap size={36} className="text-gold" />
+            </div>
             <h1 className="text-lg sm:text-xl font-cairo font-black gold-text mb-1">بوابة الطالب</h1>
             <p className="text-[10px] sm:text-xs mb-4" style={{ color: 'var(--text-muted)' }}>أدخل كودك للوصول إلى اختباراتك</p>
 
@@ -763,21 +767,21 @@ export default function StudentPortal() {
             )}
 
             <button onClick={handleLogin} disabled={loading}
-              className="btn-gold w-full justify-center text-base py-3 mb-4 shadow-xl shadow-gold/20 hover:scale-[1.02] active:scale-[0.98] transition-all">
-              {loading ? <><Loader2 className="animate-spin" size={18} /> جاري...</> : '🚀 دخول للمنصة'}
+              className="btn-gold w-full justify-center text-base py-3 mb-4 hover:scale-[1.02] active:scale-[0.98] transition-all">
+              {loading ? <><Loader2 className="animate-spin" size={18} /> جاري...</> : 'دخول للمنصة'}
             </button>
 
             <div className="space-y-3 pt-4 border-t border-white/5">
               <div className="flex flex-col gap-2">
                 <Link href="/register" className="text-xs font-bold gold-text hover:brightness-125 transition-all">
-                  ✨ ليس لديك حساب؟ اطلب اشتراك الآن
+                  ليس لديك حساب؟ اطلب اشتراك الآن
                 </Link>
                 <div className="flex items-center justify-center gap-4">
                   <button 
                     onClick={() => setShowForgotCode(true)}
-                    className="text-[10px] text-text-muted hover:text-white transition-colors flex items-center gap-1"
+                    className="text-[10px] text-text-muted hover:text-white transition-colors flex items-center gap-1.5"
                   >
-                    ❓ نسيت الكود؟
+                    نسيت الكود؟
                   </button>
                 </div>
               </div>
@@ -787,25 +791,39 @@ export default function StudentPortal() {
             {showForgotCode && (
               <div className="modal-overlay" >
                 <div className="modal-content modal-content-sm" onClick={e => e.stopPropagation()}>
-                  <h3 className="text-xl font-bold mb-4 text-center">استرجاع كود الطالب</h3>
-                  <p className="text-xs text-text-muted mb-4 text-center">أدخل رقم هاتف ولي الأمر المسجل للحصول على الكود الخاص بك.</p>
+                  <div className="modal-header">
+                    <h3 className="font-cairo font-black text-lg text-gold flex items-center gap-2">
+                      <GraduationCap size={20} />
+                      استرجاع كود الطالب
+                    </h3>
+                    <button 
+                      onClick={() => { setShowForgotCode(false); setRecoveredCode(''); setParentPhone(''); }} 
+                      className="text-gray-400 hover:text-white transition-colors"
+                    >
+                      <X size={20} />
+                    </button>
+                  </div>
                   
-                  <input
-                    type="tel"
-                    placeholder="رقم هاتف ولي الأمر..."
-                    className="input-base w-full text-center mb-4"
-                    value={parentPhone}
-                    onChange={e => setParentPhone(e.target.value)}
-                  />
+                  <div className="modal-body space-y-4">
+                    <p className="text-xs text-text-muted text-center leading-relaxed">أدخل رقم هاتف ولي الأمر المسجل للحصول على الكود الخاص بك.</p>
+                    
+                    <input
+                      type="tel"
+                      placeholder="رقم هاتف ولي الأمر..."
+                      className="input-base w-full text-center text-lg font-bold"
+                      value={parentPhone}
+                      onChange={e => setParentPhone(e.target.value)}
+                    />
 
-                  {recoveredCode && (
-                    <div className="p-4 rounded-xl bg-green-500/10 border border-green-500/20 mb-4 text-center animate-bounce">
-                      <p className="text-xs text-green-400 mb-1">كود الطالب الخاص بك هو:</p>
-                      <p className="text-2xl font-black font-mono text-white tracking-widest">{recoveredCode}</p>
-                    </div>
-                  )}
+                    {recoveredCode && (
+                      <div className="p-4 rounded-xl bg-green-500/10 border border-green-500/20 text-center animate-pulse">
+                        <p className="text-xs text-green-400 mb-1">كود الطالب الخاص بك هو:</p>
+                        <p className="text-2xl font-black font-mono text-white tracking-widest">{recoveredCode}</p>
+                      </div>
+                    )}
+                  </div>
 
-                  <div className="flex gap-2">
+                  <div className="modal-footer">
                     <button 
                       onClick={() => { setShowForgotCode(false); setRecoveredCode(''); setParentPhone(''); }}
                       className="btn-outline flex-1 py-3"
@@ -816,9 +834,9 @@ export default function StudentPortal() {
                       <button 
                         onClick={handleForgotCode}
                         disabled={findingCode}
-                        className="btn-gold flex-[2] py-3"
+                        className="btn-gold flex-[2] py-3 justify-center"
                       >
-                        {findingCode ? 'جاري البحث...' : '🔍 عرض الكود'}
+                        {findingCode ? 'جاري البحث...' : 'عرض الكود'}
                       </button>
                     )}
                   </div>
@@ -939,7 +957,7 @@ export default function StudentPortal() {
             >
               <div className="absolute inset-0 pointer-events-none" style={{ background: 'radial-gradient(ellipse at top right, rgba(16,185,129,0.1) 0%, transparent 60%)' }} />
               <div className="flex items-center gap-3 relative z-10">
-                <span className="text-2xl">🎉</span>
+                <Sparkles size={20} className="text-green-400 shrink-0" />
                 <div>
                   <div className="font-black text-green-400 text-sm leading-tight">تم قبولك في أكاديمية أ. {pendingEnrollmentNotif.teacherName}!</div>
                   {pendingEnrollmentNotif.subject && (
@@ -953,7 +971,7 @@ export default function StudentPortal() {
                   className="px-3 py-1.5 rounded-lg font-bold text-xs text-white transition-all active:scale-95"
                   style={{ background: 'linear-gradient(135deg, #10b981, #059669)', boxShadow: '0 4px 12px rgba(16,185,129,0.35)' }}
                 >
-                  تبديل الآن ←
+                  تبديل الآن
                 </button>
                 <button onClick={() => setPendingEnrollmentNotif(null)}
                   className="w-7 h-7 rounded-lg flex items-center justify-center text-green-400/50 hover:text-green-400 transition-colors"
@@ -972,12 +990,12 @@ export default function StudentPortal() {
                <h2 className="text-2xl font-black text-red-400 mb-3 font-cairo">تم إلغاء اشتراكك من قِبل المعلم</h2>
                
                <div className="p-4 bg-white/5 border border-orange-500/20 rounded-2xl mb-6 max-w-md mx-auto animate-fade-in">
-                 <span className="block text-[10px] text-orange-400 font-bold mb-2 uppercase tracking-widest text-right">📝 سبب الإلغاء:</span>
+                 <span className="block text-[10px] text-orange-400 font-bold mb-2 uppercase tracking-widest text-right">سبب الإلغاء:</span>
                  <p className="text-sm text-white leading-relaxed font-semibold">{(student as any).cancelReason}</p>
                </div>
 
                <div className="flex flex-col sm:flex-row justify-center gap-3">
-                 <button onClick={() => setActiveTab('discover')} className="btn-outline border-white/10 px-8 py-3.5 text-sm font-bold flex items-center justify-center gap-2">🔍 تصفح المعلمين</button>
+                 <button onClick={() => setActiveTab('discover')} className="btn-outline border-white/10 px-8 py-3.5 text-sm font-bold flex items-center justify-center gap-2">تصفح المعلمين</button>
                  
                  {/* WhatsApp Support Button */}
                  {(teacherInfo?.phone || siteSettings?.whatsappNumber) && (
@@ -1006,9 +1024,11 @@ export default function StudentPortal() {
               {activeTab === 'exams' && (
             <div className="space-y-3 animate-slide-up">
               {exams.length === 0 ? (
-                <div className="card-base p-10 text-center">
-                  <div className="text-4xl mb-2">📝</div>
-                  <p style={{ color: 'var(--text-muted)' }}>لا توجد اختبارات متاحة لك الآن</p>
+                <div className="card-base p-10 text-center text-text-muted">
+                  <div className="w-12 h-12 mx-auto mb-3 opacity-20 flex items-center justify-center">
+                    <ClipboardList size={36} />
+                  </div>
+                  <p>لا توجد اختبارات متاحة لك الآن</p>
                 </div>
               ) : exams.map(exam => {
                 const myAttempts = attempts.filter(a => a.examId === exam.id);
@@ -1039,11 +1059,11 @@ export default function StudentPortal() {
                     <div className="flex items-start gap-3">
                       <div className="flex-1 min-w-0">
                         <div className="font-bold text-base mb-1">{exam.title}</div>
-                        <div className="flex flex-wrap gap-2 text-xs" style={{ color: 'var(--text-muted)' }}>
-                          {exam.subject && <span>📚 {exam.subject}</span>}
-                          <span>❓ {(exam.questions || []).length} سؤال</span>
-                          <span>⏱ {exam.duration} دقيقة</span>
-                          <span>📊 نجاح {exam.passScore}%</span>
+                        <div className="flex flex-wrap items-center gap-3 text-xs text-text-muted">
+                          {exam.subject && <span className="flex items-center gap-1"><BookOpen size={12} /> {exam.subject}</span>}
+                          <span className="flex items-center gap-1"><FileText size={12} /> {(exam.questions || []).length} سؤال</span>
+                          <span className="flex items-center gap-1"><Clock size={12} /> {exam.duration} دقيقة</span>
+                          <span className="flex items-center gap-1"><Award size={12} /> نجاح {exam.passScore}%</span>
                         </div>
                         {lastScoreData !== null && (
                           <div className="mt-2 text-sm">
@@ -1071,7 +1091,7 @@ export default function StudentPortal() {
                       </div>
                       {canTake && available && (
                         <Link href={`/exam?id=${exam.id}`} className="btn-gold text-sm py-2 px-4 flex-shrink-0">
-                          📝 ابدأ
+                          ابدأ
                         </Link>
                       )}
                     </div>
@@ -1085,9 +1105,11 @@ export default function StudentPortal() {
           {activeTab === 'courses' && (
             <div className="space-y-4 animate-slide-up">
               {materials.length === 0 ? (
-                <div className="card-base p-10 text-center">
-                  <div className="text-4xl mb-2 opacity-50">📚</div>
-                  <p style={{ color: 'var(--text-muted)' }}>لا توجد مناهج أو دروس متاحة لك حالياً.</p>
+                <div className="card-base p-10 text-center text-text-muted">
+                  <div className="w-12 h-12 mx-auto mb-3 opacity-20 flex items-center justify-center">
+                    <BookOpen size={36} />
+                  </div>
+                  <p>لا توجد مناهج أو دروس متاحة لك حالياً.</p>
                 </div>
               ) : (
                 Object.entries(
@@ -1108,7 +1130,7 @@ export default function StudentPortal() {
                           <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center flex-shrink-0">
                             {material.type === 'video' && <Video size={18} className="text-blue-400" />}
                             {material.type === 'pdf' && <FileText size={18} className="text-red-400" />}
-                            {material.type === 'image' && <span className="text-lg leading-none">🖼️</span>}
+                            {material.type === 'image' && <ImageIcon size={18} className="text-purple-400" />}
                             {material.type === 'file' && <Download size={18} className="text-emerald-400" />}
                             {material.type === 'link' && <LinkIcon size={18} className="text-gold" />}
                           </div>
@@ -1242,9 +1264,11 @@ export default function StudentPortal() {
           {activeTab === 'assignments' && (
             <div className="space-y-4 animate-slide-up">
               {assignments.length === 0 ? (
-                <div className="card-base p-10 text-center">
-                  <div className="text-4xl mb-2 opacity-50">📋</div>
-                  <p style={{ color: 'var(--text-muted)' }}>لا توجد واجبات مطلوبة.</p>
+                <div className="card-base p-10 text-center text-text-muted">
+                  <div className="w-12 h-12 mx-auto mb-3 opacity-20 flex items-center justify-center">
+                    <ClipboardList size={36} />
+                  </div>
+                  <p>لا توجد واجبات مطلوبة.</p>
                 </div>
               ) : assignments.map(assign => {
                 const submission = mySubmissions.find(s => s.assignmentId === assign.id);
@@ -1259,7 +1283,7 @@ export default function StudentPortal() {
                     
                     {submission ? (
                       <div className="bg-black/20 p-3 rounded-xl space-y-2">
-                        <p className="text-xs text-green-400 font-bold">✓ تم التسليم</p>
+                        <p className="text-xs text-green-400 font-bold flex items-center gap-1"><Check size={14} /> تم التسليم</p>
                         {submission.status === 'graded' && (
                           <p className="text-lg font-black text-white">الدرجة: {submission.score} / {submission.maxScore}</p>
                         )}
@@ -1311,9 +1335,11 @@ export default function StudentPortal() {
           {activeTab === 'results' && (
             <div className="space-y-3 animate-slide-up">
               {completedAttempts.length === 0 ? (
-                <div className="card-base p-10 text-center">
-                  <div className="text-4xl mb-2">📊</div>
-                  <p style={{ color: 'var(--text-muted)' }}>لا توجد نتائج بعد</p>
+                <div className="card-base p-10 text-center text-text-muted">
+                  <div className="w-12 h-12 mx-auto mb-3 opacity-20 flex items-center justify-center">
+                    <BarChart2 size={36} />
+                  </div>
+                  <p>لا توجد نتائج بعد</p>
                 </div>
               ) : [...completedAttempts].reverse().map(att => {
                 const essayPending = att.essayAnswers?.some((ea) => ea.pending) ?? false;
@@ -1336,11 +1362,11 @@ export default function StudentPortal() {
                         <div className="flex items-center gap-2 mt-1 flex-wrap">
                           {essayPending ? (
                             <span className="badge badge-purple text-[10px] sm:text-xs animate-pulse">
-                              ⏳ قيد التصحيح
+                              قيد التصحيح
                             </span>
                           ) : (
                             <span className={`badge ${att.passed ? 'badge-green' : 'badge-red'}`}>
-                              {att.passed ? '✅ ناجح' : '❌ راسب'}
+                              {att.passed ? 'ناجح' : 'راسب'}
                             </span>
                           )}
                           <span className="text-xs text-gray-500">
@@ -1576,23 +1602,23 @@ export default function StudentPortal() {
               <div className="card-base p-0 overflow-hidden text-sm divide-y divide-white/5">
                 {student.phone && (
                   <div className="p-4 flex items-center justify-between">
-                    <span className="text-gray-400">📱 رقم الطالب</span>
+                    <span className="text-gray-400 flex items-center gap-1.5"><Phone size={14} /> رقم الطالب</span>
                     <span className="font-bold" dir="ltr">{student.phone}</span>
                   </div>
                 )}
                 {student.parentPhone && (
                   <div className="p-4 flex items-center justify-between">
-                    <span className="text-gray-400">📞 ولي الأمر</span>
+                    <span className="text-gray-400 flex items-center gap-1.5"><Phone size={14} /> ولي الأمر</span>
                     <span className="font-bold" dir="ltr">{student.parentPhone}</span>
                   </div>
                 )}
                 <div className="p-4 flex items-center justify-between">
-                  <span className="text-gray-400">📅 تاريخ الانضمام</span>
+                  <span className="text-gray-400 flex items-center gap-1.5"><Calendar size={14} /> تاريخ الانضمام</span>
                   <span className="font-bold">{student.createdAt ? new Date(student.createdAt).toLocaleDateString('ar-EG') : 'غير محدد'}</span>
                 </div>
                 {student.subExpiry && (
                   <div className="p-4 flex items-center justify-between">
-                    <span className="text-gray-400">⏰ انتهاء الاشتراك</span>
+                    <span className="text-gray-400 flex items-center gap-1.5"><Clock size={14} /> انتهاء الاشتراك</span>
                     <span className={`font-bold ${new Date(student.subExpiry).getTime() > Date.now() ? 'text-green-400' : 'text-red-400'}`}>
                       {new Date(student.subExpiry).toLocaleDateString('ar-EG')}
                     </span>
@@ -1600,13 +1626,13 @@ export default function StudentPortal() {
                 )}
                 {student.subPrice != null && student.subPrice > 0 && (
                   <div className="p-4 flex items-center justify-between">
-                    <span className="text-gray-400">💰 سعر الاشتراك</span>
+                    <span className="text-gray-400 flex items-center gap-1.5"><Award size={14} /> سعر الاشتراك</span>
                     <span className="font-bold text-gold">{student.subPrice} جنيه</span>
                   </div>
                 )}
                 {student.grade && (
                   <div className="p-4 flex items-center justify-between">
-                    <span className="text-gray-400">🎓 الصف الدراسي</span>
+                    <span className="text-gray-400 flex items-center gap-1.5"><GraduationCap size={14} /> الصف الدراسي</span>
                     <span className="font-bold">{student.grade}</span>
                   </div>
                 )}

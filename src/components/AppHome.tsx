@@ -3,7 +3,7 @@
 // الصفحة الرئيسية للتطبيق — Slider + Ticker + Categories
 
 import { useState, useEffect, useRef } from 'react';
-import { ChevronLeft, ChevronRight, Gift, Zap, Star } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Gift, Zap, Star, GraduationCap, ClipboardList, BookOpen, FileText } from 'lucide-react';
 import type { AppHomeSettings, CategoryItem } from '@/lib/db/app-settings';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -100,7 +100,9 @@ export function AppHome({ settings, onCategoryClick, examsCount = 0, coursesCoun
                   }}
                 >
                   <div className="text-center">
-                    <div className="text-5xl mb-3">🎓</div>
+                    <div className="w-16 h-16 bg-gold/10 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-gold/20">
+                      <GraduationCap size={36} className="text-gold" />
+                    </div>
                     <div className="font-cairo font-black text-xl gold-text">{slide.title}</div>
                   </div>
                 </div>
@@ -265,21 +267,21 @@ export function AppHome({ settings, onCategoryClick, examsCount = 0, coursesCoun
       <div className="px-4 mt-5">
         <div className="grid grid-cols-3 gap-2">
           {[
-            { label: 'اختبار متاح', value: examsCount, color: '#f5c518', icon: '📋' },
-            { label: 'كورس', value: coursesCount, color: '#3b82f6', icon: '📚' },
-            { label: 'واجب', value: assignmentsCount, color: '#8b5cf6', icon: '📝' },
+            { label: 'اختبار متاح', value: examsCount, color: '#f5c518', icon: <ClipboardList size={20} className="mx-auto text-gold mb-1" /> },
+            { label: 'كورس', value: coursesCount, color: '#3b82f6', icon: <BookOpen size={20} className="mx-auto text-blue-400 mb-1" /> },
+            { label: 'واجب', value: assignmentsCount, color: '#8b5cf6', icon: <FileText size={20} className="mx-auto text-purple-400 mb-1" /> },
           ].map((stat, i) => (
             <div
               key={i}
-              className="p-3 rounded-2xl text-center"
+              className="p-3 rounded-2xl text-center flex flex-col justify-center items-center"
               style={{
                 background: `${stat.color}0F`,
                 border: `1px solid ${stat.color}20`,
               }}
             >
-              <div className="text-xl mb-0.5">{stat.icon}</div>
+              {stat.icon}
               <div className="font-black text-lg leading-none" style={{ color: stat.color }}>{stat.value}</div>
-              <div className="text-[10px] text-gray-400 mt-0.5">{stat.label}</div>
+              <div className="text-[10px] text-gray-400 mt-1">{stat.label}</div>
             </div>
           ))}
         </div>

@@ -162,8 +162,15 @@ export const subscribeToNotifications = (teacherId: string, callback: (notifs: N
     .subscribe();
 
   void runFetch();
+
+  // Periodic polling fallback (every 10 seconds) when WebSocket is blocked
+  const pollInterval = setInterval(() => {
+    void runFetch();
+  }, 10000);
+
   return () => {
     cancelled = true;
+    clearInterval(pollInterval);
     supabase.removeChannel(channel);
   };
 };

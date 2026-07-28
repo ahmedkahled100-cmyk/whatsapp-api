@@ -3,7 +3,7 @@
 // الشريط السفلي للتنقل في التطبيق مع الهيدر
 
 import { useState, useEffect } from 'react';
-import { Home, BookOpen, ClipboardList, BarChart2, Settings, Bell, User, MessageSquare, LogOut, LayoutGrid, Calendar } from 'lucide-react';
+import { Home, BookOpen, ClipboardList, BarChart2, Settings, Bell, User, MessageSquare, LogOut, LayoutGrid, Calendar, Sun, Moon } from 'lucide-react';
 import Image from 'next/image';
 import { GlobalNotificationWidget } from '@/components/shared/GlobalNotificationWidget';
 
@@ -57,6 +57,29 @@ export function MobileAppLayout({
   children,
 }: Props) {
   const [scrolled, setScrolled] = useState(false);
+  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('an-academy-theme') as 'dark' | 'light' || 'dark';
+    setTheme(savedTheme);
+    const handleSync = () => {
+      setTheme(localStorage.getItem('an-academy-theme') as 'dark' | 'light' || 'dark');
+    };
+    window.addEventListener('theme-change', handleSync);
+    return () => window.removeEventListener('theme-change', handleSync);
+  }, []);
+
+  const toggleTheme = () => {
+    const nextTheme = theme === 'dark' ? 'light' : 'dark';
+    setTheme(nextTheme);
+    localStorage.setItem('an-academy-theme', nextTheme);
+    if (nextTheme === 'light') {
+      document.documentElement.classList.add('light');
+    } else {
+      document.documentElement.classList.remove('light');
+    }
+    window.dispatchEvent(new Event('theme-change'));
+  };
 
   useEffect(() => {
     const el = document.getElementById('app-scroll-container');
@@ -74,17 +97,27 @@ export function MobileAppLayout({
       <header
         className="sticky top-0 z-30 px-4 py-3 flex items-center justify-between transition-all"
         style={{
-          background: scrolled ? 'rgba(10,10,24,0.97)' : 'rgba(10,10,24,0.85)',
+          background: scrolled ? 'var(--dark2)' : 'var(--dark)',
           backdropFilter: 'blur(16px)',
-          borderBottom: '1px solid rgba(245,197,24,0.1)',
+          borderBottom: '1px solid rgba(255,255,255,0.05)',
         }}
       >
-        {/* Left: Notification & Switcher */}
+        {/* Left: Notification, Switcher & Theme Toggle */}
         <div className="flex items-center gap-2">
+          {/* Theme Toggle Button */}
+          <button 
+            onClick={toggleTheme}
+            className="w-10 h-10 rounded-xl flex items-center justify-center transition-all active:scale-95"
+            style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
+            title={theme === 'dark' ? 'المظهر المضيء' : 'المظهر الداكن'}
+          >
+            {theme === 'dark' ? <Sun size={18} className="text-text-muted" /> : <Moon size={18} className="text-text-muted" />}
+          </button>
           <GlobalNotificationWidget 
             notifications={notifications} 
             currentUser={{...student, role: 'student'}} 
             teacherId={student?.teacherId} 
+            align="right"
           />
           
           {hasMultipleAcademies && (
@@ -165,9 +198,9 @@ export function MobileAppLayout({
           transform: 'translateX(-50%)',
           width: '100%',
           maxWidth: 'min(100%, 896px)', /* matching max-w-4xl */
-          background: 'rgba(10,10,24,0.97)',
+          background: 'var(--dark2)',
           backdropFilter: 'blur(20px)',
-          borderTop: '1px solid rgba(245,197,24,0.12)',
+          borderTop: '1px solid rgba(255,255,255,0.05)',
           paddingBottom: 'env(safe-area-inset-bottom, 8px)',
         }}
       >
@@ -184,18 +217,14 @@ export function MobileAppLayout({
                   className="relative -top-5 flex flex-col items-center"
                 >
                   <div
-                    className="w-16 h-16 rounded-full flex items-center justify-center shadow-2xl transition-all"
+                    className="w-14 h-14 rounded-full flex items-center justify-center shadow-lg transition-all"
                     style={{
-                      background: isActive
-                        ? 'linear-gradient(135deg, var(--gold), #e6a800)'
-                        : 'linear-gradient(135deg, var(--gold), var(--accent))',
-                      boxShadow: isActive
-                        ? '0 0 30px rgba(245,197,24,0.5), 0 8px 20px rgba(0,0,0,0.5)'
-                        : '0 0 20px rgba(245,197,24,0.3), 0 6px 16px rgba(0,0,0,0.4)',
-                      transform: isActive ? 'scale(1.1)' : 'scale(1)',
+                      background: 'var(--gold)',
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+                      transform: isActive ? 'scale(1.05)' : 'scale(1)',
                     }}
                   >
-                    <Home size={28} className="text-black" strokeWidth={2.5} />
+                    <Home size={24} className="text-black" strokeWidth={2.5} />
                   </div>
                   <span className="text-[10px] mt-1 font-bold" style={{ color: 'var(--gold)' }}>
                     {item.label}

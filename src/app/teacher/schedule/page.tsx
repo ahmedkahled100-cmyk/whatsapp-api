@@ -25,6 +25,14 @@ export default function SchedulePage() {
     isRecurring: true
   });
 
+  // Helper to format ISO string times to HH:MM for display
+  const formatTimeDisplay = (timeStr?: string) => {
+    if (!timeStr) return '';
+    if (!timeStr.includes('T')) return timeStr; // Already HH:MM
+    const date = new Date(timeStr);
+    return date.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
+  };
+
   const fetchEvents = async () => {
     if (!user) return;
     setLoading(true);
@@ -105,7 +113,7 @@ export default function SchedulePage() {
                       <div className="font-bold text-sm mb-1">{ev.title}</div>
                       <div className="flex items-center gap-1 text-xs text-text-muted mb-2">
                         <Clock size={12} />
-                        <span>{ev.startTime} - {ev.endTime}</span>
+                        <span>{formatTimeDisplay(ev.startTime)} - {formatTimeDisplay(ev.endTime)}</span>
                       </div>
                       <div className="flex gap-2 justify-end opacity-0 group-hover:opacity-100 transition-opacity absolute top-2 left-2">
                         <button onClick={() => handleDelete(ev.id)} className="text-red-400 hover:text-red-300 p-1"><Trash2 size={14} /></button>

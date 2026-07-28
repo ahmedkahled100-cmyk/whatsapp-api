@@ -17,3 +17,8 @@ ADD COLUMN IF NOT EXISTS group_id TEXT;
 -- Add cancel_reason to teachers table for suspension reasons
 ALTER TABLE public.teachers
 ADD COLUMN IF NOT EXISTS cancel_reason TEXT;
+
+-- Add online presence fields to teachers table
+ALTER TABLE public.teachers
+ADD COLUMN IF NOT EXISTS is_online BOOLEAN DEFAULT false,
+ADD COLUMN IF NOT EXISTS last_active BIGINT;

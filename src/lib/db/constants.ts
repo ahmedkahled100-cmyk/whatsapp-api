@@ -23,3 +23,6 @@ export const EDUCATIONAL_GAMES = 'educational_games';
 export const GAME_RESULTS = 'game_results';
 export const ATTENDANCE_SESSIONS = 'attendance_sessions';
 export const ATTENDANCE_RECORDS = 'attendance_records';
+export const TEACHER_FILES = 'teacher_files';
+export const TEACHER_FOLDERS = 'teacher_folders';
+

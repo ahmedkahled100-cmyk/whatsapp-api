@@ -12,9 +12,10 @@ interface GlobalNotificationWidgetProps {
   notifications: Notification[];
   currentUser: any;
   teacherId?: string; // Needed for mark all as read if we are relying on teacherId, though markAllNotificationsRead usually works by teacher_id, which might be tricky for students.
+  align?: 'left' | 'right';
 }
 
-export function GlobalNotificationWidget({ notifications, currentUser, teacherId }: GlobalNotificationWidgetProps) {
+export function GlobalNotificationWidget({ notifications, currentUser, teacherId, align = 'left' }: GlobalNotificationWidgetProps) {
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -102,11 +103,16 @@ export function GlobalNotificationWidget({ notifications, currentUser, teacherId
       {/* Dropdown Panel (Glassmorphism) */}
       {isOpen && (
         <div 
-          className="absolute left-0 mt-3 w-[320px] sm:w-[380px] rounded-2xl shadow-2xl overflow-hidden z-[100] border border-white/10 animate-scale-in"
+          className={`
+            fixed top-[70px] left-4 right-4 w-auto
+            sm:absolute sm:top-auto sm:w-[380px] sm:mt-3
+            ${align === 'right' ? 'sm:right-0 sm:left-auto' : 'sm:left-0 sm:right-auto'}
+            rounded-2xl shadow-2xl overflow-hidden z-[100] border border-white/10 animate-scale-in
+          `}
           style={{ 
             background: 'rgba(15, 15, 25, 0.85)', 
             backdropFilter: 'blur(20px)',
-            transformOrigin: 'top left'
+            transformOrigin: align === 'right' ? 'top right' : 'top left'
           }}
           dir="rtl"
         >

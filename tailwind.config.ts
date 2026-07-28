@@ -29,8 +29,10 @@ const config: Config = {
         }
       },
       fontFamily: {
-        cairo: ['var(--font-cairo)', 'sans-serif'],
-        tajawal: ['var(--font-tajawal)', 'sans-serif'],
+        cairo: ['var(--font-alexandria)', 'sans-serif'],
+        tajawal: ['var(--font-ibm-plex)', 'sans-serif'],
+        alexandria: ['var(--font-alexandria)', 'sans-serif'],
+        almarai: ['var(--font-ibm-plex)', 'sans-serif'],
       },
       animation: {
         'pulse-gold': 'pulseGold 3s ease-in-out infinite',

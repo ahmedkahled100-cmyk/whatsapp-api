@@ -8,7 +8,7 @@ import { showToast } from '@/lib/toast';
 import { saveStudent, deleteStudent, uploadFileToStorage, deleteRegistrationRequest, getSettings, wipeStudentInteraction } from '@/lib/db';
 import { generateCode, formatDateAr, printHtml, openStudentCardForPrint, exportBulkToPdf } from '@/lib/utils';
 import type { Student } from '@/types';
-import { UserPlus, Search, Trash2, Copy, Users, Phone, Upload, Loader2, FileSpreadsheet, Edit, Eye, Printer, Calendar, Clock, Award, CheckCircle2, XCircle, RotateCcw, ImageIcon, X, QrCode, Download } from 'lucide-react';
+import { UserPlus, Search, Trash2, Copy, Users, Phone, Upload, Loader2, FileSpreadsheet, Edit, Eye, Printer, Calendar, Clock, Award, CheckCircle2, XCircle, RotateCcw, ImageIcon, X, QrCode, Download, School, FileText } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { GlobalFileUpload } from '@/components/GlobalFileUpload';
 import { ImageModal } from '@/components/ImageModal';
@@ -429,14 +429,14 @@ function StudentsPageContent() {
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {[
-              { label: 'إجمالي الطلاب', value: students.length, icon: '👥' },
-              { label: 'الفصول', value: groups.length, icon: '🏫' },
-              { label: 'المحاولات', value: attempts.filter(a => a.completed).length, icon: '📝' },
+              { label: 'إجمالي الطلاب', value: students.length, icon: <Users size={20} className="text-gold mx-auto" /> },
+              { label: 'الفصول', value: groups.length, icon: <School size={20} className="text-gold mx-auto" /> },
+              { label: 'المحاولات', value: attempts.filter(a => a.completed).length, icon: <FileText size={20} className="text-gold mx-auto" /> },
             ].map((s, i) => (
-              <div key={i} className="stat-card hover-premium text-center py-3">
-                <div className="text-2xl mb-1">{s.icon}</div>
-                <div className="text-xl font-cairo font-black text-gold">{s.value}</div>
-                <div className="text-xs text-text-muted">{s.label}</div>
+              <div key={i} className="stat-card hover-premium text-center py-3 flex flex-col justify-center items-center">
+                <div className="mb-1.5">{s.icon}</div>
+                <div className="text-xl font-cairo font-black text-gold leading-none">{s.value}</div>
+                <div className="text-xs text-text-muted mt-1">{s.label}</div>
               </div>
             ))}
           </div>
@@ -511,13 +511,13 @@ function StudentsPageContent() {
                                 <div className="text-sm font-medium">{student.name}</div>
                                 <div className="flex items-center gap-1 mt-0.5">
                                   {isCancelledByTeacher ? (
-                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/10 text-red-400 border border-red-500/20 font-bold">⛔ ملغى</span>
+                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/10 text-red-400 border border-red-500/20 font-bold">ملغى</span>
                                   ) : isFreeStudent ? (
                                     <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-500/10 text-gray-400 border border-white/10 font-bold">مجاني</span>
                                   ) : isExpired ? (
-                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-500/10 text-orange-400 border border-orange-500/20 font-bold">⚠️ منتهي</span>
+                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-500/10 text-orange-400 border border-orange-500/20 font-bold">منتهي</span>
                                   ) : (
-                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/10 text-green-400 border border-green-500/20 font-bold">✅ نشط</span>
+                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/10 text-green-400 border border-green-500/20 font-bold">نشط</span>
                                   )}
                                 </div>
                               </div>
@@ -570,13 +570,13 @@ function StudentsPageContent() {
                           <span>|</span>
                           <code className="text-gold">{student.code.replace(/-T[A-Z0-9]+$/i, '')}</code>
                           {isCancelledByTeacher ? (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/10 text-red-400 border border-red-500/20 font-bold">⛔ ملغى</span>
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/10 text-red-400 border border-red-500/20 font-bold">ملغى</span>
                           ) : isFreeStudent ? (
                             <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-500/10 text-gray-400 border border-white/10 font-bold">مجاني</span>
                           ) : isExpired ? (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-500/10 text-orange-400 border border-orange-500/20 font-bold">⚠️ منتهي</span>
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-500/10 text-orange-400 border border-orange-500/20 font-bold">منتهي</span>
                           ) : (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/10 text-green-400 border border-green-500/20 font-bold">✅ نشط</span>
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/10 text-green-400 border border-green-500/20 font-bold">نشط</span>
                           )}
                         </div>
                       </div>

@@ -886,26 +886,36 @@ function AIPageContent() {
       {showSaveModal && (
         <div className="modal-overlay" >
           <div className="modal-content modal-content-sm" onClick={e => e.stopPropagation()}>
-            <h3 className="text-xl font-bold font-cairo">تخصيص الحفظ في البنك</h3>
-            <div className="space-y-3">
+            <div className="modal-header">
+              <h3 className="font-cairo font-black text-lg text-gold flex items-center gap-2">
+                <Sparkles size={20} />
+                تخصيص الحفظ في البنك
+              </h3>
+              <button onClick={() => setShowSaveModal(false)} className="text-gray-400 hover:text-white transition-colors"><X size={20} /></button>
+            </div>
+            
+            <div className="modal-body space-y-4">
               <div>
-                <label className="block text-xs mb-1 opacity-70">الصف الدراسي</label>
-                <input type="text" placeholder="مثال: الثاني الثانوي" className="input-base w-full text-sm" value={modalData.unit} onChange={e => setModalData({...modalData, unit: e.target.value})} />
+                <label className="block text-xs font-bold text-text-muted mb-1.5 uppercase tracking-wider">الصف الدراسي</label>
+                <input type="text" placeholder="مثال: الثاني الثانوي" className="input-base w-full text-sm py-2.5" value={modalData.unit} onChange={e => setModalData({...modalData, unit: e.target.value})} />
               </div>
               <div>
-                <label className="block text-xs mb-1 opacity-70">المادة</label>
-                <input type="text" placeholder="مثال: رياضيات" className="input-base w-full text-sm" value={modalData.subject} onChange={e => setModalData({...modalData, subject: e.target.value})} />
+                <label className="block text-xs font-bold text-text-muted mb-1.5 uppercase tracking-wider">المادة</label>
+                <input type="text" placeholder="مثال: رياضيات" className="input-base w-full text-sm py-2.5" value={modalData.subject} onChange={e => setModalData({...modalData, subject: e.target.value})} />
               </div>
               <div>
-                <label className="block text-xs mb-1 opacity-70">مستوى الصعوبة</label>
-                <select className="input-base w-full text-sm" value={modalData.difficulty} onChange={e => setModalData({...modalData, difficulty: e.target.value as any})}>
-                  <option value="easy">سهل</option><option value="medium">متوسط</option><option value="hard">صعب</option>
+                <label className="block text-xs font-bold text-text-muted mb-1.5 uppercase tracking-wider">مستوى الصعوبة</label>
+                <select className="input-base w-full text-sm h-11" value={modalData.difficulty} onChange={e => setModalData({...modalData, difficulty: e.target.value as any})}>
+                  <option value="easy">سهل</option>
+                  <option value="medium">متوسط</option>
+                  <option value="hard">صعب</option>
                 </select>
               </div>
             </div>
-            <div className="flex gap-3 justify-end">
-              <button onClick={() => setShowSaveModal(false)} className="btn-outline px-6">إلغاء</button>
-              <button onClick={confirmSave} className="btn-gold px-6 flex items-center gap-2"><Save size={16} /> حفظ</button>
+            
+            <div className="modal-footer">
+              <button onClick={() => setShowSaveModal(false)} className="btn-outline flex-1 py-2.5">إلغاء</button>
+              <button onClick={confirmSave} className="btn-gold flex-1 py-2.5 justify-center flex items-center gap-2"><Save size={16} /> حفظ الأسئلة</button>
             </div>
           </div>
         </div>

@@ -1,20 +1,20 @@
 // src/app/layout.tsx
 import type { Metadata, Viewport } from 'next';
-import { Cairo, Tajawal } from 'next/font/google';
+import { Alexandria, IBM_Plex_Sans_Arabic } from 'next/font/google';
 import './globals.css';
 import { ToastProvider } from '@/components/ToastProvider';
 import { FileProcessingCenter } from '@/components/FileProcessingCenter';
 
-const cairo = Cairo({
+const alexandria = Alexandria({
   subsets: ['arabic'],
-  variable: '--font-cairo',
-  weight: ['300', '400', '600', '700', '900'],
+  variable: '--font-alexandria',
+  weight: ['300', '400', '500', '600', '700', '800', '900'],
 });
 
-const tajawal = Tajawal({
+const ibmPlex = IBM_Plex_Sans_Arabic({
   subsets: ['arabic'],
-  variable: '--font-tajawal',
-  weight: ['300', '400', '500', '700', '800', '900'],
+  variable: '--font-ibm-plex',
+  weight: ['300', '400', '500', '600', '700'],
 });
 
 export const viewport: Viewport = {
@@ -32,7 +32,25 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="ar" dir="rtl" className={`${cairo.variable} ${tajawal.variable}`}>
+    <html lang="ar" dir="rtl" className={`${alexandria.variable} ${ibmPlex.variable}`}>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                try {
+                  var theme = localStorage.getItem('an-academy-theme') || 'dark';
+                  if (theme === 'light') {
+                    document.documentElement.classList.add('light');
+                  } else {
+                    document.documentElement.classList.remove('light');
+                  }
+                } catch (e) {}
+              })();
+            `,
+          }}
+        />
+      </head>
       <body className="font-tajawal overflow-x-hidden w-full max-w-full m-0 p-0 flex flex-col min-h-screen">
         {children}
         <ToastProvider />

@@ -43,6 +43,7 @@ export function GlobalChatWidget({ currentUser, conversations, contacts, superAd
   const [otherUserLastActive, setOtherUserLastActive] = useState<number | undefined>();
 
   const [uploadingFile, setUploadingFile] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [attachmentUrl, setAttachmentUrl] = useState('');
   const [attachmentType, setAttachmentType] = useState<'text' | 'image' | 'file'>('text');
   
@@ -299,15 +300,19 @@ export function GlobalChatWidget({ currentUser, conversations, contacts, superAd
 
     const uploadFile = async (fileToUpload: File | Blob) => {
       setUploadingFile(true);
+      setUploadProgress(0);
       try {
         const path = `chat-attachments/${Date.now()}_${file.name.replace(/\.[^/.]+$/, "").replace(/[^a-z0-9]/gi, '_').toLowerCase()}`;
-        const url = await uploadFileToStorage(fileToUpload, path);
+        const url = await uploadFileToStorage(fileToUpload, path, (progress) => {
+          setUploadProgress(progress);
+        });
         setAttachmentUrl(url);
         setAttachmentType(type);
       } catch (err) {
         showToast('فشل رفع الملف');
       } finally {
         setUploadingFile(false);
+        setUploadProgress(0);
         e.target.value = '';
       }
     };
@@ -444,11 +449,11 @@ export function GlobalChatWidget({ currentUser, conversations, contacts, superAd
             openPanel();
           }
         }}
-        className={`fixed bottom-[100px] lg:bottom-10 right-4 lg:right-10 z-[110] w-14 h-14 rounded-full bg-gradient-to-tr from-gold to-amber-400 text-black shadow-xl shadow-gold/20 flex items-center justify-center`}
+        className={`fixed bottom-[100px] lg:bottom-10 right-4 lg:right-10 z-[110] w-12 h-12 rounded-full bg-gold text-zinc-950 shadow-lg flex items-center justify-center`}
       >
-        <MessageSquare size={28} />
+        <MessageSquare size={24} />
         {unreadTotal > 0 && (
-          <span className="absolute -top-1 -left-1 w-5 h-5 bg-red-500 rounded-full text-white text-[10px] font-black flex items-center justify-center border-2 border-[#0a0a0f] shadow-lg animate-bounce">
+          <span className="absolute -top-1 -left-1 w-5 h-5 bg-red-500 rounded-full text-white text-[10px] font-black flex items-center justify-center border-2 border-dark shadow-md">
             {unreadTotal > 9 ? '9+' : unreadTotal}
           </span>
         )}
@@ -461,7 +466,7 @@ export function GlobalChatWidget({ currentUser, conversations, contacts, superAd
           bottom: panelPos.bottom !== undefined ? `${panelPos.bottom}px` : undefined,
           right: panelPos.right !== undefined ? `${panelPos.right}px` : undefined,
         }}
-        className={`fixed z-[100] w-[360px] h-[600px] max-h-[80vh] max-w-[calc(100dvw-32px)] bg-[#0a0f1c]/95 backdrop-blur-xl border border-white/10 rounded-3xl shadow-2xl flex flex-col overflow-hidden transition-all duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] ${isOpen ? 'translate-y-0 opacity-100 scale-100 pointer-events-auto' : 'translate-y-20 opacity-0 scale-95 pointer-events-none'}`}
+        className={`fixed z-[100] w-[360px] h-[600px] max-h-[80vh] max-w-[calc(100dvw-32px)] bg-zinc-900/95 backdrop-blur-md border border-white/5 rounded-2xl shadow-xl flex flex-col overflow-hidden transition-all duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] ${isOpen ? 'translate-y-0 opacity-100 scale-100 pointer-events-auto' : 'translate-y-20 opacity-0 scale-95 pointer-events-none'}`}
       >
         {/* Header */}
         <div className="p-4 bg-gradient-to-r from-white/5 to-transparent border-b border-white/5 flex items-center justify-between shrink-0">
@@ -686,8 +691,8 @@ export function GlobalChatWidget({ currentUser, conversations, contacts, superAd
 
                   return (
                     <div key={msg.id} className={`flex flex-col ${isMine ? 'items-end' : 'items-start'} animate-slide-up`} style={{ animationDuration: '0.2s' }}>
-                      <div className={`max-w-[85%] p-2.5 rounded-2xl shadow-lg relative group transition-opacity ${
-                        isMine ? 'bg-gradient-to-br from-gold to-amber-500 text-black rounded-tr-none' : 'bg-white/10 text-white rounded-tl-none border border-white/5'
+                      <div className={`max-w-[85%] p-2.5 rounded-2xl shadow-sm relative group transition-opacity ${
+                        isMine ? 'bg-gold text-zinc-950 rounded-tr-none' : 'bg-zinc-800 text-zinc-100 rounded-tl-none border border-zinc-700/50'
                       } ${isOptimistic ? 'opacity-60' : 'opacity-100'}`}>
                          {msg.type === 'image' && msg.fileUrl && (
                            <div className="mb-2 rounded-xl overflow-hidden cursor-pointer bg-black/10" onClick={() => openPreview(msg.fileUrl!, 'صورة')}>
@@ -736,6 +741,22 @@ export function GlobalChatWidget({ currentUser, conversations, contacts, superAd
             {/* Input Area */}
             <div className="p-3 bg-black/50 backdrop-blur-xl border-t border-white/5 shrink-0 flex flex-col gap-2">
               {/* Upload Progress */}
+              {/* Upload Progress Bar */}
+              {uploadingFile && (
+                <div className="flex items-center gap-3 bg-gold/10 border border-gold/20 p-2 rounded-xl animate-fade-in mb-1">
+                  <Loader2 size={14} className="animate-spin text-gold shrink-0" />
+                  <div className="flex-1">
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="text-[10px] font-bold text-gold">جاري رفع الملف...</span>
+                      <span className="text-[9px] text-gold">{uploadProgress}%</span>
+                    </div>
+                    <div className="h-1 w-full bg-black/40 rounded-full overflow-hidden">
+                      <div className="h-full bg-gold transition-all duration-300" style={{ width: `${uploadProgress}%` }} />
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {isCompressing && (
                 <div className="flex items-center gap-3 bg-gold/10 border border-gold/20 p-2 rounded-xl animate-fade-in">
                   <Loader2 size={14} className="animate-spin text-gold shrink-0" />

@@ -36,6 +36,13 @@ export {
   getMaterials, saveMaterial, deleteMaterial, subscribeToMaterials 
 } from './supabase/materials';
 
+export {
+  getTeacherFiles, getTeacherFolders, saveTeacherFile, deleteTeacherFile,
+  createTeacherFolder, deleteTeacherFolder, moveFilesToFolder, toggleFileShare,
+  subscribeToTeacherFiles
+} from './supabase/files';
+
+
 export { 
   addNotification, dispatchNotification, markNotificationRead, markNotificationsAsReadBulk,
   markAllNotificationsRead, subscribeToNotifications, saveNotificationLog, 
@@ -92,5 +99,11 @@ export {
   saveAssistantJob, getAssistantJobs, getJobsByTeacher, 
   saveJobApplication, getApplicationsForJob, getApplicationsForAssistant,
   deleteAssistantJob,
-  updateApplicationStatus, updateAssistantProfile
+  updateApplicationStatus, updateAssistantProfile, subscribeToAssistantProfile
 } from './supabase/hr';
+
+export {
+  getPromoCodes, savePromoCode, deletePromoCode,
+  validatePromoCode, usePromoCode, generateRandomPromoCode
+} from './supabase/promoCodes';
+

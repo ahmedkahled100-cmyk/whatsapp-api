@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useTeacherStore } from '@/lib/store';
 import { filterNotificationsForAdminInbox } from '@/lib/notification-audience';
 import { subscribeToNotifications, subscribeToRegistrationRequests, setUserOnlineStatus, heartbeatUserOnlineStatus } from '@/lib/db';
-import { LayoutDashboard, Users, Settings, LogOut, Menu, X, ShieldCheck, GraduationCap, MessageSquare, CreditCard, Smartphone, Briefcase, Bell, MessageCircle } from 'lucide-react';
+import { LayoutDashboard, Users, Settings, LogOut, Menu, X, ShieldCheck, GraduationCap, MessageSquare, CreditCard, Smartphone, Briefcase, Bell, MessageCircle, Ticket } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { GlobalNotificationWidget } from '@/components/shared/GlobalNotificationWidget';
 
@@ -14,6 +14,7 @@ const NAV_ITEMS = [
   { href: '/admin/teachers', icon: Users, label: 'إدارة المعلمين' },
   { href: '/admin/assistants', icon: Briefcase, label: 'إدارة مساعدي المادة' },
   { href: '/admin/subscriptions', icon: CreditCard, label: 'إدارة الاشتراكات' },
+  { href: '/admin/promo-codes', icon: Ticket, label: 'رموز الخصم والدعوة' },
   { href: '/admin/messages', icon: MessageSquare, label: 'رسائل المعلمين' },
   { href: '/admin/notifications', icon: Bell, label: 'إدارة الإشعارات' },
   { href: '/admin/whatsapp', icon: MessageCircle, label: 'إدارة الواتساب' },

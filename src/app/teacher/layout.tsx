@@ -16,8 +16,11 @@ import {
   LayoutDashboard, PlusCircle, FileText, Users, BookOpen,
   BarChart2, ClipboardList, Calendar, Bot, TrendingUp,
   CreditCard, BookMarked, Settings, LogOut, Bell, Menu, X, Clock, DollarSign,
-  GraduationCap, Database, ChevronLeft, Zap, ShieldCheck, ExternalLink, MessageSquare, Gamepad2, AlertCircle, Youtube
+  GraduationCap, Database, ChevronLeft, Zap, ShieldCheck, ExternalLink, MessageSquare, Gamepad2, AlertCircle, Youtube,
+  Sun, Moon, Cloud
+
 } from 'lucide-react';
+
 import { SubscriptionExpiredOverlay } from '@/components/SubscriptionExpiredOverlay';
 import { GlobalChatWidget } from '@/components/shared/GlobalChatWidget';
 import { GlobalNotificationWidget } from '@/components/shared/GlobalNotificationWidget';
@@ -40,7 +43,10 @@ const NAV_ITEMS = [
   { href: '/teacher/subscriptions', icon: CreditCard, label: 'الاشتراكات', section: 'students', permission: 'subscriptions' },
   { href: '/teacher/finances', icon: DollarSign, label: 'الماليات', section: 'students', permission: 'finances' },
   { href: '/teacher/courses', icon: BookMarked, label: 'المناهج', section: 'content', permission: 'courses' },
+  { href: '/teacher/files', icon: Cloud, label: 'مدير الملفات', section: 'content', permission: 'courses' },
+
   { href: '/teacher/youtube', icon: Youtube, label: 'قناة اليوتيوب', section: 'content', permission: 'courses' },
+
   { href: '/teacher/assignments', icon: ClipboardList, label: 'الواجبات', section: 'content', permission: 'assignments' },
   { href: '/teacher/calendar', icon: Calendar, label: 'التقويم', section: 'content', permission: 'calendar' },
   { href: '/teacher/schedule', icon: Calendar, label: 'جدول الحصص', section: 'content', permission: 'schedule' },
@@ -83,6 +89,39 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
 
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('an-academy-theme') as 'dark' | 'light' || 'dark';
+    setTheme(savedTheme);
+    if (savedTheme === 'light') {
+      document.documentElement.classList.add('light');
+    } else {
+      document.documentElement.classList.remove('light');
+    }
+  }, []);
+
+  useEffect(() => {
+    if (user && user.role !== 'super_admin') {
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(user.id)) {
+        console.warn('Corrupted session detected. Logging out...', user.id);
+        logout();
+        router.replace('/auth');
+      }
+    }
+  }, [user, logout, router]);
+
+  const toggleTheme = () => {
+    const nextTheme = theme === 'dark' ? 'light' : 'dark';
+    setTheme(nextTheme);
+    localStorage.setItem('an-academy-theme', nextTheme);
+    if (nextTheme === 'light') {
+      document.documentElement.classList.add('light');
+    } else {
+      document.documentElement.classList.remove('light');
+    }
+  };
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -359,7 +398,7 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
   }, {} as Record<string, typeof NAV_ITEMS>);
 
   return (
-    <div className="min-h-screen bg-[#0a0a0f] relative overflow-x-hidden print:overflow-visible print:bg-white">
+    <div className="min-h-screen bg-dark relative overflow-x-hidden print:overflow-visible print:bg-white">
       {/* Overlay for mobile */}
       {sidebarOpen && (
         <div className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-md lg:hidden transition-opacity duration-300"
@@ -371,18 +410,13 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
         className={`fixed top-0 right-0 h-full z-[70] flex flex-col transition-all duration-300 ease-in-out border-l border-white/5 print:hidden
           ${isMobile ? (sidebarOpen ? 'w-[280px] translate-x-0' : 'w-0 translate-x-[285px] invisible') : (isCollapsed ? 'w-20 translate-x-0' : 'w-[280px] translate-x-0')}`}
         style={{
-          background: 'linear-gradient(180deg, var(--dark2), var(--dark3))',
-          boxShadow: '-8px 0 32px rgba(0,0,0,0.5)',
+          background: 'var(--dark2)',
+          boxShadow: '-4px 0 16px rgba(0,0,0,0.4)',
         }}
       >
         {/* Logo */}
         <div className={`p-4 flex items-center ${isCollapsed ? 'justify-center' : 'gap-3'}`} style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden relative"
-            style={{ 
-              background: 'linear-gradient(135deg, var(--gold), var(--accent))', 
-              boxShadow: '0 0 20px rgba(245,197,24,0.3)', 
-              animation: 'pulseGold 3s ease-in-out infinite' 
-            }}>
+          <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden relative bg-gold">
             {settings?.logoUrl ? (
               <Image 
                 src={settings.logoUrl} 
@@ -432,14 +466,14 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
                   <Link key={item.href} href={item.href}
                     title={isCollapsed ? item.label : undefined}
                     onClick={() => window.innerWidth < 1024 && setSidebarOpen(false)}
-                    className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-3 px-4'} py-3 mx-2 rounded-xl transition-all duration-200 text-sm font-medium group relative`}
+                    className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-3 px-4'} py-3 mx-2 rounded-lg transition-all duration-200 text-sm font-medium group relative`}
                     style={{
                       color: active ? 'var(--gold)' : 'var(--text-muted)',
-                      background: active ? 'rgba(245,197,24,0.1)' : 'transparent',
-                      border: active ? '1px solid rgba(245,197,24,0.15)' : '1px solid transparent',
+                      background: active ? 'rgba(255, 255, 255, 0.03)' : 'transparent',
+                      border: active ? '1px solid rgba(255, 255, 255, 0.06)' : '1px solid transparent',
                     }}
                   >
-                    <item.icon size={18} className={`flex-shrink-0 ${active ? 'scale-110' : 'opacity-70 group-hover:opacity-100'}`} />
+                    <item.icon size={18} className={`flex-shrink-0 ${active ? 'scale-105' : 'opacity-70 group-hover:opacity-100'}`} />
                     {!isCollapsed && <span className="animate-fade-in truncate">{item.label}</span>}
                     
                     {!isCollapsed && item.href === '/teacher/subscriptions' && registrationRequests.length > 0 && (
@@ -454,7 +488,7 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
                       </span>
                     )}
 
-                    {active && !isCollapsed && <div className="mr-auto w-1.5 h-1.5 rounded-full bg-gold shadow-[0_0_8px_var(--gold)]" />}
+                    {active && !isCollapsed && <div className="mr-auto w-1.5 h-1.5 rounded-full bg-gold" />}
                   </Link>
                 );
               })}
@@ -521,7 +555,7 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
         {/* Top Header */}
         <header className="sticky top-0 z-40 flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2.5 sm:py-3 lg:px-6 w-full print:hidden"
           style={{
-            background: 'rgba(10, 10, 15, 0.8)',
+            background: 'rgba(9, 9, 11, 0.8)',
             borderBottom: '1px solid rgba(255,255,255,0.06)',
             backdropFilter: 'blur(16px)',
           }}>
@@ -540,6 +574,15 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Theme Toggle Button */}
+            <button 
+              onClick={toggleTheme}
+              className="w-10 h-10 rounded-xl flex items-center justify-center transition-all hover:bg-white/5 active:scale-95"
+              style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
+              title={theme === 'dark' ? 'المظهر المضيء' : 'المظهر الداكن'}
+            >
+              {theme === 'dark' ? <Sun size={20} className="text-text-muted" /> : <Moon size={20} className="text-text-muted" />}
+            </button>
             <Link href="/teacher/messages" className="w-10 h-10 rounded-xl flex items-center justify-center relative transition-all hover:bg-white/5"
                style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
               <MessageSquare size={20} className="text-text-muted" />
@@ -621,13 +664,13 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
       </main>
 
       {/* 📱 Mobile Bottom Navigation - Application feel */}
-      <nav className="fixed lg:hidden bottom-0 left-0 right-0 z-[60] bg-[#12121f]/90 backdrop-blur-xl border-t border-white/5 px-2 py-2 flex justify-around items-center h-20 shadow-[0_-10px_30px_rgba(0,0,0,0.4)] print:hidden">
-          <Link href="/teacher/dashboard" className={`flex flex-col items-center gap-1.5 px-3 py-1 rounded-xl transition-all ${pathname === '/teacher/dashboard' ? 'text-gold' : 'text-gray-500'}`}>
-              <LayoutDashboard size={20} className={pathname === '/teacher/dashboard' ? 'scale-110 drop-shadow-[0_0_8px_var(--gold)]' : ''} />
+      <nav className="fixed lg:hidden bottom-0 left-0 right-0 z-[60] bg-[#18181b]/95 backdrop-blur-md border-t border-white/5 px-2 py-2 flex justify-around items-center h-20 shadow-lg print:hidden">
+          <Link href="/teacher/dashboard" className={`flex flex-col items-center gap-1.5 px-3 py-1 rounded-lg transition-all ${pathname === '/teacher/dashboard' ? 'text-gold' : 'text-gray-500'}`}>
+              <LayoutDashboard size={20} className={pathname === '/teacher/dashboard' ? 'scale-105' : ''} />
               <span className="text-[10px] font-bold">الرئيسية</span>
           </Link>
-          <Link href="/teacher/students" className={`flex flex-col items-center gap-1.5 px-3 py-1 rounded-xl transition-all relative ${pathname === '/teacher/students' ? 'text-gold' : 'text-gray-500'}`}>
-              <Users size={20} className={pathname === '/teacher/students' ? 'scale-110 drop-shadow-[0_0_8px_var(--gold)]' : ''} />
+          <Link href="/teacher/students" className={`flex flex-col items-center gap-1.5 px-3 py-1 rounded-lg transition-all relative ${pathname === '/teacher/students' ? 'text-gold' : 'text-gray-500'}`}>
+              <Users size={20} className={pathname === '/teacher/students' ? 'scale-105' : ''} />
               <span className="text-[10px] font-bold">الطلاب</span>
               {registrationRequests.length > 0 && (
                 <span className="absolute -top-1 -right-0 w-4 h-4 bg-red-500 rounded-full text-[8px] text-white flex items-center justify-center font-bold">
@@ -637,15 +680,15 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
           </Link>
           
           {/* Main Action Button - Quick Exam */}
-          <Link href="/teacher/exams/create" className="w-14 h-14 bg-gradient-to-tr from-gold to-amber-400 rounded-full flex items-center justify-center text-[#12121f] shadow-[0_0_20px_rgba(245,197,24,0.4)] -mt-10 border-4 border-[#12121f] active:scale-95 transition-transform">
-              <PlusCircle size={28} />
+          <Link href="/teacher/exams/create" className="w-12 h-12 bg-gold rounded-full flex items-center justify-center text-zinc-950 -mt-6 border-2 border-zinc-900 shadow-md active:scale-95 transition-all">
+              <PlusCircle size={24} />
           </Link>
 
-          <Link href="/teacher/exams" className={`flex flex-col items-center gap-1.5 px-3 py-1 rounded-xl transition-all ${pathname === '/teacher/exams' ? 'text-gold' : 'text-gray-500'}`}>
-              <FileText size={20} className={pathname === '/teacher/exams' ? 'scale-110 drop-shadow-[0_0_8px_var(--gold)]' : ''} />
+          <Link href="/teacher/exams" className={`flex flex-col items-center gap-1.5 px-3 py-1 rounded-lg transition-all ${pathname === '/teacher/exams' ? 'text-gold' : 'text-gray-500'}`}>
+              <FileText size={20} className={pathname === '/teacher/exams' ? 'scale-105' : ''} />
               <span className="text-[10px] font-bold">الاختبارات</span>
           </Link>
-          <button onClick={() => setShowMobileMenu(true)} className={`flex flex-col items-center gap-1.5 px-3 py-1 rounded-xl transition-all text-gray-500`}>
+          <button onClick={() => setShowMobileMenu(true)} className={`flex flex-col items-center gap-1.5 px-3 py-1 rounded-lg transition-all text-gray-500`}>
               <Menu size={20} />
               <span className="text-[10px] font-bold">المزيد</span>
           </button>
@@ -653,10 +696,10 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
 
       {/* 📲 Full Screen Mobile Menu Overlay */}
       {showMobileMenu && (
-          <div className="fixed inset-0 z-[100] bg-[#0d121f] animate-fade-in flex flex-col overflow-hidden" dir="rtl">
+          <div className="fixed inset-0 z-[100] bg-[#09090b] animate-fade-in flex flex-col overflow-hidden" dir="rtl">
               <div className="p-6 border-b border-white/5 flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-gold/10 flex items-center justify-center text-gold border border-gold/20">
+                      <div className="w-10 h-10 rounded-lg bg-gold/10 flex items-center justify-center text-gold border border-gold/20">
                           <PlusCircle size={20} />
                       </div>
                       <h3 className="text-xl font-black text-white font-cairo">كل القوائم</h3>

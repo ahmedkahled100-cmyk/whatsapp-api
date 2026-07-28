@@ -284,21 +284,21 @@ export default function GamesPage() {
       {/* Create Modal */}
       {showCreateModal && (
         <div className="modal-overlay" >
-          <div className="modal-content" onClick={e => e.stopPropagation()}>
-             <div className="p-6 border-b border-white/5 flex items-center justify-between sticky top-0 bg-dark z-10">
+          <div className="modal-content !max-w-2xl" onClick={e => e.stopPropagation()}>
+             <div className="modal-header sticky top-0 bg-[#09090b] z-10">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-gold/10 flex items-center justify-center text-gold">
                     <Sparkles size={24} />
                   </div>
                   <div>
-                    <h2 className="font-black text-white">إنشاء لعبة تعليمية ذكية</h2>
+                    <h2 className="font-black text-white text-lg">إنشاء لعبة تعليمية ذكية</h2>
                     <p className="text-xs text-text-muted">اختر نوع اللعبة ومصدر المعلومات</p>
                   </div>
                 </div>
                 <button onClick={() => setShowCreateModal(false)} className="text-gray-400 hover:text-white"><X size={24} /></button>
              </div>
 
-             <div className="p-6 space-y-6">
+             <div className="modal-body space-y-6">
                 {/* Step 1: Basic Info */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-4">
@@ -417,20 +417,20 @@ export default function GamesPage() {
       {showResultsModal && (
         <div className="modal-overlay" >
           <div className="modal-content modal-content-lg" onClick={e => e.stopPropagation()}>
-             <div className="p-6 bg-gradient-to-r from-blue-500/20 to-transparent border-b border-white/5 flex items-center justify-between">
+             <div className="modal-header bg-gradient-to-r from-blue-500/10 to-transparent">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-blue-500 flex items-center justify-center text-white">
+                  <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400">
                     <BarChart3 size={24} />
                   </div>
                   <div>
-                    <h2 className="font-black text-white">نتائج الطلاب: {showResultsModal.title}</h2>
+                    <h2 className="font-black text-white text-lg">نتائج الطلاب: {showResultsModal.title}</h2>
                     <p className="text-xs text-blue-300/60">متابعة تفاعل الطلاب مع اللعبة</p>
                   </div>
                 </div>
                 <button onClick={() => setShowResultsModal(null)} className="text-gray-400 hover:text-white"><X size={24} /></button>
              </div>
              
-             <div className="p-6 max-h-[60vh] overflow-y-auto">
+             <div className="modal-body">
                 {loadingResults ? (
                   <div className="flex items-center justify-center p-20"><Loader2 className="animate-spin text-blue-500" /></div>
                 ) : results.length === 0 ? (

@@ -508,3 +508,21 @@ export const updateAssistantProfile = async (id: string, updates: Partial<Assist
     throw error;
   }
 };
+
+// 19. Subscribe to assistant profile changes in real-time
+export const subscribeToAssistantProfile = (assistantId: string, callback: (profile: AssistantProfile | null) => void) => {
+  if (!assistantId) return () => {};
+  const channel = supabase
+    .channel(`assistant_profile:${assistantId}`)
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: ASSISTANTS_PROFILES, filter: `id=eq.${assistantId}` },
+      async () => {
+        const { data } = await supabase.from(ASSISTANTS_PROFILES).select('*').eq('id', assistantId).maybeSingle();
+        if (data) callback(fromDB<AssistantProfile>(data));
+      }
+    )
+    .subscribe();
+  return () => supabase.removeChannel(channel);
+};
+

@@ -25,25 +25,35 @@ const encode = (str: string) => {
   }
 };
 
-export const getTeachers = async (): Promise<TeacherUser[]> => {
-  const { data, error } = await supabase.from(TEACHERS).select('*');
-  if (error) throw error;
-  
-  return manyFromDB<TeacherUser>(data).map(teacher => {
-    // Fallback deserialize from notes field if native columns are empty
-    const t = teacher as any;
-    if ((teacher.totalPaid === undefined || teacher.totalPaid === null) && t.notes) {
+const deserializeNotesFields = (teacher: TeacherUser): TeacherUser => {
+  const t = teacher as any;
+  if (!t) return teacher;
+  if (t.notes) {
+    if (teacher.totalPaid === undefined || teacher.totalPaid === null) {
       const tpMatch = t.notes.match(/\[TP:(\d+)\]/);
       if (tpMatch) teacher.totalPaid = parseInt(tpMatch[1]);
     }
-    if ((!teacher.paymentHistory || teacher.paymentHistory.length === 0) && t.notes) {
+    if (!teacher.paymentHistory || teacher.paymentHistory.length === 0) {
       const histMatch = t.notes.match(/\[HIST:(.*?)\]/);
       if (histMatch) {
          try { teacher.paymentHistory = JSON.parse(decode(histMatch[1])); } catch {}
       }
     }
-    return teacher;
-  });
+    if (!teacher.cancelReason) {
+      const crMatch = t.notes.match(/\[CR:(.*?)\]/);
+      if (crMatch) {
+        try { teacher.cancelReason = decode(crMatch[1]); } catch { teacher.cancelReason = crMatch[1]; }
+      }
+    }
+  }
+  return teacher;
+};
+
+export const getTeachers = async (): Promise<TeacherUser[]> => {
+  const { data, error } = await supabase.from(TEACHERS).select('*');
+  if (error) throw error;
+  
+  return manyFromDB<TeacherUser>(data).map(deserializeNotesFields);
 };
 
 export const getSuperAdmin = async (): Promise<TeacherUser | null> => {
@@ -54,19 +64,7 @@ export const getSuperAdmin = async (): Promise<TeacherUser | null> => {
     .maybeSingle();
   if (error) throw error;
   if (!data) return null;
-  const admin = fromDB<TeacherUser>(data);
-  const t = admin as any;
-  if ((admin.totalPaid === undefined || admin.totalPaid === null) && t.notes) {
-      const tpMatch = t.notes.match(/\[TP:(\d+)\]/);
-      if (tpMatch) admin.totalPaid = parseInt(tpMatch[1]);
-  }
-  if ((!admin.paymentHistory || admin.paymentHistory.length === 0) && t.notes) {
-      const histMatch = t.notes.match(/\[HIST:(.*?)\]/);
-      if (histMatch) {
-         try { admin.paymentHistory = JSON.parse(decode(histMatch[1])); } catch {}
-      }
-  }
-  return admin;
+  return deserializeNotesFields(fromDB<TeacherUser>(data));
 };
 
 export const getTeacherByUsername = async (username: string): Promise<TeacherUser | null> => {
@@ -76,7 +74,7 @@ export const getTeacherByUsername = async (username: string): Promise<TeacherUse
     .eq('username', username.trim().toLowerCase())
     .maybeSingle();
   if (error) throw error;
-  return data ? fromDB<TeacherUser>(data) : null;
+  return data ? deserializeNotesFields(fromDB<TeacherUser>(data)) : null;
 };
 
 export const getTeacherByCode = async (code: string): Promise<TeacherUser | null> => {
@@ -86,7 +84,7 @@ export const getTeacherByCode = async (code: string): Promise<TeacherUser | null
     .eq('code', code.trim().toUpperCase())
     .maybeSingle();
   if (error) throw error;
-  return data ? fromDB<TeacherUser>(data) : null;
+  return data ? deserializeNotesFields(fromDB<TeacherUser>(data)) : null;
 };
 
 export const getTeacherById = async (id: string): Promise<TeacherUser | null> => {
@@ -97,19 +95,7 @@ export const getTeacherById = async (id: string): Promise<TeacherUser | null> =>
     .maybeSingle();
   if (error) throw error;
   if (!data) return null;
-  const teacher = fromDB<TeacherUser>(data);
-  const t = teacher as any;
-  if ((teacher.totalPaid === undefined || teacher.totalPaid === null) && t.notes) {
-      const tpMatch = t.notes.match(/\[TP:(\d+)\]/);
-      if (tpMatch) teacher.totalPaid = parseInt(tpMatch[1]);
-  }
-  if ((!teacher.paymentHistory || teacher.paymentHistory.length === 0) && t.notes) {
-      const histMatch = t.notes.match(/\[HIST:(.*?)\]/);
-      if (histMatch) {
-         try { teacher.paymentHistory = JSON.parse(decode(histMatch[1])); } catch {}
-      }
-  }
-  return teacher;
+  return deserializeNotesFields(fromDB<TeacherUser>(data));
 };
 
 export const getTeacherByPhone = async (phone: string): Promise<TeacherUser | null> => {
@@ -119,25 +105,64 @@ export const getTeacherByPhone = async (phone: string): Promise<TeacherUser | nu
     .eq('phone', phone.trim())
     .maybeSingle();
   if (error) throw error;
-  return data ? fromDB<TeacherUser>(data) : null;
+  return data ? deserializeNotesFields(fromDB<TeacherUser>(data)) : null;
 };
 
 export const saveTeacher = async (teacher: Omit<TeacherUser, 'id'> & { id?: string }): Promise<string> => {
+  const teacherObj = { ...teacher } as any;
+  const cancelReason = teacherObj.cancelReason;
+  const totalPaid = teacherObj.totalPaid;
+  const paymentHistory = teacherObj.paymentHistory;
+
+  let notes = teacherObj.notes || '';
+
+  // Serialize cancelReason into notes
+  if (cancelReason !== undefined) {
+    notes = notes.replace(/\[CR:.*?\]/g, '').trim();
+    if (cancelReason) {
+      notes = `${notes} [CR:${encode(cancelReason)}]`.trim();
+    }
+  }
+
+  // Serialize totalPaid into notes
+  if (totalPaid !== undefined && totalPaid !== null) {
+    notes = notes.replace(/\[TP:\d+\]/g, '').trim();
+    notes = `${notes} [TP:${totalPaid}]`.trim();
+  }
+
+  // Serialize paymentHistory into notes
+  if (paymentHistory !== undefined && paymentHistory !== null) {
+    notes = notes.replace(/\[HIST:.*?\]/g, '').trim();
+    if (paymentHistory.length > 0) {
+      notes = `${notes} [HIST:${encode(JSON.stringify(paymentHistory))}]`.trim();
+    }
+  }
+
+  teacherObj.notes = notes;
+
   const payload = toDB({
-    ...teacher,
-    username: (teacher.username || '').trim().toLowerCase(),
-    code: teacher.code ? teacher.code.trim().toUpperCase() : undefined,
+    ...teacherObj,
+    username: (teacherObj.username || '').trim().toLowerCase(),
+    code: teacherObj.code ? teacherObj.code.trim().toUpperCase() : undefined,
   });
   Object.keys(payload).forEach(k => payload[k] === undefined && delete payload[k]);
 
-  await checkUserUniqueness(teacher.code, teacher.username, teacher.id);
+  // Strip keys that do NOT exist as native columns in the Supabase 'teachers' table
+  delete payload.cancel_reason;
+  delete payload.cancelReason;
+  delete payload.total_paid;
+  delete payload.totalPaid;
+  delete payload.payment_history;
+  delete payload.paymentHistory;
 
-  if (teacher.id) {
+  await checkUserUniqueness(teacherObj.code, teacherObj.username, teacherObj.id);
+
+  if (teacherObj.id) {
     const { error } = await supabase
       .from(TEACHERS)
-      .upsert([{ ...payload, id: teacher.id, created_at: payload.created_at ?? Date.now(), is_active: payload.is_active ?? true }], { onConflict: 'id' });
+      .upsert([{ ...payload, id: teacherObj.id, created_at: payload.created_at ?? Date.now(), is_active: payload.is_active ?? true }], { onConflict: 'id' });
     if (error) throw error;
-    return teacher.id;
+    return teacherObj.id;
   } else {
     const newId = crypto.randomUUID();
     const { data, error } = await supabase

@@ -6,7 +6,7 @@ import { saveExam, getExam, uploadFileToStorage, dispatchNotification } from '@/
 import { showToast } from '@/lib/toast';
 import { generateId } from '@/lib/utils';
 import type { Question, Exam } from '@/types';
-import { PlusCircle, Trash2, Save, ChevronDown, ChevronUp, ArrowRight, Image as ImageIcon, FileText, Upload, X, Loader2 } from 'lucide-react';
+import { PlusCircle, Trash2, Save, ChevronDown, ChevronUp, ArrowRight, Image as ImageIcon, FileText, Upload, X, Loader2, Settings, School, HelpCircle } from 'lucide-react';
 import { GlobalFileUpload } from '@/components/GlobalFileUpload';
 
 type QForm = Question & { expanded?: boolean };
@@ -232,9 +232,10 @@ function EditExamContent() {
         </button>
       </div>
 
-      {/* Settings Card */}
       <div className="card-base p-5">
-        <h2 className="font-cairo font-bold mb-4" style={{ color: 'var(--gold)' }}>⚙️ إعدادات الاختبار</h2>
+        <h2 className="font-cairo font-bold mb-4 flex items-center gap-2" style={{ color: 'var(--gold)' }}>
+          <Settings size={18} /> إعدادات الاختبار
+        </h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="sm:col-span-2">
             <label className="block text-sm mb-1.5 text-muted">عنوان الاختبار *</label>
@@ -257,7 +258,7 @@ function EditExamContent() {
               onChange={e => setPassScore(+e.target.value)} className="input-base" />
           </div>
           <div>
-            <label className="block text-sm mb-1.5 text-muted">🏫 تخصيص لفصل (اختياري)</label>
+            <label className="block text-sm mb-1.5 text-muted">تخصيص لفصل (اختياري)</label>
             <select value={targetGroup} onChange={e => setTargetGroup(e.target.value)} className="input-base">
               <option value="">— جميع الطلاب —</option>
               {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
@@ -284,10 +285,10 @@ function EditExamContent() {
           )}
           {/* Toggles */}
           {[
-            { label: '🔀 ترتيب عشوائي للأسئلة', value: shuffle, set: setShuffle },
-            { label: '🔁 السماح بإعادة الاختبار', value: allowRetake, set: setAllowRetake },
-            { label: '👁 إظهار الإجابات بعد الانتهاء', value: showAnswers, set: setShowAnswers },
-            { label: '✅ نشر الاختبار الآن', value: published, set: setPublished },
+            { label: 'ترتيب عشوائي للأسئلة', value: shuffle, set: setShuffle },
+            { label: 'السماح بإعادة الاختبار', value: allowRetake, set: setAllowRetake },
+            { label: 'إظهار الإجابات بعد الانتهاء', value: showAnswers, set: setShowAnswers },
+            { label: 'نشر الاختبار الآن', value: published, set: setPublished },
           ].map(({ label, value, set }) => (
             <div key={label} className="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/5">
               <span className="text-sm">{label}</span>
@@ -302,7 +303,7 @@ function EditExamContent() {
           <div className="sm:col-span-2 p-3 rounded-xl bg-white/5 border border-white/5"
             style={{ background: 'rgba(255,197,24,0.05)', border: '1px solid rgba(245,197,24,0.1)' }}>
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-bold text-gold">🎲 عدد الأسئلة العشوائية لكل طالب</span>
+              <span className="text-sm font-bold text-gold">عدد الأسئلة العشوائية لكل طالب</span>
               <span className="text-[10px] bg-gold/10 text-gold px-2 py-0.5 rounded-md">ميزة متقدمة</span>
             </div>
             <p className="text-[11px] text-gray-400 mb-2">
@@ -382,7 +383,9 @@ function EditExamContent() {
       {/* Questions */}
       <div className="card-base p-5">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="font-cairo font-bold gold-text">❓ الأسئلة ({questions.length})</h2>
+          <h2 className="font-cairo font-bold flex items-center gap-2" style={{ color: 'var(--gold)' }}>
+            <HelpCircle size={18} /> الأسئلة ({questions.length})
+          </h2>
           <div className="flex gap-2">
             <button onClick={addMCQ} className="btn-accent text-sm py-2 px-3"><PlusCircle size={14} /> اختياري</button>
             <button onClick={addTF} className="btn-accent text-sm py-2 px-3 bg-blue-600 border-blue-600 hover:bg-blue-700 hover:border-blue-700 text-white"><PlusCircle size={14} /> صح/خطأ</button>
@@ -403,7 +406,7 @@ function EditExamContent() {
                   {idx + 1}
                 </div>
                 <span className="text-sm font-medium flex-1">
-                  {q.type === 'essay' ? '✍️ سؤال مقالي' : q.type === 'tf' ? '⚖️ سؤال صح أو خطأ' : '⭕ سؤال اختياري متعدد'}
+                  {q.type === 'essay' ? 'سؤال مقالي' : q.type === 'tf' ? 'سؤال صح أو خطأ' : 'سؤال اختياري متعدد'}
                 </span>
                 <button onClick={() => updateQ(q.id, { expanded: !q.expanded })} className="opacity-50 hover:opacity-100 p-1">
                   {q.expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
@@ -472,7 +475,7 @@ function EditExamContent() {
                   {q.type === 'mcq' && (
                     <>
                       <div>
-                        <label className="block text-xs mb-2 font-bold gold-text">✅ الإجابات (اختر الصحيحة)</label>
+                        <label className="block text-xs mb-2 font-bold gold-text">الإجابات (اختر الصحيحة)</label>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                           {(q.options || []).map((opt, i) => (
                             <div key={i} onClick={() => updateQ(q.id, { correct: i })}

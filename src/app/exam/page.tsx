@@ -8,7 +8,7 @@ import { showToast } from '@/lib/toast';
 import imageCompression from 'browser-image-compression';
 import { compressPDFWithILovePDF } from '@/lib/ilovepdf-client';
 
-import { Clock, CheckCircle, XCircle, AlertTriangle, User, ArrowLeft, ArrowRight, Send, Upload, FileText, Image as ImageIcon, X, AlertCircle, Eye, Loader2 } from 'lucide-react';
+import { Clock, CheckCircle, XCircle, AlertTriangle, User, ArrowLeft, ArrowRight, Send, Upload, FileText, Image as ImageIcon, X, AlertCircle, Eye, Loader2, Trophy, Lock, ClipboardList, BookOpen } from 'lucide-react';
 import { useFilePreview, FilePreviewModal } from '@/components/FilePreviewModal';
 import type { Exam, Question, Attempt, EssayAnswer } from '@/types';
 
@@ -18,7 +18,7 @@ export default function ExamPage() {
   return (
     <Suspense fallback={
       <div className="min-h-screen flex items-center justify-center bg-dark">
-        <div className="text-center"><div className="text-5xl mb-3 animate-spin duration-1000">⏳</div><p className="text-muted">جاري التحميل...</p></div>
+        <div className="text-center"><Loader2 className="animate-spin text-gold mx-auto mb-3" size={40} /><p className="text-muted">جاري التحميل...</p></div>
       </div>
     }>
       <ExamContent />
@@ -307,7 +307,7 @@ const ExamContent = () => {
 
   if (phase === 'loading') return (
     <div className="min-h-screen flex items-center justify-center bg-dark">
-      <div className="text-center"><div className="text-5xl mb-3 animate-spin duration-1000">⏳</div><p className="text-muted">جاري تحميل الاختبار...</p></div>
+      <div className="text-center"><Loader2 className="animate-spin text-gold mx-auto mb-3" size={40} /><p className="text-muted">جاري تحميل الاختبار...</p></div>
     </div>
   );
 
@@ -315,7 +315,9 @@ const ExamContent = () => {
     <div className="min-h-screen flex items-center justify-center p-4 bg-dark">
       <div className="card-base p-6 sm:p-8 w-full max-w-sm text-center animate-scale-in blur-backdrop relative overflow-hidden">
         <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-gold to-accent" />
-        <div className="text-4xl sm:text-5xl mb-4">🔐</div>
+        <div className="w-16 h-16 bg-gold/10 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-gold/20">
+          <Lock size={30} className="text-gold" />
+        </div>
         <h2 className="font-cairo font-black text-lg sm:text-xl mb-1 gold-text">{exam?.title}</h2>
         <p className="text-xs sm:text-sm mb-6 text-muted">أدخل كودك للبدء</p>
         <input type="text" value={studentCode}
@@ -324,7 +326,7 @@ const ExamContent = () => {
           placeholder="كود الطالب..." className="input-base text-center text-lg sm:text-xl font-mono tracking-[0.2em] sm:tracking-[0.3em] mb-2 rtl"
           autoFocus />
         {codeError && <p className="text-sm mb-2 text-red-500 animate-pulse">{codeError}</p>}
-        <button onClick={handleLogin} className="btn-gold w-full justify-center py-3.5 mt-4 text-sm sm:text-base">🚀 تأكيد والدخول</button>
+        <button onClick={handleLogin} className="btn-gold w-full justify-center py-3.5 mt-4 text-sm sm:text-base">تأكيد والدخول</button>
       </div>
     </div>
   );
@@ -333,7 +335,9 @@ const ExamContent = () => {
     <div className="min-h-screen flex items-center justify-center p-4 bg-dark">
       <div className="card-base p-6 sm:p-8 w-full max-w-md animate-scale-in blur-backdrop">
         <div className="text-center mb-6">
-          <div className="text-4xl sm:text-5xl mb-3 drop-shadow-lg">📋</div>
+          <div className="w-16 h-16 bg-gold/10 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-gold/20">
+            <ClipboardList size={30} className="text-gold" />
+          </div>
           <h2 className="font-cairo font-black text-xl sm:text-2xl gold-text mb-1">{exam.title}</h2>
           {exam.subject && <span className="text-[10px] sm:text-xs px-3 py-1 bg-white/5 rounded-full text-muted">{exam.subject}</span>}
         </div>
@@ -371,10 +375,10 @@ const ExamContent = () => {
 
         <div className="space-y-2.5 sm:space-y-3 mb-8">
           {[
-            { label: 'الطالب', value: student?.name, icon: '👤' },
-            { label: 'عدد الأسئلة', value: `${questions.length} أسئلة`, icon: '📝' },
-            { label: 'مدة الاختبار', value: `${exam.duration} دقيقة`, icon: '⏳' },
-            { label: 'درجة النجاح', value: `${exam.passScore}%`, icon: '🎯' },
+            { label: 'الطالب', value: student?.name, icon: <User size={16} className="text-gold" /> },
+            { label: 'عدد الأسئلة', value: `${questions.length} أسئلة`, icon: <FileText size={16} className="text-gold" /> },
+            { label: 'مدة الاختبار', value: `${exam.duration} دقيقة`, icon: <Clock size={16} className="text-gold" /> },
+            { label: 'درجة النجاح', value: `${exam.passScore}%`, icon: <CheckCircle size={16} className="text-gold" /> },
           ].map(({ label, value, icon }) => (
             <div key={label} className="flex justify-between items-center p-3 rounded-xl bg-white/5 border border-white/5">
               <span className="text-muted text-xs sm:text-sm flex items-center gap-2">{icon} {label}</span>
@@ -621,7 +625,15 @@ const ExamContent = () => {
             <span className="text-[10px] sm:text-xs mt-1 sm:mt-2 text-muted font-bold">{isEssayPresent ? 'بانتظار المقالي' : scoreLabel(score)}</span>
           </div>
 
-          <div className="text-4xl sm:text-5xl mb-3">{isEssayPresent ? '📝' : (passed ? '🏆' : '😔')}</div>
+          <div className="mb-4">
+            {isEssayPresent ? (
+              <FileText size={48} className="text-accent mx-auto" />
+            ) : passed ? (
+              <Trophy size={48} className="text-green-500 mx-auto" />
+            ) : (
+              <AlertCircle size={48} className="text-red-500 mx-auto" />
+            )}
+          </div>
           <h2 className="font-cairo font-black text-2xl sm:text-3xl mb-2" style={{ color: isEssayPresent ? 'var(--accent)' : (passed ? 'var(--green)' : 'var(--red)') }}>
             {isEssayPresent ? 'تم تسليم الإجابات' : (passed ? 'مبروك! ناجح' : 'للأسف! راسب')}
           </h2>

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { getSettings, saveRegistrationRequest, uploadFileToStorage, dispatchNotification, getSuperAdmin } from '@/lib/db';
+import { getSettings, saveRegistrationRequest, uploadFileToStorage, dispatchNotification, getSuperAdmin, usePromoCode } from '@/lib/db';
 import { FileProcessor } from '@/lib/file-processor';
 import { useFileProcessingStore } from '@/lib/store';
 import type { Settings, TeacherUser } from '@/types';
@@ -10,6 +10,7 @@ import { GraduationCap, ShieldCheck, Mail, Phone, Calculator, CheckCircle2, User
 import { GlobalFileUpload } from '@/components/GlobalFileUpload';
 import { PDFCompressionModal } from '@/components/PDFCompressionModal';
 import ImageCropperModal from '@/components/ImageCropperModal';
+import { PromoCodeInput } from '@/components/PromoCodeInput';
 
 export default function TeacherRegisterPage() {
   const { queue } = useFileProcessingStore();
@@ -78,6 +79,8 @@ export default function TeacherRegisterPage() {
     return () => window.removeEventListener('fileUploaded', handleUploaded);
   }, []);
 
+  const [appliedPromo, setAppliedPromo] = useState<{ code: string; discountAmount: number; finalPrice: number } | null>(null);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.name || !form.phone || !form.subject || !superAdmin) {
@@ -87,19 +90,29 @@ export default function TeacherRegisterPage() {
 
     setSubmitting(true);
     try {
+      const originalPrice = form.subType === 'monthly' ? (settings?.monthlyPrice || 0) : (settings?.yearlyPrice || 0);
+      const finalPrice = appliedPromo ? appliedPromo.finalPrice : originalPrice;
+
       const requestData: any = {
         ...form,
+        subPrice: finalPrice,
+        promoCode: appliedPromo?.code || null,
+        discountAmount: appliedPromo?.discountAmount || 0,
         teacherId: superAdmin.id,
         status: 'pending',
         createdAt: Date.now(),
       };
       
       await saveRegistrationRequest(requestData);
+
+      if (appliedPromo?.code) {
+        await usePromoCode(appliedPromo.code);
+      }
       
       try {
         await dispatchNotification({
           teacherId: superAdmin.id,
-          msg: `طلب انضمام معلم جديد: ${form.name} (${form.subject})`,
+          msg: `طلب انضمام معلم جديد: ${form.name} (${form.subject})${appliedPromo ? ` [كود خصم: ${appliedPromo.code}]` : ''}`,
           targetRoles: ['super_admin'],
           channels: { inApp: true, whatsapp: false },
           actionPath: '/admin/teachers'
@@ -250,6 +263,13 @@ export default function TeacherRegisterPage() {
                 </label>
               </div>
             </div>
+
+            <PromoCodeInput
+              role="teacher"
+              originalPrice={form.subType === 'monthly' ? (settings?.monthlyPrice || 0) : (settings?.yearlyPrice || 0)}
+              onApply={(res) => setAppliedPromo(res)}
+              onClear={() => setAppliedPromo(null)}
+            />
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
               {/* Profile Image with Cropper */}

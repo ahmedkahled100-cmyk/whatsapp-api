@@ -62,20 +62,18 @@ export const saveExam = async (exam: Omit<Exam, 'id'> & { id?: string }): Promis
     if (raw[col] !== undefined && raw[col] !== null) payload[col] = raw[col];
   });
 
-  if (exam.id) {
-    const { error } = await supabase.from(EXAMS).update(payload).eq('id', exam.id);
-    if (error) throw error;
-    return exam.id;
-  } else {
-    const newId = crypto.randomUUID();
-    const { data, error } = await supabase
-      .from(EXAMS)
-      .insert([{ ...payload, id: newId, created_at: payload.created_at ?? new Date().toISOString() }])
-      .select('id')
-      .single();
-    if (error) throw error;
-    return data.id;
+  if (!payload.id) {
+    payload.id = crypto.randomUUID();
+    payload.created_at = payload.created_at ?? new Date().toISOString();
   }
+  
+  const { data, error } = await supabase
+    .from(EXAMS)
+    .upsert(payload)
+    .select('id')
+    .single();
+  if (error) throw error;
+  return data?.id || payload.id;
 };
 
 
@@ -145,17 +143,13 @@ export const saveAttempt = async (attempt: Omit<Attempt, 'id'> & { id?: string }
   const payload = toDB({ ...attempt });
   Object.keys(payload).forEach(k => payload[k] === undefined && delete payload[k]);
 
-  if (attempt.id) {
-    const { error } = await supabase.from(ATTEMPTS).update(payload).eq('id', attempt.id);
-    if (error) throw error;
-    return attempt.id;
-  } else {
-    const newId = crypto.randomUUID();
-    const { data, error } = await supabase
-      .from(ATTEMPTS).insert([{ ...payload, id: newId }]).select().single();
-    if (error) throw error;
-    return data.id;
+  if (!payload.id) {
+    payload.id = crypto.randomUUID();
   }
+
+  const { data, error } = await supabase.from(ATTEMPTS).upsert(payload).select('id').single();
+  if (error) throw error;
+  return data?.id || payload.id;
 };
 
 export const deleteAttempt = async (id: string) => {

@@ -471,3 +471,45 @@ export interface AssistantJobApplication {
   job?: AssistantJob;
   assistant?: AssistantProfile;
 }
+
+export interface FileFolder {
+  id: string;
+  teacherId: string;
+  name: string;
+  color?: string;
+  description?: string;
+  driveFolderId?: string; // If synced with Google Drive
+  createdAt: number;
+}
+
+
+export interface TeacherFile {
+  id: string;
+  teacherId: string;
+  name: string;
+  url: string;
+  fileType: 'pdf' | 'image' | 'video' | 'audio' | 'doc' | 'archive' | 'other';
+  fileSize: number; // in bytes
+  extension: string;
+  folderId?: string; // empty or null means 'no folder'
+  isShared: boolean;
+  driveFileId?: string; // If synced with Google Drive
+  driveWebViewLink?: string;
+  createdAt: number;
+  updatedAt?: number;
+}
+
+export interface PromoCode {
+  id: string;
+  code: string; // Uppercase unique code e.g. "AN2026", "OFF50"
+  discountType: 'percentage' | 'fixed'; // % or EGP
+  discountValue: number; // e.g., 20 (%) or 100 (EGP)
+  maxUses: number; // 0 for unlimited
+  usedCount: number;
+  targetRole: 'all' | 'teacher' | 'student' | 'assistant';
+  expiryDate?: number | null;
+  isActive: boolean;
+  createdAt: number;
+}
+
+

@@ -8,7 +8,8 @@ import {
   dispatchNotification, 
   getStudentByPhoneAnywhere,
   uploadFileToStorage,
-  getSettings
+  getSettings,
+  usePromoCode
 } from '@/lib/db';
 import { FileProcessor } from '@/lib/file-processor';
 import { useFileProcessingStore } from '@/lib/store';
@@ -18,6 +19,7 @@ import { showToast } from '@/lib/toast';
 import { GraduationCap, ShieldCheck, Mail, Phone, Calculator, CheckCircle2, User, FileText, Upload, Image as ImageIcon, Loader2 } from 'lucide-react';
 import { PDFCompressionModal } from '@/components/PDFCompressionModal';
 import { GlobalFileUpload } from '@/components/GlobalFileUpload';
+import { PromoCodeInput } from '@/components/PromoCodeInput';
 
 export default function RegisterPage() {
   return (
@@ -138,6 +140,8 @@ function RegisterForm() {
     }
   }, [form.phone]);
 
+  const [appliedPromo, setAppliedPromo] = useState<{ code: string; discountAmount: number; finalPrice: number } | null>(null);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.name || !form.phone || !form.parentPhone || !selectedTeacherId) {
@@ -154,9 +158,6 @@ function RegisterForm() {
         const existing = await getStudentByPhoneAnywhere(form.phone);
         if (existing) {
           existingCode = existing.code;
-          // IMPORTANT: DO NOT set studentId = existing.id here. 
-          // If we pass an existing ID for a different teacher, it will overwrite the old student record.
-          
           // Ensure image is unified if no new one was uploaded
           if (!form.imageUrl && existing.imageUrl) {
             form.imageUrl = existing.imageUrl;
@@ -166,8 +167,13 @@ function RegisterForm() {
         console.warn('Unified code check failed:', e);
       }
 
+      const finalPrice = appliedPromo ? appliedPromo.finalPrice : form.subPrice;
+
       const requestData: any = {
         ...form,
+        subPrice: finalPrice,
+        promoCode: appliedPromo?.code || null,
+        discountAmount: appliedPromo?.discountAmount || 0,
         teacherId: selectedTeacherId,
         studentId,
         existingCode,
@@ -176,11 +182,15 @@ function RegisterForm() {
       };
       
       await saveRegistrationRequest(requestData);
+
+      if (appliedPromo?.code) {
+        await usePromoCode(appliedPromo.code);
+      }
       
       try {
         await dispatchNotification({
           teacherId: selectedTeacherId,
-          msg: `طلب اشتراك جديد: ${form.name} (${form.subType})`,
+          msg: `طلب اشتراك جديد: ${form.name} (${form.subType})${appliedPromo ? ` [كود خصم: ${appliedPromo.code}]` : ''}`,
           targetRoles: ['teacher'],
           channels: { inApp: true, whatsapp: false },
           actionPath: '/teacher/subscriptions'
@@ -367,6 +377,13 @@ function RegisterForm() {
                   </label>
                 </div>
               </div>
+
+              <PromoCodeInput
+                role="student"
+                originalPrice={form.subPrice}
+                onApply={(res) => setAppliedPromo(res)}
+                onClear={() => setAppliedPromo(null)}
+              />
 
               <div className="relative">
                 <FileText size={18} className="absolute top-3.5 right-4 text-gray-400" />

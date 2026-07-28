@@ -5,11 +5,12 @@ import { useMemo } from 'react';
 import Link from 'next/link';
 import { useTeacherStore } from '@/lib/store';
 import { formatDateAr, scoreLabel, gradeColor } from '@/lib/utils';
-import { Users, FileText, TrendingUp, Clock, PlusCircle, Eye, Share2, ChevronLeft, AlertCircle } from 'lucide-react';
+import { Users, FileText, TrendingUp, Clock, PlusCircle, Eye, Share2, ChevronLeft, AlertCircle, Award, Inbox, DollarSign, FileEdit, BarChart2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { getStaffHomeSettings } from '@/lib/db/app-settings';
 import type { AppHomeSettings } from '@/lib/db/app-settings';
 import { StaffHomeSlider } from '@/components/StaffHomeSlider';
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
 export default function DashboardPage() {
   const { user, exams, students, attempts, groups, notifications, registrationRequests } = useTeacherStore();
@@ -45,6 +46,31 @@ export default function DashboardPage() {
     ).slice(0, 8),
     [attempts]
   );
+
+  const chartData = useMemo(() => {
+    const last7Days = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      return d.toISOString().split('T')[0];
+    }).reverse();
+
+    const counts = attempts.reduce((acc, a) => {
+      if (a.submittedAt) {
+        const dateStr = a.submittedAt.split('T')[0];
+        acc[dateStr] = (acc[dateStr] || 0) + 1;
+      }
+      return acc;
+    }, {} as Record<string, number>);
+
+    return last7Days.map(date => {
+      const d = new Date(date);
+      const label = d.toLocaleDateString('ar-EG', { month: 'short', day: 'numeric' });
+      return {
+        date: label,
+        count: counts[date] || 0,
+      };
+    });
+  }, [attempts]);
 
   const copyStudentLink = () => {
     const url = `${window.location.origin}/student`;
@@ -136,12 +162,12 @@ export default function DashboardPage() {
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
         {[
-          { id: 'exams', label: 'اختبار', value: exams.length, icon: '📋', color: 'var(--accent)', sub: `${exams.filter(e => e.published).length} منشور`, href: '/teacher/exams' },
-          { id: 'students', label: 'طالب', value: students.length, icon: '👥', color: 'var(--green)', sub: `${groups.length} فصل`, href: '/teacher/students' },
-          { id: 'results', label: 'محاولة', value: attempts.length, icon: '📝', color: 'var(--gold)', sub: `${attempts.filter(a => a.completed).length} مكتملة`, href: '/teacher/results' },
-          { id: 'essays', label: 'مقالي ينتظر', value: stats.pendingEssays, icon: '⏳', color: 'var(--red)', sub: `معدل النجاح ${stats.passRate}%`, href: '/teacher/essays' },
-          { id: 'requests', label: 'طلبات معلقة', value: stats.pendingRequests, icon: '📩', color: '#8B5CF6', sub: 'تسجيل وتجديد', href: '/teacher/subscriptions' },
-          { id: 'subscriptions', label: 'إجمالي الاشتراكات', value: `${stats.totalRevenue} ج.م`, icon: '💰', color: '#10B981', sub: 'إيرادات الطلاب', href: '/teacher/subscriptions' },
+          { id: 'exams', label: 'اختبار', value: exams.length, icon: FileText, color: 'var(--accent)', sub: `${exams.filter(e => e.published).length} منشور`, href: '/teacher/exams' },
+          { id: 'students', label: 'طالب', value: students.length, icon: Users, color: 'var(--green)', sub: `${groups.length} فصل`, href: '/teacher/students' },
+          { id: 'results', label: 'محاولة', value: attempts.length, icon: Award, color: 'var(--gold)', sub: `${attempts.filter(a => a.completed).length} مكتملة`, href: '/teacher/results' },
+          { id: 'essays', label: 'مقالي ينتظر', value: stats.pendingEssays, icon: Clock, color: 'var(--red)', sub: `معدل النجاح ${stats.passRate}%`, href: '/teacher/essays' },
+          { id: 'requests', label: 'طلبات معلقة', value: stats.pendingRequests, icon: Inbox, color: '#8B5CF6', sub: 'تسجيل وتجديد', href: '/teacher/subscriptions' },
+          { id: 'subscriptions', label: 'إجمالي الاشتراكات', value: `${stats.totalRevenue} ج.م`, icon: DollarSign, color: '#10B981', sub: 'إيرادات الطلاب', href: '/teacher/subscriptions' },
         ].filter(s => {
           if (s.id === 'requests') return hasPermission('subscriptions');
           if (s.id === 'results') return hasPermission('results');
@@ -155,31 +181,65 @@ export default function DashboardPage() {
                 <div className="text-sm font-medium" style={{ color: 'var(--text-muted)' }}>{s.label}</div>
                 <div className="text-xs mt-1 opacity-60" style={{ color: 'var(--text-muted)' }}>{s.sub}</div>
               </div>
-              <div className="text-3xl opacity-80">{s.icon}</div>
+              <div className="opacity-80 mt-1">
+                <s.icon size={24} style={{ color: s.color }} />
+              </div>
             </div>
           </Link>
         ))}
       </div>
 
-      {/* Score Stats */}
+      {/* Analytics & Charts */}
       {hasPermission('analytics') && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div className="stat-card text-center">
-            <div className="text-4xl font-cairo font-black" style={{ color: gradeColor(stats.avgScore, 50) }}>
-              {stats.avgScore}%
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+          {/* Main Chart */}
+          <div className="card-base p-5 lg:col-span-2 flex flex-col justify-between" style={{ minHeight: 250 }}>
+            <div>
+              <h3 className="font-cairo font-bold text-sm mb-4 flex items-center gap-2" style={{ color: 'var(--gold)' }}>
+                <TrendingUp size={16} /> نشاط حل الاختبارات (آخر 7 أيام)
+              </h3>
             </div>
-            <div className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>متوسط الدرجات</div>
-            <div className="badge mt-2" style={{ background: 'rgba(16,185,129,0.1)', color: 'var(--green)' }}>
-              {scoreLabel(stats.avgScore)}
+            <div className="h-44 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="colorCount" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="var(--gold)" stopOpacity={0.2}/>
+                      <stop offset="95%" stopColor="var(--gold)" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <XAxis dataKey="date" stroke="var(--text-muted)" fontSize={10} tickLine={false} axisLine={false} />
+                  <YAxis stroke="var(--text-muted)" fontSize={10} tickLine={false} axisLine={false} allowDecimals={false} />
+                  <Tooltip 
+                    contentStyle={{ background: 'var(--dark3)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '8px', direction: 'rtl' }}
+                    labelStyle={{ color: 'var(--text)', fontSize: 11, fontWeight: 'bold' }}
+                    itemStyle={{ color: 'var(--gold)', fontSize: 11 }}
+                  />
+                  <Area type="monotone" dataKey="count" stroke="var(--gold)" strokeWidth={2} fillOpacity={1} fill="url(#colorCount)" name="المحاولات" />
+                </AreaChart>
+              </ResponsiveContainer>
             </div>
           </div>
-          <div className="stat-card text-center">
-            <div className="text-4xl font-cairo font-black" style={{ color: stats.passRate >= 50 ? 'var(--green)' : 'var(--red)' }}>
-              {stats.passRate}%
+
+          {/* Metrics Grid */}
+          <div className="grid grid-cols-1 gap-3">
+            <div className="stat-card flex flex-col items-center justify-center text-center">
+              <div className="text-4xl font-cairo font-black" style={{ color: gradeColor(stats.avgScore, 50) }}>
+                {stats.avgScore}%
+              </div>
+              <div className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>متوسط الدرجات</div>
+              <div className="badge mt-2" style={{ background: 'rgba(16,185,129,0.1)', color: 'var(--green)' }}>
+                {scoreLabel(stats.avgScore)}
+              </div>
             </div>
-            <div className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>معدل النجاح</div>
-            <div className="text-xs mt-2 opacity-60" style={{ color: 'var(--text-muted)' }}>
-              من {attempts.filter(a => a.completed).length} محاولة
+            <div className="stat-card flex flex-col items-center justify-center text-center">
+              <div className="text-4xl font-cairo font-black" style={{ color: stats.passRate >= 50 ? 'var(--green)' : 'var(--red)' }}>
+                {stats.passRate}%
+              </div>
+              <div className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>معدل النجاح</div>
+              <div className="text-[10px] mt-2 opacity-60" style={{ color: 'var(--text-muted)' }}>
+                من {attempts.filter(a => a.completed).length} محاولة
+              </div>
             </div>
           </div>
         </div>
@@ -189,16 +249,20 @@ export default function DashboardPage() {
       {hasPermission('exams') && (
         <div className="card-base p-5">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="font-cairo font-bold text-base" style={{ color: 'var(--gold)' }}>📋 آخر الاختبارات</h3>
+            <h3 className="font-cairo font-bold text-base flex items-center gap-2" style={{ color: 'var(--gold)' }}>
+              <FileText size={18} /> آخر الاختبارات
+            </h3>
             <Link href="/teacher/exams" className="text-xs flex items-center gap-1" style={{ color: 'var(--text-muted)' }}>
               عرض الكل <ChevronLeft size={13} />
             </Link>
           </div>
           {recentExams.length === 0 ? (
             <div className="text-center py-8" style={{ color: 'var(--text-muted)' }}>
-              <div className="text-4xl mb-2">📝</div>
+              <div className="w-16 h-16 mx-auto mb-3 opacity-20 flex items-center justify-center">
+                <FileEdit size={40} />
+              </div>
               <p className="text-sm">لا توجد اختبارات بعد</p>
-              <Link href="/teacher/exams/create" className="btn-gold text-sm mt-3 inline-flex py-2 px-4">
+              <Link href="/teacher/exams/create" className="btn-gold text-sm mt-4 inline-flex py-2 px-4">
                 <PlusCircle size={14} /> أنشئ أول اختبار
               </Link>
             </div>
@@ -217,7 +281,7 @@ export default function DashboardPage() {
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0">
                       <span className={`badge ${exam.published ? 'badge-green' : 'badge-red'}`}>
-                        {exam.published ? '✅ منشور' : '📝 مسودة'}
+                        {exam.published ? 'منشور' : 'مسودة'}
                       </span>
                       <Link href={`/teacher/exams/view?id=${exam.id}`} className="btn-outline text-xs py-1 px-2">
                         <Eye size={12} />
@@ -235,7 +299,9 @@ export default function DashboardPage() {
       {hasPermission('students') && recentAttempts.length > 0 && (
         <div className="card-base p-5">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="font-cairo font-bold text-base" style={{ color: 'var(--gold)' }}>📊 آخر النتائج</h3>
+            <h3 className="font-cairo font-bold text-base flex items-center gap-2" style={{ color: 'var(--gold)' }}>
+              <BarChart2 size={18} /> آخر النتائج
+            </h3>
             <Link href="/teacher/results" className="text-xs flex items-center gap-1" style={{ color: 'var(--text-muted)' }}>
               عرض الكل <ChevronLeft size={13} />
             </Link>
@@ -265,7 +331,7 @@ export default function DashboardPage() {
                       </td>
                       <td className="px-4 py-3">
                         <span className={`badge ${att.passed ? 'badge-green' : 'badge-red'}`}>
-                          {att.passed ? '✅ ناجح' : '❌ راسب'}
+                          {att.passed ? 'ناجح' : 'راسب'}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-xs opacity-60">{att.submittedAt ? formatDateAr(att.submittedAt) : '—'}</td>
@@ -289,8 +355,8 @@ export default function DashboardPage() {
                   <div className="text-xs opacity-60 truncate">{att.examTitle}</div>
                   <div className="flex justify-between items-center pt-2 border-t border-white/5">
                     <span className={`badge ${att.passed ? 'badge-green' : 'badge-red'}`}>
-                      {att.passed ? '✅ ناجح' : '❌ راسب'}
-                    </span>
+                      {att.passed ? 'ناجح' : 'راسب'
+                    }</span>
                     <span className="text-[10px] opacity-40">{att.submittedAt ? formatDateAr(att.submittedAt) : '—'}</span>
                   </div>
                 </div>

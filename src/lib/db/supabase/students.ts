@@ -392,19 +392,18 @@ export const saveGroup = async (group: Omit<Group, 'id'> & { id?: string }): Pro
   // Sanitize
   Object.keys(payload).forEach(k => payload[k] === undefined && delete payload[k]);
 
-  if (group.id) {
-    const { error } = await supabase.from(GROUPS).update(payload).eq('id', group.id);
-    if (error) throw error;
-    return group.id;
-  } else {
-    const { data, error } = await supabase
-      .from(GROUPS)
-      .insert([{ ...payload, created_at: new Date().toISOString() }])
-      .select()
-      .single();
-    if (error) throw error;
-    return data.id;
+  if (!payload.id) {
+    payload.id = crypto.randomUUID();
+    payload.created_at = new Date().toISOString();
   }
+
+  const { data, error } = await supabase
+    .from(GROUPS)
+    .upsert(payload)
+    .select()
+    .single();
+  if (error) throw error;
+  return data?.id || payload.id;
 };
 
 export const deleteGroup = async (id: string) => {
@@ -467,20 +466,18 @@ export const saveRegistrationRequest = async (req: Omit<RegistrationRequest, 'id
 
   Object.keys(payload).forEach(k => payload[k] === undefined && delete payload[k]);
 
-  if (req.id) {
-    const { error } = await supabase.from(REG_REQUESTS).update(payload).eq('id', req.id);
-    if (error) throw error;
-    return req.id;
-  } else {
-    const newId = crypto.randomUUID();
-    const { data, error } = await supabase
-      .from(REG_REQUESTS)
-      .insert([{ ...payload, id: newId, created_at: Date.now() }])
-      .select()
-      .single();
-    if (error) throw error;
-    return data.id;
+  if (!payload.id) {
+    payload.id = crypto.randomUUID();
+    payload.created_at = Date.now();
   }
+
+  const { data, error } = await supabase
+    .from(REG_REQUESTS)
+    .upsert(payload)
+    .select()
+    .single();
+  if (error) throw error;
+  return data?.id || payload.id;
 };
 
 export const deleteRegistrationRequest = async (id: string) => {

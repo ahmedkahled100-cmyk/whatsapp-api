@@ -12,18 +12,34 @@ export const getAssignments = async (teacherId: string): Promise<Assignment[]> =
 };
 
 export const saveAssignment = async (assign: Omit<Assignment, 'id'> & { id?: string }): Promise<string> => {
-  const payload = toDB({ ...assign });
+  const raw = toDB({ ...assign });
+  const payload = { ...raw };
   Object.keys(payload).forEach(k => payload[k] === undefined && delete payload[k]);
-  if (assign.id) {
-    const { error } = await supabase.from(ASSIGNMENTS).update(payload).eq('id', assign.id);
-    if (error) throw error;
-    return assign.id;
-  } else {
-    const newId = crypto.randomUUID();
-    const { data, error } = await supabase.from(ASSIGNMENTS).insert([{ ...payload, id: newId, created_at: new Date().toISOString() }]).select().single();
-    if (error) throw error;
-    return data.id;
+  
+  if (!payload.id) {
+    payload.id = crypto.randomUUID();
+    payload.created_at = new Date().toISOString();
   }
+  
+  let { data, error } = await supabase.from(ASSIGNMENTS).upsert(payload).select('id').single();
+  
+  // Fallback for PGRST204 (Missing Columns in DB Schema)
+  if (error && error.code === 'PGRST204') {
+    console.warn('Database schema missing columns. Retrying with safe whitelist...');
+    const SAFE_COLS = ['id', 'teacher_id', 'title', 'description', 'due_date', 'created_at'];
+    const safePayload: Record<string, any> = {};
+    SAFE_COLS.forEach(c => { if (payload[c] !== undefined) safePayload[c] = payload[c]; });
+    if (!safePayload.id) {
+      safePayload.id = crypto.randomUUID();
+      safePayload.created_at = new Date().toISOString();
+    }
+    const retry = await supabase.from(ASSIGNMENTS).upsert(safePayload).select('id').single();
+    if (retry.error) throw retry.error;
+    return retry.data?.id || safePayload.id;
+  }
+  
+  if (error) throw error;
+  return data?.id || payload.id;
 };
 
 export const deleteAssignment = async (id: string) => {
@@ -74,14 +90,13 @@ export const getStudentSubmissions = async (studentId: string): Promise<Assignme
 export const saveAssignmentSubmission = async (sub: Omit<AssignmentSubmission, 'id'> & { id?: string }): Promise<string> => {
   const payload = toDB({ ...sub });
   Object.keys(payload).forEach(k => payload[k] === undefined && delete payload[k]);
-  if (sub.id) {
-    const { error } = await supabase.from(ASSIGN_SUBS).update(payload).eq('id', sub.id);
-    if (error) throw error;
-    return sub.id;
-  } else {
-    const newId = crypto.randomUUID();
-    const { data, error } = await supabase.from(ASSIGN_SUBS).insert([{ ...payload, id: newId }]).select().single();
-    if (error) throw error;
-    return data.id;
+  
+  if (!payload.id) {
+    payload.id = crypto.randomUUID();
+    payload.submitted_at = new Date().toISOString();
   }
+  
+  const { data, error } = await supabase.from(ASSIGN_SUBS).upsert(payload).select('id').single();
+  if (error) throw error;
+  return data?.id || payload.id;
 };

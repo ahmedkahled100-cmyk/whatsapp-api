@@ -8,7 +8,7 @@ import { saveExam, uploadFileToStorage, dispatchNotification } from '@/lib/db';
 import { showToast } from '@/lib/toast';
 import { generateId } from '@/lib/utils';
 import type { Question, Exam } from '@/types';
-import { PlusCircle, Trash2, Save, GripVertical, ChevronDown, ChevronUp, Image as ImageIcon, FileText, Upload, X, Loader2 } from 'lucide-react';
+import { PlusCircle, Trash2, Save, GripVertical, ChevronDown, ChevronUp, Image as ImageIcon, FileText, Upload, X, Loader2, Settings, School, HelpCircle } from 'lucide-react';
 import { GlobalFileUpload } from '@/components/GlobalFileUpload';
 
 
@@ -192,15 +192,18 @@ function CreateExamPageContent() {
     <div className="max-w-3xl mx-auto space-y-5">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-cairo font-black gold-text">➕ اختبار جديد</h1>
+        <h1 className="text-2xl font-cairo font-black gold-text flex items-center gap-2">
+          <PlusCircle size={24} /> اختبار جديد
+        </h1>
         <button onClick={handleSave} disabled={saving} className="btn-gold disabled:opacity-60">
           <Save size={16} /> {saving ? 'جاري الحفظ...' : 'حفظ الاختبار'}
         </button>
       </div>
 
-      {/* Settings Card */}
       <div className="card-base p-5">
-        <h2 className="font-cairo font-bold mb-4" style={{ color: 'var(--gold)' }}>⚙️ إعدادات الاختبار</h2>
+        <h2 className="font-cairo font-bold mb-4 flex items-center gap-2" style={{ color: 'var(--gold)' }}>
+          <Settings size={18} /> إعدادات الاختبار
+        </h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="sm:col-span-2">
             <label className="block text-sm mb-1.5" style={{ color: 'var(--text-muted)' }}>عنوان الاختبار *</label>
@@ -223,7 +226,7 @@ function CreateExamPageContent() {
               onChange={e => setPassScore(+e.target.value)} className="input-base" />
           </div>
           <div>
-            <label className="block text-sm mb-1.5" style={{ color: 'var(--text-muted)' }}>🏫 تخصيص لفصل (اختياري)</label>
+            <label className="block text-sm mb-1.5" style={{ color: 'var(--text-muted)' }}>تخصيص لفصل (اختياري)</label>
             <select value={targetGroup} onChange={e => setTargetGroup(e.target.value)} className="input-base">
               <option value="">— جميع الطلاب —</option>
               {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
@@ -250,10 +253,10 @@ function CreateExamPageContent() {
           )}
           {/* Toggles */}
           {[
-            { label: '🔀 ترتيب عشوائي للأسئلة', value: shuffle, set: setShuffle },
-            { label: '🔁 السماح بإعادة الاختبار', value: allowRetake, set: setAllowRetake },
-            { label: '👁 إظهار الإجابات بعد الانتهاء', value: showAnswers, set: setShowAnswers },
-            { label: '✅ نشر الاختبار الآن', value: published, set: setPublished },
+            { label: 'ترتيب عشوائي للأسئلة', value: shuffle, set: setShuffle },
+            { label: 'السماح بإعادة الاختبار', value: allowRetake, set: setAllowRetake },
+            { label: 'إظهار الإجابات بعد الانتهاء', value: showAnswers, set: setShowAnswers },
+            { label: 'نشر الاختبار الآن', value: published, set: setPublished },
           ].map(({ label, value, set }) => (
             <div key={label} className="flex items-center justify-between p-3 rounded-xl"
               style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
@@ -269,7 +272,7 @@ function CreateExamPageContent() {
           <div className="sm:col-span-2 p-3 rounded-xl"
             style={{ background: 'rgba(255,197,24,0.05)', border: '1px solid rgba(245,197,24,0.1)' }}>
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-bold text-gold">🎲 عدد الأسئلة العشوائية لكل طالب</span>
+              <span className="text-sm font-bold text-gold">عدد الأسئلة العشوائية لكل طالب</span>
               <span className="text-[10px] bg-gold/10 text-gold px-2 py-0.5 rounded-md">ميزة متقدمة</span>
             </div>
             <p className="text-[11px] text-gray-400 mb-2">
@@ -349,7 +352,9 @@ function CreateExamPageContent() {
       {/* Questions */}
       <div className="card-base p-5">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="font-cairo font-bold" style={{ color: 'var(--gold)' }}>❓ الأسئلة ({questions.length})</h2>
+          <h2 className="font-cairo font-bold flex items-center gap-2" style={{ color: 'var(--gold)' }}>
+            <HelpCircle size={18} /> الأسئلة ({questions.length})
+          </h2>
           <div className="flex gap-2">
             <button onClick={addMCQ} className="btn-accent text-sm py-2 px-3"><PlusCircle size={14} /> اختياري</button>
             <button onClick={addTF} className="btn-accent text-sm py-2 px-3 bg-blue-600 border-blue-600 hover:bg-blue-700 hover:border-blue-700 text-white"><PlusCircle size={14} /> صح/خطأ</button>
@@ -361,11 +366,14 @@ function CreateExamPageContent() {
         </div>
 
         {questions.length === 0 && (
-          <div className="text-center py-10" style={{ color: 'var(--text-muted)' }}>
-            <div className="text-4xl mb-2">💭</div>
+          <div className="text-center py-10 text-text-muted">
+            <div className="w-12 h-12 mx-auto mb-3 opacity-20 flex items-center justify-center">
+              <HelpCircle size={36} />
+            </div>
             <p className="text-sm">اضغط «سؤال اختياري» أو «سؤال مقالي» لإضافة أسئلة</p>
           </div>
         )}
+
 
         <div className="space-y-3">
           {questions.map((q, idx) => (
@@ -378,7 +386,7 @@ function CreateExamPageContent() {
                   {idx + 1}
                 </div>
                 <span className="text-sm font-medium flex-1">
-                  {q.type === 'essay' ? '✍️ سؤال مقالي' : q.type === 'tf' ? '⚖️ سؤال صح أو خطأ' : '⭕ سؤال اختياري متعدد'}
+                  {q.type === 'essay' ? 'سؤال مقالي' : q.type === 'tf' ? 'سؤال صح أو خطأ' : 'سؤال اختياري متعدد'}
                 </span>
                 <button onClick={() => updateQ(q.id, { expanded: !q.expanded })} className="opacity-50 hover:opacity-100">
                   {q.expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
