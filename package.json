@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "whatsapp": "cd whatsapp-server && node index.js",
+    "dev:all": "run-local.bat",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"

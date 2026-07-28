@@ -4,21 +4,30 @@ export async function GET() {
   try {
     const apiUrl = process.env.WHATSAPP_API_URL || 'http://localhost:3001';
     
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3000);
+
     const res = await fetch(`${apiUrl}/status`, {
-      cache: 'no-store'
-    });
+      cache: 'no-store',
+      signal: controller.signal
+    }).catch(() => null);
+
+    clearTimeout(timeoutId);
     
-    if (!res.ok) {
-      return NextResponse.json({ isConnected: false, qrCode: null, error: 'Failed to fetch status' }, { status: 500 });
+    if (!res || !res.ok) {
+      return NextResponse.json(
+        { isConnected: false, qrCode: null, isOffline: true, error: 'تعذر الاتصال بخادم الواتساب من السيرفر' },
+        { status: 503 }
+      );
     }
 
     const data = await res.json();
     return NextResponse.json(data);
   } catch (error: any) {
-    console.error('WhatsApp Status API Error:', error);
     return NextResponse.json(
-      { isConnected: false, qrCode: null, error: 'Internal server error while fetching status' },
-      { status: 500 }
+      { isConnected: false, qrCode: null, isOffline: true, error: 'فشل استعلام حالة الواتساب' },
+      { status: 503 }
     );
   }
 }
+

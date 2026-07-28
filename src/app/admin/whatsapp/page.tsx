@@ -17,20 +17,50 @@ export default function WhatsAppAdminPage() {
 
   const fetchStatus = async () => {
     try {
+      // 1. Try Next.js API route first
       const res = await fetch('/api/whatsapp/status');
       const data = await res.json();
 
-      if (res.ok && !data.error) {
+      if (res.ok && !data.error && !data.isOffline) {
         setServerError(null);
         setStatus({
           isConnected: data.isConnected || false,
           qrCode: data.qrCode || null,
         });
-      } else {
-        setServerError(data.error || 'تعذر الاتصال بخادم الواتساب');
-        setStatus({ isConnected: false, qrCode: null });
+        return;
       }
+
+      // 2. Direct browser fallback to localhost:3001 (works when website is on Vercel while server is running locally)
+      try {
+        const localRes = await fetch('http://localhost:3001/status');
+        if (localRes.ok) {
+          const localData = await localRes.json();
+          setServerError(null);
+          setStatus({
+            isConnected: localData.isConnected || false,
+            qrCode: localData.qrCode || null,
+          });
+          return;
+        }
+      } catch (localErr) {}
+
+      setServerError(data.error || 'تعذر الاتصال بخادم الواتساب');
+      setStatus({ isConnected: false, qrCode: null });
     } catch (error: any) {
+      // Fallback attempt to local server directly from browser
+      try {
+        const localRes = await fetch('http://localhost:3001/status');
+        if (localRes.ok) {
+          const localData = await localRes.json();
+          setServerError(null);
+          setStatus({
+            isConnected: localData.isConnected || false,
+            qrCode: localData.qrCode || null,
+          });
+          return;
+        }
+      } catch (localErr) {}
+
       console.error('Error fetching WhatsApp status:', error);
       setServerError('فشل الاتصال بالخادم. يرجى التأكد من تشغيل خادم الواتساب.');
       setStatus({ isConnected: false, qrCode: null });
@@ -59,18 +89,38 @@ export default function WhatsAppAdminPage() {
 
     setSending(true);
     try {
-      const res = await fetch('/api/whatsapp/send', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: testNumber, message: testMessage }),
-      });
-      const data = await res.json();
+      let data: any = null;
 
-      if (data.success) {
+      try {
+        const res = await fetch('/api/whatsapp/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone: testNumber, message: testMessage }),
+        });
+        data = await res.json();
+      } catch (e) {}
+
+      if (!data || !data.success) {
+        // Fallback to direct client-side fetch to localhost:3001
+        try {
+          let formattedPhone = testNumber.replace(/\D/g, '');
+          if (formattedPhone.startsWith('01') && formattedPhone.length === 11) {
+            formattedPhone = `2${formattedPhone}`;
+          }
+          const localRes = await fetch('http://localhost:3001/send', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ number: formattedPhone, message: testMessage }),
+          });
+          data = await localRes.json();
+        } catch (localErr) {}
+      }
+
+      if (data && data.success) {
         alert("✅ تم إرسال الرسالة بنجاح!");
         setTestMessage('');
       } else {
-        alert("❌ فشل الإرسال: " + data.error);
+        alert("❌ فشل الإرسال: " + (data?.error || 'تعذر الاتصال بخادم الواتساب'));
       }
     } catch (error: any) {
       alert("❌ حدث خطأ: " + error.message);
@@ -78,6 +128,7 @@ export default function WhatsAppAdminPage() {
       setSending(false);
     }
   };
+
 
   return (
     <div className="p-6 space-y-6 max-w-4xl mx-auto" dir="rtl">
