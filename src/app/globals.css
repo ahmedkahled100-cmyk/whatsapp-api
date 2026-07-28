@@ -535,27 +535,38 @@ body::after {
     background-clip: text;
   }
 
-  .input-base {
+  .input-base,
+  .input-field {
     width: 100%;
-    background: rgba(0, 0, 0, 0.25);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 0.5rem;
+    background: #0f172a !important;
+    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+    border-radius: 0.75rem;
     padding: 0.625rem 0.875rem;
-    color: var(--text);
+    color: #ffffff !important;
     font-family: var(--font-almarai), sans-serif;
     font-size: 0.875rem;
     transition: all 0.2s ease-in-out;
     outline: none;
+    color-scheme: dark;
   }
 
-  .input-base:focus {
-    border-color: var(--gold);
-    background: rgba(0, 0, 0, 0.35);
-    box-shadow: 0 0 0 2px rgba(245, 197, 24, 0.15);
+  .input-base:focus,
+  .input-field:focus {
+    border-color: var(--gold) !important;
+    background: #1e293b !important;
+    box-shadow: 0 0 0 2px rgba(245, 197, 24, 0.2) !important;
   }
 
-  .input-base:hover:not(:focus) {
-    border-color: rgba(255, 255, 255, 0.15);
+  .input-base:hover:not(:focus),
+  .input-field:hover:not(:focus) {
+    border-color: rgba(255, 255, 255, 0.25) !important;
+  }
+
+  .input-base option,
+  .input-field option,
+  select option {
+    background-color: #0f172a !important;
+    color: #ffffff !important;
   }
 
   /* Robust icon alignment for inputs in RTL (Start = Right) */

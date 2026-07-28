@@ -89,7 +89,7 @@ export function PromoCodeInput({
               value={code}
               onChange={(e) => setCode(e.target.value.toUpperCase())}
               placeholder="أدخل رمز الدعوة/الخصم..."
-              className="input-field uppercase font-mono tracking-wider font-bold text-amber-200 placeholder:normal-case placeholder:font-normal placeholder:tracking-normal text-sm py-2.5"
+              className="input-base bg-[#0f172a] uppercase font-mono tracking-wider font-bold !text-amber-300 placeholder:normal-case placeholder:font-normal placeholder:tracking-normal placeholder:text-gray-500 text-sm py-2.5"
             />
           </div>
           <button

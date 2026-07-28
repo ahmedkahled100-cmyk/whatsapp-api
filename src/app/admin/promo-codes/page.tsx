@@ -427,7 +427,7 @@ export default function AdminPromoCodesPage() {
                     value={formData.code}
                     onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
                     placeholder="مثال: SUMMER2026"
-                    className="input-field font-mono uppercase text-amber-300 tracking-wider font-bold"
+                    className="input-base font-mono uppercase !text-amber-300 tracking-wider font-bold bg-[#0f172a]"
                   />
                   <button
                     type="button"
@@ -448,7 +448,7 @@ export default function AdminPromoCodesPage() {
                   <select
                     value={formData.discountType}
                     onChange={(e) => setFormData({ ...formData, discountType: e.target.value as any })}
-                    className="input-field cursor-pointer"
+                    className="input-base bg-[#0f172a] text-white font-bold cursor-pointer"
                   >
                     <option value="percentage">نسبة مئوية (%)</option>
                     <option value="fixed">مبلغ ثابت (ج.م)</option>
@@ -467,7 +467,7 @@ export default function AdminPromoCodesPage() {
                     value={formData.discountValue}
                     onChange={(e) => setFormData({ ...formData, discountValue: e.target.value })}
                     placeholder="أدخل القيمة"
-                    className="input-field font-bold"
+                    className="input-base bg-[#0f172a] text-white font-bold"
                   />
                 </div>
               </div>
@@ -509,7 +509,7 @@ export default function AdminPromoCodesPage() {
                     min="0"
                     value={formData.maxUses}
                     onChange={(e) => setFormData({ ...formData, maxUses: e.target.value })}
-                    className="input-field"
+                    className="input-base bg-[#0f172a] text-white font-bold"
                     placeholder="0 = غير محدود"
                   />
                 </div>
@@ -520,7 +520,7 @@ export default function AdminPromoCodesPage() {
                     type="date"
                     value={formData.expiryDate}
                     onChange={(e) => setFormData({ ...formData, expiryDate: e.target.value })}
-                    className="input-field"
+                    className="input-base bg-[#0f172a] text-white font-bold"
                   />
                 </div>
               </div>
