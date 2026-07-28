@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "whatsapp": "cd whatsapp-server && node index.js",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"

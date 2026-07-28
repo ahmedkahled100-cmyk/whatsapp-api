@@ -338,7 +338,7 @@ export const getAssistantJobs = async (): Promise<AssistantJob[]> => {
   const jobs = manyFromDB<AssistantJob>(data);
   
   // Backfill teacher details if missing from database
-  const missingTeacherIds = [...new Set(jobs.filter(j => !j.teacherName || !j.teacherPhone).map(j => j.teacherId))];
+  const missingTeacherIds = Array.from(new Set(jobs.filter(j => !j.teacherName || !j.teacherPhone).map(j => j.teacherId)));
   if (missingTeacherIds.length > 0) {
     const { data: teachers } = await supabase.from('teachers').select('id, name, phone').in('id', missingTeacherIds);
     if (teachers) {

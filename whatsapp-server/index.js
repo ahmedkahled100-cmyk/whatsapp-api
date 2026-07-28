@@ -12,11 +12,25 @@ const port = process.env.PORT || 3001;
 const API_KEY = process.env.API_KEY || 'my-super-secret-key-123';
 
 // Setup WhatsApp Client
+const puppeteerOptions = {
+    args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-accelerated-2d-canvas',
+        '--no-first-run',
+        '--no-zygote',
+        '--disable-gpu'
+    ]
+};
+
+if (process.env.PUPPETEER_EXECUTABLE_PATH) {
+    puppeteerOptions.executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
+}
+
 const client = new Client({
     authStrategy: new LocalAuth(),
-    puppeteer: {
-        args: ['--no-sandbox', '--disable-setuid-sandbox'],
-    }
+    puppeteer: puppeteerOptions
 });
 
 let isClientReady = false;
@@ -44,6 +58,11 @@ client.on('disconnected', (reason) => {
     console.log('Client was logged out', reason);
     isClientReady = false;
     currentQrCode = null;
+    try {
+        client.initialize();
+    } catch (e) {
+        console.error('Error re-initializing client:', e);
+    }
 });
 
 client.initialize();

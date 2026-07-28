@@ -79,7 +79,7 @@ export {
   getAppHomeSettings, updateAppHomeSettings, APP_HOME_SETTINGS_KEY, APP_HOME_DOC 
 } from './app-settings';
 
-export { wipeAllData, wipeStudentInteraction } from './admin';
+export { wipeAllData, wipeStudentInteraction, wipeTeacherData } from './admin';
 
 export {
   getAttendanceSessions, createAttendanceSession, updateAttendanceSessionStatus,

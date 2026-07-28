@@ -342,10 +342,14 @@ export default function SubscriptionsPage() {
         }
 
         // Optimistic UI state
-        useTeacherStore.getState().setStudents(
-            existingStudent ? students.map(s => s.id === existingStudent.id ? finalStudentObj as Student : s) : [...students, finalStudentObj as Student]
-        );
-        useTeacherStore.getState().setRegistrationRequests(registrationRequests.filter(r => r.id !== req.id));
+        const nextStudents = existingStudent ? students.map(s => s.id === existingStudent.id ? finalStudentObj as Student : s) : [...students, finalStudentObj as Student];
+        const nextReqs = registrationRequests.filter(r => r.id !== req.id);
+        useTeacherStore.getState().setStudents(nextStudents);
+        useTeacherStore.getState().setRegistrationRequests(nextReqs);
+        import('@/lib/realtime-broadcast').then(m => {
+          m.broadcastTabChange('SET_STUDENTS', nextStudents);
+          m.broadcastTabChange('SET_REGISTRATION_REQUESTS', nextReqs);
+        }).catch(() => {});
 
         await saveStudent(finalStudentObj);
       } else {
@@ -368,8 +372,14 @@ export default function SubscriptionsPage() {
         };
 
         // Optimistic UI state
-        useTeacherStore.getState().setStudents(students.map(s => s.id === existingStudent.id ? finalStudentObj as Student : s));
-        useTeacherStore.getState().setRegistrationRequests(registrationRequests.filter(r => r.id !== req.id));
+        const updatedStudents = students.map(s => s.id === existingStudent.id ? finalStudentObj as Student : s);
+        const updatedReqs = registrationRequests.filter(r => r.id !== req.id);
+        useTeacherStore.getState().setStudents(updatedStudents);
+        useTeacherStore.getState().setRegistrationRequests(updatedReqs);
+        import('@/lib/realtime-broadcast').then(m => {
+          m.broadcastTabChange('SET_STUDENTS', updatedStudents);
+          m.broadcastTabChange('SET_REGISTRATION_REQUESTS', updatedReqs);
+        }).catch(() => {});
 
         await saveStudent(finalStudentObj);
       }

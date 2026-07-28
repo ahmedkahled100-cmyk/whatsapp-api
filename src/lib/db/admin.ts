@@ -33,3 +33,28 @@ export const wipeStudentInteraction = async (studentId: string) => {
   // Clear game results
   await supabase.from(GAME_RESULTS).delete().eq('student_id', studentId);
 };
+
+export const wipeTeacherData = async (teacherId: string) => {
+  if (!teacherId) return;
+
+  const tablesToWipe = [
+    STUDENTS, EXAMS, ATTEMPTS, GROUPS, QBANK,
+    NOTIFICATIONS, ASSIGNMENTS, REG_REQUESTS, MATERIALS,
+    NOTIFICATION_LOGS, GAME_RESULTS, EVENTS
+  ];
+
+  for (const tableName of tablesToWipe) {
+    try {
+      const { error } = await supabase
+        .from(tableName)
+        .delete()
+        .eq('teacher_id', teacherId);
+      
+      if (error) {
+        console.error(`Error wiping teacher data for table ${tableName}:`, error);
+      }
+    } catch (err) {
+      console.error(`Exception wiping teacher data for table ${tableName}:`, err);
+    }
+  }
+};

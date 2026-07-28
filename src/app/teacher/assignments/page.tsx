@@ -2,7 +2,7 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useTeacherStore } from '@/lib/store';
-import { getAssignments, saveAssignment, deleteAssignment, getAssignmentSubmissions, gradeSubmission } from '@/lib/db';
+import { getAssignments, saveAssignment, deleteAssignment, getAssignmentSubmissions, gradeSubmission, uploadFileToStorage } from '@/lib/db';
 import { Assignment, AssignmentSubmission } from '@/types';
 import { showToast } from '@/lib/toast';
 import { ClipboardList, PlusCircle, Trash2, Users, CheckCircle, X, Download, Eye, FileText, Image as ImageIcon, Sparkles, Loader2 } from 'lucide-react';
@@ -15,6 +15,10 @@ function AssignmentsPageContent() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  // File Upload State for Assignment
+  const [isUploadingAssignFile, setIsUploadingAssignFile] = useState(false);
+  const [uploadAssignProgress, setUploadAssignProgress] = useState(0);
   
   // AI Generation State
   const [isGeneratingAI, setIsGeneratingAI] = useState(false);
@@ -44,6 +48,26 @@ function AssignmentsPageContent() {
     fileUrl: '',
     maxScore: 10
   });
+
+  const handleAssignFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploadingAssignFile(true);
+    setUploadAssignProgress(0);
+    try {
+      const url = await uploadFileToStorage(file, 'assignments', (progress) => {
+        setUploadAssignProgress(progress);
+      });
+      setNewAssign(prev => ({ ...prev, fileUrl: url }));
+      showToast('✅ تم رفع ملف الواجب بنجاح!');
+    } catch (err: any) {
+      console.error(err);
+      showToast('فشل رفع الملف: ' + (err.message || ''));
+    } finally {
+      setIsUploadingAssignFile(false);
+    }
+  };
 
   const handleAIGenerate = async () => {
     if (!aiTopic && !aiFile) {
@@ -77,8 +101,18 @@ function AssignmentsPageContent() {
         })
       });
 
-      const data = await res.json();
-      if (data.error) throw new Error(data.error);
+      const responseText = await res.text();
+      let data: any = {};
+      try {
+        data = JSON.parse(responseText);
+      } catch {
+        if (res.status === 413 || responseText.includes('Request Entity Too Large')) {
+          throw new Error('حجم الملف كبير جداً للسيرفر (Request Entity Too Large). يرجى اختيار ملف أصغر.');
+        }
+        throw new Error(responseText.slice(0, 100) || `خطأ (${res.status})`);
+      }
+
+      if (!res.ok || data.error) throw new Error(data.error || `خطأ (${res.status})`);
 
       setNewAssign(prev => ({
         ...prev,
@@ -170,7 +204,7 @@ function AssignmentsPageContent() {
     try {
       const realId = await saveAssignment(payload);
       if (!editingId && realId !== tempId) {
-        setAssignments(prev => prev.map(a => a.id === tempId ? { ...a, id: realId } : a));
+        setAssignments(assignments.map(a => a.id === tempId ? { ...a, id: realId } : a));
       }
     } catch (e) {
       setAssignments(previous);
@@ -507,12 +541,52 @@ function AssignmentsPageContent() {
                 {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
               </select>
             </div>
-            <div>
-              <label className="block text-sm mb-1 opacity-70">رابط ملف (اختياري)</label>
-              <input 
-                type="text" className="input-base w-full" placeholder="رابط Google Drive أو PDF..."
-                value={newAssign.fileUrl} onChange={e => setNewAssign({...newAssign, fileUrl: e.target.value})}
-              />
+            <div className="md:col-span-2">
+              <label className="block text-sm mb-1.5 opacity-80 font-bold">ملف التكليف المرفق (اختياري - PDF أو صورة أو رابط خارجي)</label>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-3.5 rounded-2xl bg-white/5 border border-white/10">
+                {/* Direct File Upload */}
+                <div>
+                  <label className="block text-xs text-amber-400 font-bold mb-1.5 flex items-center gap-1">
+                    📁 رفع ملف مباشرة (PDF / صورة):
+                  </label>
+                  <GlobalFileUpload 
+                    accept="application/pdf,image/*"
+                    isUploading={isUploadingAssignFile}
+                    uploadProgress={uploadAssignProgress}
+                    uploadedUrl={newAssign.fileUrl}
+                    label={isUploadingAssignFile ? `جاري الرفع (${uploadAssignProgress}%)...` : "اضغط لرفع ملف PDF أو صورة"}
+                    onChange={handleAssignFileUpload}
+                    onDelete={() => setNewAssign(prev => ({ ...prev, fileUrl: '' }))}
+                  />
+                </div>
+
+                {/* Direct Link Input */}
+                <div>
+                  <label className="block text-xs text-gray-400 font-bold mb-1.5 flex items-center gap-1">
+                    🔗 أو أدخل رابطاً مباشراً / Google Drive:
+                  </label>
+                  <input 
+                    type="text" 
+                    className="input-base w-full text-sm h-[44px]" 
+                    placeholder="رابط Google Drive أو PDF أو صورة..."
+                    value={newAssign.fileUrl || ''} 
+                    onChange={e => setNewAssign({...newAssign, fileUrl: e.target.value})}
+                  />
+                  {newAssign.fileUrl && (
+                    <div className="mt-2 flex items-center justify-between text-xs bg-emerald-500/10 text-emerald-400 px-3 py-1.5 rounded-xl border border-emerald-500/20">
+                      <span className="truncate max-w-[200px]">📌 تم إرفاق الملف/الرابط بنجاح</span>
+                      <button 
+                        type="button"
+                        onClick={() => openPreview(newAssign.fileUrl!, 'ملف التكليف')} 
+                        className="underline hover:text-white font-bold"
+                      >
+                        معاينة
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
             <div className="md:col-span-2">
                <label className="block text-sm mb-1 opacity-70">تفاصيل الواجب</label>

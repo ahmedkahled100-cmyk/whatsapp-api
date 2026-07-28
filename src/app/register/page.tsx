@@ -14,7 +14,7 @@ import {
 import { FileProcessor } from '@/lib/file-processor';
 import { useFileProcessingStore } from '@/lib/store';
 import { normalizePhone } from '@/lib/utils';
-import type { Settings, TeacherUser } from '@/types';
+import { type Settings, type TeacherUser, ACADEMIC_GRADES } from '@/types';
 import { showToast } from '@/lib/toast';
 import { GraduationCap, ShieldCheck, Mail, Phone, Calculator, CheckCircle2, User, FileText, Upload, Image as ImageIcon, Loader2, Search } from 'lucide-react';
 import { PDFCompressionModal } from '@/components/PDFCompressionModal';
@@ -59,6 +59,9 @@ function RegisterForm() {
     studentId: ''
   });
 
+  // Status lookup modal state
+  const [showStatusModal, setShowStatusModal] = useState(false);
+
   // PDF Compression state
   const [compressionModal, setCompressionModal] = useState<{
     isOpen: boolean;
@@ -80,12 +83,29 @@ function RegisterForm() {
     });
   }, [queryTeacherId]);
 
+  const getSubPriceForGrade = (grade: string, subType: string, s: Settings | null) => {
+    if (!s) return 0;
+    const keyMap: Record<string, keyof Settings> = {
+      monthly: 'monthlyPrice',
+      halfYearly: 'halfYearlyPrice',
+      yearly: 'yearlyPrice',
+      course: 'coursePrice',
+      session: 'sessionPrice'
+    };
+    const key = keyMap[subType] as any;
+    if (grade && s.gradePrices?.[grade]) {
+      const gPrice = (s.gradePrices[grade] as any)?.[key];
+      if (gPrice !== undefined && gPrice !== null && gPrice !== '') return Number(gPrice);
+    }
+    return Number((s as any)?.[key] || 0);
+  };
+
   useEffect(() => {
     if (selectedTeacherId) {
       setLoading(true);
       getSettings(selectedTeacherId).then(s => {
         setSettings(s);
-        setForm(f => ({ ...f, subPrice: s?.monthlyPrice || 0 }));
+        setForm(f => ({ ...f, subPrice: getSubPriceForGrade(f.grade, f.subType, s) }));
         setLoading(false);
       });
     }
@@ -122,15 +142,19 @@ function RegisterForm() {
         try {
           const existing = await getStudentByPhoneAnywhere(phone);
           if (existing) {
-            setForm(f => ({
-              ...f,
-              name: f.name || existing.name,
-              parentPhone: f.parentPhone || existing.parentPhone || '',
-              grade: f.grade || existing.grade || '',
-              imageUrl: f.imageUrl || existing.imageUrl || '',
-              existingCode: existing.code || '',
-              studentId: existing.id || '',
-            }));
+            setForm(f => {
+              const targetGrade = f.grade || existing.grade || '';
+              return {
+                ...f,
+                name: f.name || existing.name,
+                parentPhone: f.parentPhone || existing.parentPhone || '',
+                grade: targetGrade,
+                subPrice: getSubPriceForGrade(targetGrade, f.subType, settings),
+                imageUrl: f.imageUrl || existing.imageUrl || '',
+                existingCode: existing.code || '',
+                studentId: existing.id || '',
+              };
+            });
             showToast('✨ تم استرجاع بيانات ملفك الشخصي الموحد');
           }
         } catch (e) {
@@ -139,7 +163,7 @@ function RegisterForm() {
       }, 500);
       return () => clearTimeout(timeout);
     }
-  }, [form.phone]);
+  }, [form.phone, settings]);
 
   const [appliedPromo, setAppliedPromo] = useState<{ code: string; discountAmount: number; finalPrice: number } | null>(null);
 
@@ -347,45 +371,82 @@ function RegisterForm() {
                 </div>
               </div>
               <div className="relative">
-                <GraduationCap size={18} className="absolute top-1/2 -translate-y-1/2 right-4 text-gray-400" />
-                <input 
-                  type="text" 
-                  placeholder="الصف الدراسي (مثال: الصف الأول الثانوي)" 
-                  className="input-base has-icon-right w-full text-sm sm:text-base"
+                <GraduationCap size={18} className="absolute top-1/2 -translate-y-1/2 right-4 text-gray-400 z-10 pointer-events-none" />
+                <select 
+                  className="input-base has-icon-right w-full text-sm sm:text-base appearance-none pr-11 text-white bg-white/5 cursor-pointer"
                   value={form.grade}
-                  onChange={e => setForm({...form, grade: e.target.value})}
+                  onChange={e => {
+                    const newGrade = e.target.value;
+                    const newPrice = getSubPriceForGrade(newGrade, form.subType, settings);
+                    setForm(f => ({ ...f, grade: newGrade, subPrice: newPrice }));
+                  }}
                   required
-                />
+                >
+                  <option value="" disabled className="bg-gray-900 text-gray-400">اختر الصف الدراسي...</option>
+                  <optgroup label="🏫 المرحلة الابتدائية" className="bg-gray-900 text-amber-400 font-bold">
+                    <option value="الصف الرابع الابتدائي" className="text-white font-normal">الصف الرابع الابتدائي</option>
+                    <option value="الصف الخامس الابتدائي" className="text-white font-normal">الصف الخامس الابتدائي</option>
+                    <option value="الصف السادس الابتدائي" className="text-white font-normal">الصف السادس الابتدائي</option>
+                  </optgroup>
+                  <optgroup label="🏫 المرحلة الإعدادية" className="bg-gray-900 text-amber-400 font-bold">
+                    <option value="الصف الأول الإعدادي" className="text-white font-normal">الصف الأول الإعدادي</option>
+                    <option value="الصف الثاني الإعدادي" className="text-white font-normal">الصف الثاني الإعدادي</option>
+                    <option value="الصف الثالث الإعدادي" className="text-white font-normal">الصف الثالث الإعدادي</option>
+                  </optgroup>
+                  <optgroup label="🏫 المرحلة الثانوية" className="bg-gray-900 text-amber-400 font-bold">
+                    <option value="الصف الأول الثانوي" className="text-white font-normal">الصف الأول الثانوي</option>
+                    <option value="الصف الثاني الثانوي" className="text-white font-normal">الصف الثاني الثانوي</option>
+                    <option value="الصف الثالث الثانوي" className="text-white font-normal">الصف الثالث الثانوي</option>
+                  </optgroup>
+                </select>
               </div>
 
               <div>
-                <label className="block text-sm mb-2 text-gray-300 font-bold px-1">نوع الاشتراك المطلوب</label>
+                <label className="block text-sm mb-2 text-gray-300 font-bold px-1">
+                  نوع الاشتراك المطلوب {form.grade ? `(${form.grade})` : ''}
+                </label>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 sm:gap-3">
-                  <label className={`cursor-pointer p-3 rounded-xl border border-white/10 text-center transition-all flex flex-col justify-center ${form.subType === 'monthly' ? 'bg-blue-500/20 border-blue-500/50 text-blue-400' : 'bg-white/5 hover:bg-white/10'}`}>
-                    <input type="radio" className="hidden" name="type" checked={form.subType === 'monthly'} onChange={() => setForm({...form, subType: 'monthly', subPrice: settings?.monthlyPrice || 0})} />
-                    <div className="font-bold text-sm sm:text-base">شهري</div>
-                    {settings?.monthlyPrice && <div className="text-[10px] sm:text-xs mt-1 opacity-80">{settings.monthlyPrice} ج.م</div>}
-                  </label>
-                  <label className={`cursor-pointer p-3 rounded-xl border border-white/10 text-center transition-all flex flex-col justify-center ${form.subType === 'halfYearly' ? 'bg-gold/20 border-gold/50 gold-text' : 'bg-white/5 hover:bg-white/10'}`}>
-                    <input type="radio" className="hidden" name="type" checked={form.subType === 'halfYearly'} onChange={() => setForm({...form, subType: 'halfYearly', subPrice: settings?.halfYearlyPrice || 0})} />
-                    <div className="font-bold text-sm sm:text-base">نصف سنوي</div>
-                    {settings?.halfYearlyPrice && <div className="text-[10px] sm:text-xs mt-1 opacity-80">{settings.halfYearlyPrice} ج.م</div>}
-                  </label>
-                  <label className={`cursor-pointer p-3 rounded-xl border border-white/10 text-center transition-all flex flex-col justify-center ${form.subType === 'yearly' ? 'bg-gold/20 border-gold/50 gold-text' : 'bg-white/5 hover:bg-white/10'}`}>
-                    <input type="radio" className="hidden" name="type" checked={form.subType === 'yearly'} onChange={() => setForm({...form, subType: 'yearly', subPrice: settings?.yearlyPrice || 0})} />
-                    <div className="font-bold text-sm sm:text-base">سنوي</div>
-                    {settings?.yearlyPrice && <div className="text-[10px] sm:text-xs mt-1 opacity-80">{settings.yearlyPrice} ج.م</div>}
-                  </label>
-                  <label className={`cursor-pointer p-3 rounded-xl border border-white/10 text-center transition-all flex flex-col justify-center ${form.subType === 'course' ? 'bg-purple-500/20 border-purple-500/50 text-purple-400' : 'bg-white/5 hover:bg-white/10'}`}>
-                    <input type="radio" className="hidden" name="type" checked={form.subType === 'course'} onChange={() => setForm({...form, subType: 'course', subPrice: settings?.coursePrice || 0})} />
-                    <div className="font-bold text-sm sm:text-base">كورس كامل</div>
-                    {settings?.coursePrice && <div className="text-[10px] sm:text-xs mt-1 opacity-80">{settings.coursePrice} ج.م</div>}
-                  </label>
-                  <label className={`cursor-pointer p-3 rounded-xl border border-white/10 text-center transition-all flex flex-col justify-center ${form.subType === 'session' ? 'bg-purple-500/20 border-purple-500/50 text-purple-400' : 'bg-white/5 hover:bg-white/10'}`}>
-                    <input type="radio" className="hidden" name="type" checked={form.subType === 'session'} onChange={() => setForm({...form, subType: 'session', subPrice: settings?.sessionPrice || 0})} />
-                    <div className="font-bold text-sm sm:text-base">بالحصة</div>
-                    {settings?.sessionPrice && <div className="text-[10px] sm:text-xs mt-1 opacity-80">{settings.sessionPrice} ج.م</div>}
-                  </label>
+                  {(() => {
+                    const mP = getSubPriceForGrade(form.grade, 'monthly', settings);
+                    const hyP = getSubPriceForGrade(form.grade, 'halfYearly', settings);
+                    const yP = getSubPriceForGrade(form.grade, 'yearly', settings);
+                    const cP = getSubPriceForGrade(form.grade, 'course', settings);
+                    const sP = getSubPriceForGrade(form.grade, 'session', settings);
+
+                    return (
+                      <>
+                        <label className={`cursor-pointer p-3 rounded-xl border border-white/10 text-center transition-all flex flex-col justify-center ${form.subType === 'monthly' ? 'bg-blue-500/20 border-blue-500/50 text-blue-400' : 'bg-white/5 hover:bg-white/10'}`}>
+                          <input type="radio" className="hidden" name="type" checked={form.subType === 'monthly'} onChange={() => setForm(f => ({ ...f, subType: 'monthly', subPrice: mP }))} />
+                          <div className="font-bold text-sm sm:text-base">شهري</div>
+                          {mP > 0 ? <div className="text-[10px] sm:text-xs mt-1 opacity-90 font-mono font-bold">{mP} ج.م</div> : <div className="text-[10px] opacity-40 mt-1">غير متوفر</div>}
+                        </label>
+
+                        <label className={`cursor-pointer p-3 rounded-xl border border-white/10 text-center transition-all flex flex-col justify-center ${form.subType === 'halfYearly' ? 'bg-gold/20 border-gold/50 gold-text' : 'bg-white/5 hover:bg-white/10'}`}>
+                          <input type="radio" className="hidden" name="type" checked={form.subType === 'halfYearly'} onChange={() => setForm(f => ({ ...f, subType: 'halfYearly', subPrice: hyP }))} />
+                          <div className="font-bold text-sm sm:text-base">نصف سنوي</div>
+                          {hyP > 0 ? <div className="text-[10px] sm:text-xs mt-1 opacity-90 font-mono font-bold">{hyP} ج.م</div> : <div className="text-[10px] opacity-40 mt-1">غير متوفر</div>}
+                        </label>
+
+                        <label className={`cursor-pointer p-3 rounded-xl border border-white/10 text-center transition-all flex flex-col justify-center ${form.subType === 'yearly' ? 'bg-gold/20 border-gold/50 gold-text' : 'bg-white/5 hover:bg-white/10'}`}>
+                          <input type="radio" className="hidden" name="type" checked={form.subType === 'yearly'} onChange={() => setForm(f => ({ ...f, subType: 'yearly', subPrice: yP }))} />
+                          <div className="font-bold text-sm sm:text-base">سنوي</div>
+                          {yP > 0 ? <div className="text-[10px] sm:text-xs mt-1 opacity-90 font-mono font-bold">{yP} ج.م</div> : <div className="text-[10px] opacity-40 mt-1">غير متوفر</div>}
+                        </label>
+
+                        <label className={`cursor-pointer p-3 rounded-xl border border-white/10 text-center transition-all flex flex-col justify-center ${form.subType === 'course' ? 'bg-purple-500/20 border-purple-500/50 text-purple-400' : 'bg-white/5 hover:bg-white/10'}`}>
+                          <input type="radio" className="hidden" name="type" checked={form.subType === 'course'} onChange={() => setForm(f => ({ ...f, subType: 'course', subPrice: cP }))} />
+                          <div className="font-bold text-sm sm:text-base">كورس كامل</div>
+                          {cP > 0 ? <div className="text-[10px] sm:text-xs mt-1 opacity-90 font-mono font-bold">{cP} ج.م</div> : <div className="text-[10px] opacity-40 mt-1">غير متوفر</div>}
+                        </label>
+
+                        <label className={`cursor-pointer p-3 rounded-xl border border-white/10 text-center transition-all flex flex-col justify-center ${form.subType === 'session' ? 'bg-purple-500/20 border-purple-500/50 text-purple-400' : 'bg-white/5 hover:bg-white/10'}`}>
+                          <input type="radio" className="hidden" name="type" checked={form.subType === 'session'} onChange={() => setForm(f => ({ ...f, subType: 'session', subPrice: sP }))} />
+                          <div className="font-bold text-sm sm:text-base">بالحصة</div>
+                          {sP > 0 ? <div className="text-[10px] sm:text-xs mt-1 opacity-90 font-mono font-bold">{sP} ج.م</div> : <div className="text-[10px] opacity-40 mt-1">غير متوفر</div>}
+                        </label>
+                      </>
+                    );
+                  })()}
                 </div>
               </div>
 
@@ -542,6 +603,14 @@ function RegisterForm() {
           </form>
         </div>
       </div>
+
+      {/* Check Status Modal */}
+      {showStatusModal && (
+        <CheckStatusModal
+          isOpen={showStatusModal}
+          onClose={() => setShowStatusModal(false)}
+        />
+      )}
 
       {/* PDF Compression Modal */}
       {compressionModal.isOpen && compressionModal.file && (

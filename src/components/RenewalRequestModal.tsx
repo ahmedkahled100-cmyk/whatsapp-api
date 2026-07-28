@@ -48,6 +48,12 @@ export function RenewalRequestModal({ settings, target, userData, onClose, onSub
 
   const getPrice = (key: string): number | undefined => {
     if (!settings) return undefined;
+    if (target === 'student' && 'grade' in userData && userData.grade) {
+      const gPrices = settings.gradePrices?.[userData.grade];
+      if (gPrices && (gPrices as any)[key] !== undefined && (gPrices as any)[key] !== null) {
+        return Number((gPrices as any)[key]);
+      }
+    }
     return (settings as any)[key];
   };
 

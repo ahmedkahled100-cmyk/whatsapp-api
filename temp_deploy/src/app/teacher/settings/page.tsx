@@ -300,20 +300,22 @@ function SettingsPageContent() {
       </div>
 
       {/* Password */}
-      <div className="card-base p-5">
-        <h2 className="font-cairo font-bold mb-4" style={{ color: 'var(--gold)' }}>🔐 كلمة مرور لوحة التحكم</h2>
-        <div className="relative">
-          <input type={showPass ? 'text' : 'password'} value={form.teacherPassword}
-            onChange={e => update('teacherPassword', e.target.value)} className="input-base has-icon-left" />
-          <button type="button" onClick={() => setShowPass(!showPass)}
-            className="absolute top-1/2 left-3 -translate-y-1/2 opacity-50 hover:opacity-100">
-            {showPass ? <EyeOff size={17} /> : <Eye size={17} />}
-          </button>
+      {user?.role === 'super_admin' && (
+        <div className="card-base p-5">
+          <h2 className="font-cairo font-bold mb-4" style={{ color: 'var(--gold)' }}>🔐 كلمة مرور لوحة التحكم</h2>
+          <div className="relative">
+            <input type={showPass ? 'text' : 'password'} value={form.teacherPassword}
+              onChange={e => update('teacherPassword', e.target.value)} className="input-base has-icon-left" />
+            <button type="button" onClick={() => setShowPass(!showPass)}
+              className="absolute top-1/2 left-3 -translate-y-1/2 opacity-50 hover:opacity-100">
+              {showPass ? <EyeOff size={17} /> : <Eye size={17} />}
+            </button>
+          </div>
+          <p className="text-xs mt-2" style={{ color: 'var(--text-muted)' }}>
+            ⚠️ احفظ كلمة المرور في مكان آمن. الافتراضية: admin123
+          </p>
         </div>
-        <p className="text-xs mt-2" style={{ color: 'var(--text-muted)' }}>
-          ⚠️ احفظ كلمة المرور في مكان آمن. الافتراضية: admin123
-        </p>
-      </div>
+      )}
 
       {/* Teacher Code */}
       <div className="card-base p-5">

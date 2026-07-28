@@ -23,6 +23,7 @@ import {
 
 import { SubscriptionExpiredOverlay } from '@/components/SubscriptionExpiredOverlay';
 import { GlobalChatWidget } from '@/components/shared/GlobalChatWidget';
+import { initCrossTabSync } from '@/lib/realtime-broadcast';
 import { GlobalNotificationWidget } from '@/components/shared/GlobalNotificationWidget';
 
 const NAV_ITEMS = [
@@ -223,14 +224,35 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
       user.role === 'teacher' ? subscribeToTeacherProfile(user.id, setUser) : () => {}, // Maintain user's login state
       subscribeToSettings(targetId, setSettings),
       subscribeToConversations(targetId, setConversations),
+      initCrossTabSync((type, payload) => {
+        if (type === 'SET_STUDENTS') setStudents(payload);
+        if (type === 'SET_SETTINGS') setSettings(payload);
+        if (type === 'SET_REGISTRATION_REQUESTS') setRegistrationRequests(payload);
+        if (type === 'SET_EXAMS') setExams(payload);
+        if (type === 'SET_ASSIGNMENTS') setAssignments(payload);
+        if (type === 'SET_MATERIALS') setMaterials(payload);
+        if (type === 'SET_GROUPS') setGroups(payload);
+      })
     ];
 
-    // Initial fetch of static data
-    getExams(targetId).then(setExams);
-    getStudents(targetId).then(setStudents);
-    getGroups(targetId).then(setGroups);
+    // Background revalidation
+    getExams(targetId).then(setExams).catch(() => {});
+    getStudents(targetId).then(setStudents).catch(() => {});
+    getGroups(targetId).then(setGroups).catch(() => {});
+    getRegistrationRequests(targetId).then(reqs => {
+      setRegistrationRequests(reqs.filter(r => r.type === 'student' || r.type === 'renewal' || !r.type));
+    }).catch(() => {});
 
-    // ⚡ Polling fallback every 30 seconds
+    // Re-verify when tab regains focus or network reconnects
+    const handleFocus = () => {
+      getRegistrationRequests(targetId).then(reqs => {
+        setRegistrationRequests(reqs.filter(r => r.type === 'student' || r.type === 'renewal' || !r.type));
+      }).catch(() => {});
+      getStudents(targetId).then(setStudents).catch(() => {});
+    };
+    window.addEventListener('focus', handleFocus);
+
+    // ⚡ Fallback polling every 30 seconds
     const pollInterval = setInterval(() => {
       getRegistrationRequests(targetId).then(reqs => {
         setRegistrationRequests(reqs.filter(r => r.type === 'student' || r.type === 'renewal' || !r.type));
@@ -239,6 +261,7 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
 
     return () => {
       unsubs.forEach(u => u());
+      window.removeEventListener('focus', handleFocus);
       clearInterval(pollInterval);
       clearTimeout(syncTimeout);
     };

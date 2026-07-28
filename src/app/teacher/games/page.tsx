@@ -55,15 +55,31 @@ export default function GamesPage() {
   const handleFileChange = async (file: File) => {
     setUploadingFile(true);
     try {
-      // Need base64 for Gemini API
+      let processFile = file;
+      if (file.size > 2 * 1024 * 1024) {
+        showToast('⏳ الملف كبير نسبياً، جاري معالجته وضغطه...');
+        try {
+          const { FileProcessor } = await import('@/lib/file-processor');
+          if (file.type === 'application/pdf') {
+            processFile = await FileProcessor.compressPdfFileLocally(file);
+          }
+        } catch (e) {
+          console.warn('Compression skipped:', e);
+        }
+      }
+
+      if (processFile.size > 3.5 * 1024 * 1024) {
+        showToast('⚠️ حجم الملف كبير جداً (أكثر من 3.5MB). ينصح باستخدام ملف أصغر لضمان التوليد.');
+      }
+
       const reader = new FileReader();
       reader.onload = () => {
         const base64 = (reader.result as string).split(',')[1];
         setFileBase64(base64);
-        setFileMime(file.type);
-        showToast('✅ تم تحليل الملف، يمكنك الآن توليد اللعبة');
+        setFileMime(processFile.type || file.type);
+        showToast('✅ تم تحليل وتجهيز الملف، يمكنك الآن توليد اللعبة');
       };
-      reader.readAsDataURL(file);
+      reader.readAsDataURL(processFile);
     } catch (err) {
       showToast('❌ فشل قراءة الملف');
     } finally {
@@ -89,12 +105,26 @@ export default function GamesPage() {
           count: 10
         })
       });
-      const data = await res.json();
-      if (data.error) throw new Error(data.error);
+
+      const responseText = await res.text();
+      let data: any = {};
+      try {
+        data = JSON.parse(responseText);
+      } catch {
+        if (res.status === 413 || responseText.includes('Request Entity Too Large')) {
+          throw new Error('حجم الملف كبير جداً بالنسبة للسيرفر (Request Entity Too Large). يرجى اختيار ملف أصغر أو كتابة عنوان/وصف الدرس بدلاً منه.');
+        }
+        throw new Error(responseText.slice(0, 120) || `خطأ الخادم (${res.status})`);
+      }
+
+      if (!res.ok || data.error) {
+        throw new Error(data.error || `فشل طلب التوليد (${res.status})`);
+      }
+
       setAiContent(data.gameContent);
       showToast('✨ تم توليد محتوى اللعبة بالذكاء الاصطناعي');
     } catch (err: any) {
-      showToast('❌ فشل التوليد: ' + err.message);
+      showToast('❌ فشل التوليد: ' + (err.message || 'خطأ غير معروف'));
     } finally {
       setGenerating(false);
     }

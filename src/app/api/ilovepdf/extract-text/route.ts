@@ -37,8 +37,8 @@ export async function POST(req: Request) {
 
     // 2. Extract text using pdf2json
     const extractResult = await new Promise<{text: string, pageCount: number}>((resolve, reject) => {
-      // Initialize with 1 for text only extraction
-      const pdfParser = new PDFParser(null, 1);
+      // Initialize with true for text only extraction
+      const pdfParser = new (PDFParser as any)(null, 1);
       
       pdfParser.on("pdfParser_dataError", (errData: any) => {
         console.error("PDFParser Error:", errData.parserError);

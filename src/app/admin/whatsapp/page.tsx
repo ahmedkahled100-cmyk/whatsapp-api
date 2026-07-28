@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Loader2, QrCode, MessageSquare, CheckCircle2 } from 'lucide-react';
+import { Loader2, QrCode, MessageSquare, CheckCircle2, RotateCcw, AlertTriangle } from 'lucide-react';
 import QRCode from 'react-qr-code';
 
 export default function WhatsAppAdminPage() {
@@ -10,6 +10,7 @@ export default function WhatsAppAdminPage() {
     qrCode: null,
   });
   const [loading, setLoading] = useState(true);
+  const [serverError, setServerError] = useState<string | null>(null);
   const [testNumber, setTestNumber] = useState('');
   const [testMessage, setTestMessage] = useState('');
   const [sending, setSending] = useState(false);
@@ -18,12 +19,21 @@ export default function WhatsAppAdminPage() {
     try {
       const res = await fetch('/api/whatsapp/status');
       const data = await res.json();
-      setStatus({
-        isConnected: data.isConnected || false,
-        qrCode: data.qrCode || null,
-      });
-    } catch (error) {
+
+      if (res.ok && !data.error) {
+        setServerError(null);
+        setStatus({
+          isConnected: data.isConnected || false,
+          qrCode: data.qrCode || null,
+        });
+      } else {
+        setServerError(data.error || 'تعذر الاتصال بخادم الواتساب');
+        setStatus({ isConnected: false, qrCode: null });
+      }
+    } catch (error: any) {
       console.error('Error fetching WhatsApp status:', error);
+      setServerError('فشل الاتصال بالخادم. يرجى التأكد من تشغيل خادم الواتساب.');
+      setStatus({ isConnected: false, qrCode: null });
     } finally {
       setLoading(false);
     }
@@ -117,6 +127,27 @@ export default function WhatsAppAdminPage() {
                 افتح تطبيق الواتساب في هاتفك {'>'} الأجهزة المرتبطة {'>'} ربط جهاز، ثم امسح الكود.
               </p>
             </div>
+          ) : serverError ? (
+            <div className="flex flex-col items-center gap-4 text-center max-w-sm">
+              <div className="w-16 h-16 bg-red-100 text-red-500 rounded-full flex items-center justify-center">
+                <AlertTriangle className="w-8 h-8" />
+              </div>
+              <h3 className="text-lg font-bold text-red-500">{serverError}</h3>
+              <p className="text-xs text-muted-foreground">
+                يرجى تشغيل خادم الواتساب المحلي باستخدام الأمر:
+                <br />
+                <code className="bg-slate-800 text-gold px-2 py-1 rounded inline-block mt-2 text-sm dir-ltr">
+                  npm run whatsapp
+                </code>
+              </p>
+              <button 
+                onClick={() => { setLoading(true); fetchStatus(); }} 
+                className="btn-outline mt-2 flex items-center gap-2"
+              >
+                <RotateCcw className="w-4 h-4" />
+                إعادة المحاولة
+              </button>
+            </div>
           ) : (
             <div className="flex flex-col items-center gap-4 text-center">
               <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
@@ -125,6 +156,7 @@ export default function WhatsAppAdminPage() {
               </p>
             </div>
           )}
+
         </div>
 
         {/* Test Send Card */}

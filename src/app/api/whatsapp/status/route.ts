@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 
 export async function GET() {
   try {
-    const apiUrl = process.env.WHATSAPP_API_URL || 'https://whatsapp-api-2026.up.railway.app';
+    const apiUrl = process.env.WHATSAPP_API_URL || 'http://localhost:3001';
     
     const res = await fetch(`${apiUrl}/status`, {
       cache: 'no-store'

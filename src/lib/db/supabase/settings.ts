@@ -59,6 +59,7 @@ export const saveSettings = async (settings: Partial<Settings> & { teacherId: st
   // Workaround for missing columns: pack them into paymentMethods
   const extras: any = {};
   if (settings.youtubeChannelUrl !== undefined) extras.youtubeChannelUrl = settings.youtubeChannelUrl;
+  if (settings.gradePrices !== undefined) extras.gradePrices = settings.gradePrices;
   
   const settingsCopy = { ...settings };
   if (Object.keys(extras).length > 0) {
@@ -66,6 +67,7 @@ export const saveSettings = async (settings: Partial<Settings> & { teacherId: st
     const basePm = pm.replace(/\|SET:.*?\|/, '').trim();
     settingsCopy.paymentMethods = `${basePm} |SET:${JSON.stringify(extras)}|`;
     delete settingsCopy.youtubeChannelUrl;
+    delete settingsCopy.gradePrices;
   }
 
   const payload = toDB(settingsCopy);

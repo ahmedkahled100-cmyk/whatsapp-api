@@ -86,11 +86,34 @@ export const useTeacherStore = create<TeacherStore>()(
       setActiveTab: (activeTab) => set({ activeTab }),
       setLoading: (isLoading) => set({ isLoading }),
       setTempExamQuestions: (tempExamQuestions) => set({ tempExamQuestions }),
-      logout: () => set({ user: null, settings: null, tempExamQuestions: null, activeTeacherId: null }),
+      logout: () => set({ 
+        user: null, 
+        settings: null, 
+        tempExamQuestions: null, 
+        activeTeacherId: null,
+        students: [],
+        exams: [],
+        groups: [],
+        registrationRequests: [],
+        materials: [],
+        assignments: [],
+        attempts: [],
+        conversations: []
+      }),
     }),
     {
       name: 'an-academy-teacher',
-      partialize: (state) => ({ user: state.user, settings: state.settings, activeTeacherId: state.activeTeacherId }),
+      partialize: (state) => ({ 
+        user: state.user, 
+        settings: state.settings, 
+        activeTeacherId: state.activeTeacherId,
+        students: state.students,
+        exams: state.exams,
+        groups: state.groups,
+        registrationRequests: state.registrationRequests,
+        materials: state.materials,
+        assignments: state.assignments
+      }),
     }
   )
 );

@@ -5,8 +5,8 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useTeacherStore } from '@/lib/store';
-import { saveSettings, uploadFileToStorage, wipeAllData, saveTeacher, getSuperAdmin, getSettings } from '@/lib/db';
-import type { Settings } from '@/types';
+import { saveSettings, uploadFileToStorage, wipeTeacherData, saveTeacher, getSuperAdmin, getSettings } from '@/lib/db';
+import { type Settings, type GradePrices, ACADEMIC_GRADES } from '@/types';
 import { Save, Eye, EyeOff, Copy, Upload, Loader2, MessageCircle, Phone, Trash2, AlertTriangle, X } from 'lucide-react';
 import { showToast } from '@/lib/toast';
 import { GlobalFileUpload } from '@/components/GlobalFileUpload';
@@ -51,6 +51,26 @@ function SettingsPageContent() {
   const [wipeConfirmText, setWipeConfirmText] = useState('');
   const [wiping, setWiping] = useState(false);
   
+  // Grade Prices State
+  const [selectedGrade, setSelectedGrade] = useState<string>(ACADEMIC_GRADES[6]); // Default: الصف الأول الثانوي
+
+  const updateGradePrice = (grade: string, field: keyof GradePrices, val: number | undefined) => {
+    setForm(f => {
+      const currentGradePrices = f.gradePrices || {};
+      const currentForGrade = currentGradePrices[grade] || {};
+      return {
+        ...f,
+        gradePrices: {
+          ...currentGradePrices,
+          [grade]: {
+            ...currentForGrade,
+            [field]: val
+          }
+        }
+      };
+    });
+  };
+
   // Teacher Profile State (for code editing)
   const [teacherCode, setTeacherCode] = useState(user?.code || '');
   
@@ -111,8 +131,12 @@ function SettingsPageContent() {
     const finalForm = { ...form, teacherId: user.id };
     try {
       // Save Settings
-      await saveSettings(finalForm);
       setSettings(finalForm);
+      try {
+        const { broadcastTabChange } = await import('@/lib/realtime-broadcast');
+        broadcastTabChange('SET_SETTINGS', finalForm);
+      } catch (e) {}
+      await saveSettings(finalForm);
 
       // Save Teacher Profile if changed
       const passwordChanged = form.teacherPassword !== user.password;
@@ -202,6 +226,7 @@ function SettingsPageContent() {
   const copyLink = () => { navigator.clipboard.writeText(studentLink); showToast('✅ تم نسخ رابط بوابة الطلاب!'); };
 
   const handleWipeData = async () => {
+    if (!user?.id) { showToast('فشل التعرّف على حساب المعلم'); return; }
     if (wipeConfirmText !== 'مسح') {
       showToast('يرجى كتابة كلمة "مسح" للتأكيد');
       return;
@@ -209,12 +234,28 @@ function SettingsPageContent() {
     
     setWiping(true);
     try {
-      await wipeAllData();
-      showToast('تم مسح جميع البيانات بنجاح.');
+      await wipeTeacherData(user.id);
+      showToast('✅ تم مسح بيانات حسابك بنجاح للبدء من جديد.');
       setShowWipeModal(false);
       setWipeConfirmText('');
-      logout();
-      window.location.href = '/auth';
+
+      // Refresh local store states for this teacher
+      useTeacherStore.getState().setStudents([]);
+      useTeacherStore.getState().setExams([]);
+      useTeacherStore.getState().setGroups([]);
+      useTeacherStore.getState().setRegistrationRequests([]);
+      useTeacherStore.getState().setMaterials([]);
+      useTeacherStore.getState().setAssignments([]);
+      
+      try {
+        const { broadcastTabChange } = await import('@/lib/realtime-broadcast');
+        broadcastTabChange('SET_STUDENTS', []);
+        broadcastTabChange('SET_REGISTRATION_REQUESTS', []);
+        broadcastTabChange('SET_EXAMS', []);
+        broadcastTabChange('SET_ASSIGNMENTS', []);
+        broadcastTabChange('SET_MATERIALS', []);
+        broadcastTabChange('SET_GROUPS', []);
+      } catch (e) {}
     } catch (err) {
       console.error(err);
       showToast('حدث خطأ أثناء مسح البيانات.');
@@ -312,20 +353,22 @@ function SettingsPageContent() {
       </div>
 
       {/* Password */}
-      <div className="card-base p-5">
-        <h2 className="font-cairo font-bold mb-4" style={{ color: 'var(--gold)' }}>🔐 كلمة مرور لوحة التحكم</h2>
-        <div className="relative">
-          <input type={showPass ? 'text' : 'password'} value={form.teacherPassword}
-            onChange={e => update('teacherPassword', e.target.value)} className="input-base has-icon-left" />
-          <button type="button" onClick={() => setShowPass(!showPass)}
-            className="absolute top-1/2 left-3 -translate-y-1/2 opacity-50 hover:opacity-100">
-            {showPass ? <EyeOff size={17} /> : <Eye size={17} />}
-          </button>
+      {user?.role === 'super_admin' && (
+        <div className="card-base p-5">
+          <h2 className="font-cairo font-bold mb-4" style={{ color: 'var(--gold)' }}>🔐 كلمة مرور لوحة التحكم</h2>
+          <div className="relative">
+            <input type={showPass ? 'text' : 'password'} value={form.teacherPassword}
+              onChange={e => update('teacherPassword', e.target.value)} className="input-base has-icon-left" />
+            <button type="button" onClick={() => setShowPass(!showPass)}
+              className="absolute top-1/2 left-3 -translate-y-1/2 opacity-50 hover:opacity-100">
+              {showPass ? <EyeOff size={17} /> : <Eye size={17} />}
+            </button>
+          </div>
+          <p className="text-xs mt-2" style={{ color: 'var(--text-muted)' }}>
+            ⚠️ احفظ كلمة المرور في مكان آمن. الافتراضية: admin123
+          </p>
         </div>
-        <p className="text-xs mt-2" style={{ color: 'var(--text-muted)' }}>
-          ⚠️ احفظ كلمة المرور في مكان آمن. الافتراضية: admin123
-        </p>
-      </div>
+      )}
 
       {/* Teacher Code */}
       <div className="card-base p-5">
@@ -513,52 +556,136 @@ function SettingsPageContent() {
       </div>
 
       {/* Payment Settings */}
-      <div className="card-base p-5">
-        <h2 className="font-cairo font-bold mb-4" style={{ color: 'var(--gold)' }}>💳 طرق الدفع والاشتراكات</h2>
+      <div className="card-base p-5 space-y-4">
+        <h2 className="font-cairo font-bold text-lg gold-text flex items-center gap-2">
+          💳 طرق الدفع وأسعار الاشتراكات
+        </h2>
+
         <div>
-          <label className="block text-sm mb-1.5" style={{ color: 'var(--text-muted)' }}>بيانات وطرق الدفع (تظهر للطلاب عند التسجيل)</label>
+          <label className="block text-sm mb-1.5 font-bold" style={{ color: 'var(--text-muted)' }}>
+            بيانات وطرق الدفع (تظهر للطلاب عند التسجيل)
+          </label>
           <textarea
             value={form.paymentMethods || ''}
             onChange={e => update('paymentMethods', e.target.value)}
-            rows={4}
-            className="input-base resize-y"
+            rows={3}
+            className="input-base resize-y text-sm"
             placeholder="مثال: يرجى تحويل قيمة الاشتراك على فودافون كاش رقم 0101XXXXXXX ثم كتابة رقم التحويل في الملاحظات..."
           />
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-4">
+
+        {/* Grade-specific Pricing Section */}
+        <div className="border border-white/10 rounded-2xl p-4 bg-white/5 space-y-4">
+          <div className="border-b border-white/10 pb-3">
+            <h3 className="font-bold text-sm text-amber-400">📊 أسعار اشتراكات الطلاب حسب الصف الدراسي</h3>
+            <p className="text-xs text-gray-400 mt-0.5">اختر الصف الدراسي المُراد إدخال أو تعديل أسعار اشتراكاته</p>
+          </div>
+
+          {/* Grade Selector Grid */}
           <div>
-            <label className="block text-sm mb-1.5" style={{ color: 'var(--text-muted)' }}>سعر الاشتراك الشهري</label>
-            <div className="relative">
-              <input type="number" value={form.monthlyPrice ?? ''} onChange={e => update('monthlyPrice', e.target.value === '' ? 0 : parseFloat(e.target.value))} className="input-base pr-10" placeholder="0" />
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-500">ج.م</span>
+            <label className="block text-xs font-bold text-gray-300 mb-2">الصفوف الدراسية:</label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+              {ACADEMIC_GRADES.map(grade => {
+                const gp = form.gradePrices?.[grade];
+                const hasPrices = gp && Object.values(gp).some(v => v !== undefined && v > 0);
+                const isSelected = selectedGrade === grade;
+                return (
+                  <button
+                    key={grade}
+                    type="button"
+                    onClick={() => setSelectedGrade(grade)}
+                    className={`px-3 py-2.5 rounded-xl text-xs font-bold transition-all text-right flex items-center justify-between border ${
+                      isSelected
+                        ? 'bg-amber-500/20 border-amber-500/60 text-amber-300 shadow-md ring-1 ring-amber-500/30'
+                        : 'bg-white/5 border-white/10 text-gray-300 hover:bg-white/10'
+                    }`}
+                  >
+                    <span>{grade}</span>
+                    {hasPrices ? (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                        مُحدد
+                      </span>
+                    ) : (
+                      <span className="text-[10px] opacity-40">فارغ</span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           </div>
-          <div>
-            <label className="block text-sm mb-1.5" style={{ color: 'var(--text-muted)' }}>سعر الاشتراك نصف السنوي</label>
-            <div className="relative">
-              <input type="number" value={form.halfYearlyPrice ?? ''} onChange={e => update('halfYearlyPrice', e.target.value === '' ? 0 : parseFloat(e.target.value))} className="input-base pr-10" placeholder="0" />
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-500">ج.م</span>
+
+          {/* Price inputs for selected grade */}
+          <div className="bg-black/30 rounded-xl p-4 border border-amber-500/20 space-y-3">
+            <div className="text-xs font-bold text-gold flex items-center justify-between border-b border-white/10 pb-2">
+              <span>🎯 إعداد الأسعار لـ: <span className="text-white underline font-extrabold">{selectedGrade}</span></span>
             </div>
-          </div>
-          <div>
-            <label className="block text-sm mb-1.5" style={{ color: 'var(--text-muted)' }}>سعر الاشتراك السنوي</label>
-            <div className="relative">
-              <input type="number" value={form.yearlyPrice ?? ''} onChange={e => update('yearlyPrice', e.target.value === '' ? 0 : parseFloat(e.target.value))} className="input-base pr-10" placeholder="0" />
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-500">ج.م</span>
-            </div>
-          </div>
-          <div>
-            <label className="block text-sm mb-1.5" style={{ color: 'var(--text-muted)' }}>سعر الاشتراك كورس كامل</label>
-            <div className="relative">
-              <input type="number" value={form.coursePrice ?? ''} onChange={e => update('coursePrice', e.target.value === '' ? 0 : parseFloat(e.target.value))} className="input-base pr-10" placeholder="0" />
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-500">ج.م</span>
-            </div>
-          </div>
-          <div>
-            <label className="block text-sm mb-1.5" style={{ color: 'var(--text-muted)' }}>سعر الحصة / الجلسة</label>
-            <div className="relative">
-              <input type="number" value={form.sessionPrice ?? ''} onChange={e => update('sessionPrice', e.target.value === '' ? 0 : parseFloat(e.target.value))} className="input-base pr-10" placeholder="0" />
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-500">ج.م</span>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-1">
+              <div>
+                <label className="block text-xs mb-1 text-gray-300">سعر الاشتراك الشهري</label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    value={form.gradePrices?.[selectedGrade]?.monthlyPrice ?? ''}
+                    onChange={e => updateGradePrice(selectedGrade, 'monthlyPrice', e.target.value === '' ? undefined : parseFloat(e.target.value))}
+                    className="input-base pr-10 text-sm"
+                    placeholder="0"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-500">ج.م</span>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs mb-1 text-gray-300">سعر الاشتراك نصف السنوي</label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    value={form.gradePrices?.[selectedGrade]?.halfYearlyPrice ?? ''}
+                    onChange={e => updateGradePrice(selectedGrade, 'halfYearlyPrice', e.target.value === '' ? undefined : parseFloat(e.target.value))}
+                    className="input-base pr-10 text-sm"
+                    placeholder="0"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-500">ج.م</span>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs mb-1 text-gray-300">سعر الاشتراك السنوي</label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    value={form.gradePrices?.[selectedGrade]?.yearlyPrice ?? ''}
+                    onChange={e => updateGradePrice(selectedGrade, 'yearlyPrice', e.target.value === '' ? undefined : parseFloat(e.target.value))}
+                    className="input-base pr-10 text-sm"
+                    placeholder="0"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-500">ج.م</span>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs mb-1 text-gray-300">سعر الاشتراك كورس كامل</label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    value={form.gradePrices?.[selectedGrade]?.coursePrice ?? ''}
+                    onChange={e => updateGradePrice(selectedGrade, 'coursePrice', e.target.value === '' ? undefined : parseFloat(e.target.value))}
+                    className="input-base pr-10 text-sm"
+                    placeholder="0"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-500">ج.م</span>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs mb-1 text-gray-300">سعر الحصة / الجلسة</label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    value={form.gradePrices?.[selectedGrade]?.sessionPrice ?? ''}
+                    onChange={e => updateGradePrice(selectedGrade, 'sessionPrice', e.target.value === '' ? undefined : parseFloat(e.target.value))}
+                    className="input-base pr-10 text-sm"
+                    placeholder="0"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-500">ج.م</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -591,16 +718,16 @@ function SettingsPageContent() {
         </h2>
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 rounded-xl border border-red-500/10 bg-black/20">
           <div>
-            <h3 className="font-bold text-red-400 mb-1">مسح جميع بيانات المنصة</h3>
+            <h3 className="font-bold text-red-400 mb-1">مسح بيانات حسابك فقط (إعادة ضبط الحساب)</h3>
             <p className="text-sm text-gray-400">
-              سيتم حذف جميع حسابات الطلاب، الامتحانات، والإجابات. سيتم تصفير قاعدة البيانات بالكامل للبدء من جديد وتوفير المساحة. (لا يشمل الملفات المرفوعة يدوياً، يجب حذفها من Cloudinary لاحقاً إذا لزم الأمر).
+              سيتم حذف جميع حسابات الطلاب والامتحانات والإجابات الخاصة بحسابك كمعلم فقط للبدء من جديد. <b className="text-gray-200">لن يتم حذف حسابك كمعلم، ولن تتأثر بيانات باقي معلمين الأكاديمية إطلاقاً.</b>
             </p>
           </div>
           <button 
             onClick={() => setShowWipeModal(true)}
             className="btn-danger whitespace-nowrap"
           >
-            <Trash2 size={16} /> مسح كل البيانات
+            <Trash2 size={16} /> مسح بيانات حسابك
           </button>
         </div>
       </div>
@@ -611,7 +738,7 @@ function SettingsPageContent() {
           <div className="modal-content modal-content-sm" onClick={e => e.stopPropagation()}>
             <div className="modal-header border-red-500/10 bg-red-500/5">
               <h3 className="font-bold text-lg text-red-500 flex items-center gap-2">
-                <AlertTriangle size={20} /> تحذير نهائي!
+                <AlertTriangle size={20} /> تحذير مسح بيانات الحساب!
               </h3>
               <button onClick={() => setShowWipeModal(false)} className="text-gray-400 hover:text-white transition-colors">
                 <X size={24} />
@@ -623,7 +750,7 @@ function SettingsPageContent() {
                 <Trash2 size={32} />
               </div>
               <p className="text-gray-300 text-sm mb-6 leading-relaxed">
-                أنت على وشك مسح <span className="text-red-400 font-bold underline">جميع</span> البيانات من المنصة بشكل نهائي ولا يمكن التراجع عن هذا الإجراء أبداً.
+                أنت على وشك مسح <span className="text-red-400 font-bold underline">جميع البيانات الخاصة بحسابك فقط</span> (الطلاب، الامتحانات، الواجبات، المجموعات). <b>حسابك كمعلم سيبقى نشطاً للبدء من جديد ولن تتأثر بيانات المعلمين الآخرين بالأكاديمية.</b>
               </p>
               
               <div className="bg-black/40 p-5 rounded-2xl border border-red-500/20">
