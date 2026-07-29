@@ -27,8 +27,10 @@ export default function WhatsAppAdminPage() {
       const data = await res.json();
       if (data.success && data.url) {
         setServerUrl(data.url);
+        return data.url as string;
       }
     } catch (e) {}
+    return null;
   };
 
   const saveServerUrl = async () => {
@@ -43,7 +45,7 @@ export default function WhatsAppAdminPage() {
       const data = await res.json();
       if (data.success) {
         setUrlMessage('✅ تم حفظ رابط السيرفر بنجاح!');
-        fetchStatus();
+        fetchStatus(serverUrl);
       } else {
         setUrlMessage('❌ فشل الحفظ: ' + (data.error || 'خطأ غير معروف'));
       }
@@ -75,41 +77,40 @@ export default function WhatsAppAdminPage() {
     }
   };
 
-  const fetchStatus = async () => {
+  const fetchStatus = async (urlOverride?: string) => {
+    const targetUrl = (urlOverride ?? serverUrl)?.replace(/\/+$/, '');
+    if (!targetUrl) {
+      setServerError('لم يتم تحديد رابط سيرفر الواتساب');
+      setLoading(false);
+      return;
+    }
     try {
-      const res = await fetch('/api/whatsapp/status');
-      const data = await res.json();
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 6000);
 
-      if (res.ok && !data.error && !data.isOffline) {
-        setServerError(null);
-        setStatus({
-          isConnected: data.isConnected || false,
-          qrCode: data.qrCode || null,
-        });
+      const res = await fetch(`${targetUrl}/status`, {
+        headers: {
+          'bypass-tunnel-reminder': 'true',
+          'ngrok-skip-browser-warning': 'true',
+        },
+        signal: controller.signal,
+        cache: 'no-store',
+      }).catch(() => null);
+
+      clearTimeout(timeoutId);
+
+      if (!res || !res.ok) {
+        setServerError('تعذر الاتصال بخادم الواتساب');
+        setStatus({ isConnected: false, qrCode: null });
         return;
       }
 
-      const host = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
-      const defaultUrl = `http://${host}:3001`;
-      const localServerUrl = serverUrl || process.env.NEXT_PUBLIC_WHATSAPP_API_URL || defaultUrl;
-
-      try {
-        const localRes = await fetch(`${localServerUrl}/status`, {
-          headers: { 'bypass-tunnel-reminder': 'true' }
-        });
-        if (localRes.ok) {
-          const localData = await localRes.json();
-          setServerError(null);
-          setStatus({
-            isConnected: localData.isConnected || false,
-            qrCode: localData.qrCode || null,
-          });
-          return;
-        }
-      } catch (localErr) {}
-
-      setServerError(data.error || 'تعذر الاتصال بخادم الواتساب');
-      setStatus({ isConnected: false, qrCode: null });
+      const data = await res.json();
+      setServerError(null);
+      setStatus({
+        isConnected: data.isConnected || false,
+        qrCode: data.qrCode || null,
+      });
     } catch (error: any) {
       console.error('Error fetching WhatsApp status:', error);
       setServerError('فشل الاتصال بالخادم. يرجى التأكد من تشغيل خادم الواتساب.');
@@ -120,16 +121,35 @@ export default function WhatsAppAdminPage() {
   };
 
   useEffect(() => {
-    fetchServerConfig();
-    fetchStatus();
-    const interval = setInterval(() => {
-      if (!status.isConnected) {
-        fetchStatus();
-      }
-    }, 5000);
+    let intervalId: NodeJS.Timeout;
 
-    return () => clearInterval(interval);
-  }, [status.isConnected]);
+    const init = async () => {
+      // Load saved URL first, then fetch status with it
+      const savedUrl = await fetchServerConfig();
+      const urlToUse = savedUrl || serverUrl;
+      await fetchStatus(urlToUse);
+
+      // Poll every 5s if not connected
+      intervalId = setInterval(() => {
+        if (!status.isConnected) {
+          fetchStatus(urlToUse);
+        }
+      }, 5000);
+    };
+
+    init();
+
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, []);
+
+  // Re-poll when serverUrl changes (e.g. user saves new URL)
+  useEffect(() => {
+    if (serverUrl && serverUrl !== 'http://localhost:3001') {
+      fetchStatus(serverUrl);
+    }
+  }, [serverUrl]);
 
   const sendTestMessage = async () => {
     if (!testNumber || !testMessage) {
