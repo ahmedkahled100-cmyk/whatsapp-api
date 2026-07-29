@@ -1,14 +1,18 @@
 import { NextResponse } from 'next/server';
+import { getWhatsAppApiUrl } from '@/lib/whatsapp';
 
 export async function GET() {
   try {
-    const apiUrl = process.env.WHATSAPP_API_URL || 'http://localhost:3001';
+    const apiUrl = await getWhatsAppApiUrl();
     
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 3000);
 
     const res = await fetch(`${apiUrl}/status`, {
       cache: 'no-store',
+      headers: {
+        'bypass-tunnel-reminder': 'true',
+      },
       signal: controller.signal
     }).catch(() => null);
 
@@ -30,4 +34,3 @@ export async function GET() {
     );
   }
 }
-

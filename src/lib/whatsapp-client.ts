@@ -30,12 +30,19 @@ export async function sendWhatsAppMessageClient(phone: string, message: string):
       formattedPhone = `2${formattedPhone}`;
     }
 
+    const host = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
+    const defaultUrl = `http://${host}:3001`;
+    const localServerUrl = process.env.NEXT_PUBLIC_WHATSAPP_API_URL || defaultUrl;
+
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000);
 
-    const localRes = await fetch('http://localhost:3001/send', {
+    const localRes = await fetch(`${localServerUrl}/send`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'bypass-tunnel-reminder': 'true',
+      },
       body: JSON.stringify({ number: formattedPhone, message }),
       signal: controller.signal
     }).catch(() => null);

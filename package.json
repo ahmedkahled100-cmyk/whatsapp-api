@@ -4,7 +4,11 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "whatsapp": "cd whatsapp-server && node index.js",
+    "whatsapp": "node start-whatsapp-server.js",
+    "whatsapp:bg": "npx pm2 start start-whatsapp-server.js --name whatsapp-server",
+    "whatsapp:stop": "npx pm2 stop whatsapp-server && npx pm2 delete whatsapp-server",
+    "whatsapp:status": "npx pm2 status",
+    "whatsapp:logs": "npx pm2 logs whatsapp-server",
     "dev:all": "run-local.bat",
     "build": "next build",
     "start": "next start",
@@ -50,6 +54,8 @@
     "autoprefixer": "^10.0.1",
     "eslint": "^8",
     "eslint-config-next": "14.2.0",
+    "localtunnel": "^2.0.2",
+    "pm2": "^7.0.3",
     "postcss": "^8",
     "tailwindcss": "^3.4.1",
     "typescript": "^5"

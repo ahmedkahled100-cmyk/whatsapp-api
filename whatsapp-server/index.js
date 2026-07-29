@@ -41,7 +41,19 @@ client.on('qr', (qr) => {
     // Generate and scan this code with your phone
     console.log('QR RECEIVED!');
     currentQrCode = qr; // Store it so the API can return it
-    qrcode.generate(qr, { small: true });
+    try {
+        qrcode.generate(qr, { small: true });
+    } catch (e) {
+        console.log('QR Code generated (Length: ' + qr.length + ')');
+    }
+});
+
+process.on('uncaughtException', (err) => {
+    console.error('[SERVER ERROR] Uncaught Exception:', err);
+});
+
+process.on('unhandledRejection', (reason) => {
+    console.error('[SERVER ERROR] Unhandled Rejection:', reason);
 });
 
 client.on('ready', () => {

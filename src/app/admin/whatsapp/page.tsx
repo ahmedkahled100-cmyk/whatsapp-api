@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Loader2, QrCode, MessageSquare, CheckCircle2, RotateCcw, AlertTriangle } from 'lucide-react';
+import { Loader2, QrCode, MessageSquare, CheckCircle2, RotateCcw, AlertTriangle, Globe, Copy, Save, Activity } from 'lucide-react';
 import QRCode from 'react-qr-code';
 
 export default function WhatsAppAdminPage() {
@@ -15,9 +15,68 @@ export default function WhatsAppAdminPage() {
   const [testMessage, setTestMessage] = useState('');
   const [sending, setSending] = useState(false);
 
+  // Server URL Config State
+  const [serverUrl, setServerUrl] = useState('http://localhost:3001');
+  const [savingUrl, setSavingUrl] = useState(false);
+  const [testingUrl, setTestingUrl] = useState(false);
+  const [urlMessage, setUrlMessage] = useState<string | null>(null);
+
+  const fetchServerConfig = async () => {
+    try {
+      const res = await fetch('/api/whatsapp/config');
+      const data = await res.json();
+      if (data.success && data.url) {
+        setServerUrl(data.url);
+      }
+    } catch (e) {}
+  };
+
+  const saveServerUrl = async () => {
+    setSavingUrl(true);
+    setUrlMessage(null);
+    try {
+      const res = await fetch('/api/whatsapp/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: serverUrl }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setUrlMessage('✅ تم حفظ رابط السيرفر بنجاح!');
+        fetchStatus();
+      } else {
+        setUrlMessage('❌ فشل الحفظ: ' + (data.error || 'خطأ غير معروف'));
+      }
+    } catch (e: any) {
+      setUrlMessage('❌ خطأ: ' + e.message);
+    } finally {
+      setSavingUrl(false);
+    }
+  };
+
+  const testServerUrlConnection = async () => {
+    setTestingUrl(true);
+    setUrlMessage(null);
+    try {
+      const targetUrl = serverUrl.replace(/\/+$/, '');
+      const res = await fetch(`${targetUrl}/status`, {
+        headers: { 'bypass-tunnel-reminder': 'true' }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setUrlMessage(`✅ تم الاتصال بالسيرفر بنجاح! (حالة الاتصال: ${data.isConnected ? 'متصل بالواتساب 🟢' : 'في انتظار مسح الـ QR Code 🟡'})`);
+      } else {
+        setUrlMessage('⚠️ السيرفر استجاب بخطأ HTTP: ' + res.status);
+      }
+    } catch (e: any) {
+      setUrlMessage('❌ تعذر الاتصال بهذا الرابط: ' + e.message);
+    } finally {
+      setTestingUrl(false);
+    }
+  };
+
   const fetchStatus = async () => {
     try {
-      // 1. Try Next.js API route first
       const res = await fetch('/api/whatsapp/status');
       const data = await res.json();
 
@@ -30,9 +89,14 @@ export default function WhatsAppAdminPage() {
         return;
       }
 
-      // 2. Direct browser fallback to localhost:3001 (works when website is on Vercel while server is running locally)
+      const host = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
+      const defaultUrl = `http://${host}:3001`;
+      const localServerUrl = serverUrl || process.env.NEXT_PUBLIC_WHATSAPP_API_URL || defaultUrl;
+
       try {
-        const localRes = await fetch('http://localhost:3001/status');
+        const localRes = await fetch(`${localServerUrl}/status`, {
+          headers: { 'bypass-tunnel-reminder': 'true' }
+        });
         if (localRes.ok) {
           const localData = await localRes.json();
           setServerError(null);
@@ -47,20 +111,6 @@ export default function WhatsAppAdminPage() {
       setServerError(data.error || 'تعذر الاتصال بخادم الواتساب');
       setStatus({ isConnected: false, qrCode: null });
     } catch (error: any) {
-      // Fallback attempt to local server directly from browser
-      try {
-        const localRes = await fetch('http://localhost:3001/status');
-        if (localRes.ok) {
-          const localData = await localRes.json();
-          setServerError(null);
-          setStatus({
-            isConnected: localData.isConnected || false,
-            qrCode: localData.qrCode || null,
-          });
-          return;
-        }
-      } catch (localErr) {}
-
       console.error('Error fetching WhatsApp status:', error);
       setServerError('فشل الاتصال بالخادم. يرجى التأكد من تشغيل خادم الواتساب.');
       setStatus({ isConnected: false, qrCode: null });
@@ -70,8 +120,8 @@ export default function WhatsAppAdminPage() {
   };
 
   useEffect(() => {
+    fetchServerConfig();
     fetchStatus();
-    // Poll every 5 seconds if not connected
     const interval = setInterval(() => {
       if (!status.isConnected) {
         fetchStatus();
@@ -101,15 +151,18 @@ export default function WhatsAppAdminPage() {
       } catch (e) {}
 
       if (!data || !data.success) {
-        // Fallback to direct client-side fetch to localhost:3001
         try {
           let formattedPhone = testNumber.replace(/\D/g, '');
           if (formattedPhone.startsWith('01') && formattedPhone.length === 11) {
             formattedPhone = `2${formattedPhone}`;
           }
-          const localRes = await fetch('http://localhost:3001/send', {
+          const targetUrl = serverUrl || 'http://localhost:3001';
+          const localRes = await fetch(`${targetUrl}/send`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+              'Content-Type': 'application/json',
+              'bypass-tunnel-reminder': 'true',
+            },
             body: JSON.stringify({ number: formattedPhone, message: testMessage }),
           });
           data = await localRes.json();
@@ -129,7 +182,6 @@ export default function WhatsAppAdminPage() {
     }
   };
 
-
   return (
     <div className="p-6 space-y-6 max-w-4xl mx-auto" dir="rtl">
       <div className="flex justify-between items-center">
@@ -144,6 +196,7 @@ export default function WhatsAppAdminPage() {
         </div>
       </div>
 
+      {/* Main Status & Test Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* QR Code Card */}
         <div className="card-base p-6 flex flex-col items-center justify-center min-h-[400px]">
@@ -207,7 +260,6 @@ export default function WhatsAppAdminPage() {
               </p>
             </div>
           )}
-
         </div>
 
         {/* Test Send Card */}
@@ -256,6 +308,63 @@ export default function WhatsAppAdminPage() {
             )}
           </div>
         </div>
+      </div>
+
+      {/* Public Server URL Config Card */}
+      <div className="card-base p-6 space-y-4">
+        <div className="flex items-center gap-2">
+          <Globe className="w-6 h-6 text-sky-500" />
+          <h2 className="text-xl font-bold">رابط سيرفر الواتساب العام (المحلي أو الإنترنت)</h2>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          ضع هنا رابط سيرفر الواتساب (مثال: <code className="bg-slate-800 text-gold px-1 rounded">https://xxxx.loca.lt</code> للمشرقين خارج الشبكة أو <code className="bg-slate-800 text-gold px-1 rounded">http://192.168.1.X:3001</code> للأجهزة المحلية).
+        </p>
+
+        <div className="flex flex-col sm:flex-row gap-2">
+          <input
+            type="text"
+            className="flex-1 h-10 rounded-md border border-input bg-background px-3 py-2 text-sm text-black dir-ltr font-mono"
+            placeholder="http://localhost:3001 أو https://xxxx.loca.lt"
+            value={serverUrl}
+            onChange={(e) => setServerUrl(e.target.value)}
+          />
+          <div className="flex gap-2">
+            <button
+              onClick={saveServerUrl}
+              disabled={savingUrl}
+              className="btn-primary flex items-center gap-1 text-sm py-2 px-4"
+            >
+              {savingUrl ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              حفظ
+            </button>
+
+            <button
+              onClick={testServerUrlConnection}
+              disabled={testingUrl}
+              className="btn-outline flex items-center gap-1 text-sm py-2 px-4"
+            >
+              {testingUrl ? <Loader2 className="w-4 h-4 animate-spin" /> : <Activity className="w-4 h-4 text-emerald-500" />}
+              اختبار
+            </button>
+
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(serverUrl);
+                alert('تم نسخ الرابط!');
+              }}
+              className="btn-outline flex items-center gap-1 text-sm py-2 px-4"
+            >
+              <Copy className="w-4 h-4" />
+              نسخ
+            </button>
+          </div>
+        </div>
+
+        {urlMessage && (
+          <div className="p-3 rounded-lg bg-slate-900/60 text-sm font-medium text-amber-300 border border-amber-500/20">
+            {urlMessage}
+          </div>
+        )}
       </div>
     </div>
   );
