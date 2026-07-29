@@ -6,3 +6,6 @@ temp_deploy/
 .env
 .next
 node_modules
+.wwebjs_auth/ 
+*.log 
+*.url

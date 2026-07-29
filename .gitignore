@@ -37,3 +37,6 @@ next-env.d.ts
 .env*.local
 whatsapp-server/.wwebjs_auth
 whatsapp-server/node_modules
+.wwebjs_auth/ 
+*.log 
+*.url 
