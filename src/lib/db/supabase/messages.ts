@@ -51,6 +51,41 @@ export const sendMessage = async (msg: Omit<Message, 'id' | 'timestamp' | 'isRea
   const { error: convError } = await supabase.from(CONVERSATIONS).upsert(convData);
   if (convError) throw convError;
 
+  // Trigger email notification if message is sent to Admin (super_admin)
+  if (msg.senderId !== msg.receiverId) {
+    (async () => {
+      try {
+        const { data: receiver } = await supabase
+          .from('teachers')
+          .select('role')
+          .eq('id', msg.receiverId)
+          .maybeSingle();
+
+        if (receiver && receiver.role === 'super_admin') {
+          const { data: sender } = await supabase
+            .from('teachers')
+            .select('name, phone, subject, role')
+            .eq('id', msg.senderId)
+            .maybeSingle();
+
+          if (!sender || sender.role !== 'super_admin') {
+            const { sendTeacherMessageEmailNotification } = await import('@/lib/email-service');
+            await sendTeacherMessageEmailNotification({
+              teacherName: sender?.name || msg.senderName,
+              teacherPhone: sender?.phone,
+              subjectName: sender?.subject,
+              messageContent: msg.content,
+              messageType: msg.type,
+              fileUrl: msg.fileUrl,
+            });
+          }
+        }
+      } catch (err) {
+        console.error('Failed to trigger teacher message email notification:', err);
+      }
+    })();
+  }
+
   return msgData.id as string;
 };
 

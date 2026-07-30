@@ -10,8 +10,9 @@ import { useTeacherStore } from '@/lib/store';
 import { filterNotificationsForTeacherInbox } from '@/lib/notification-audience';
 import { supabase } from '@/lib/supabase';
 import {
-  subscribeToExams, subscribeToStudents, subscribeToAttempts, subscribeToGroups, subscribeToNotifications, subscribeToRegistrationRequests, subscribeToMaterials, subscribeToAssignments, subscribeToTeacherProfile, subscribeToSettings, subscribeToConversations, getExams, getAllAttempts, getStudents, getGroups, getMaterials, getAssignments, getRegistrationRequests, getSuperAdmin
+  subscribeToExams, subscribeToStudents, subscribeToAttempts, subscribeToGroups, subscribeToNotifications, subscribeToRegistrationRequests, subscribeToMaterials, subscribeToAssignments, subscribeToTeacherProfile, subscribeToSettings, subscribeToConversations, getExams, getAllAttempts, getStudents, getGroups, getMaterials, getAssignments, getRegistrationRequests, getSuperAdmin, subscribeToDisabledPages
 } from '@/lib/db';
+import type { DisabledPageItem } from '@/types';
 import {
   LayoutDashboard, PlusCircle, FileText, Users, BookOpen,
   BarChart2, ClipboardList, Calendar, Bot, TrendingUp,
@@ -20,6 +21,8 @@ import {
   Sun, Moon, Cloud
 
 } from 'lucide-react';
+
+import { DisabledPageGuard } from '@/components/DisabledPageGuard';
 
 import { SubscriptionExpiredOverlay } from '@/components/SubscriptionExpiredOverlay';
 import { GlobalChatWidget } from '@/components/shared/GlobalChatWidget';
@@ -128,6 +131,13 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
   const [isMobile, setIsMobile] = useState(false);
   const [syncStatus, setSyncStatus] = useState<'syncing' | 'synced' | 'offline'>('syncing');
   const [adminInfo, setAdminInfo] = useState<any>(null);
+
+  const [disabledPages, setDisabledPages] = useState<DisabledPageItem[]>([]);
+
+  useEffect(() => {
+    const unsub = subscribeToDisabledPages(setDisabledPages);
+    return () => unsub();
+  }, []);
 
   // Assistant permissions cache
   const [assistantPermissions, setAssistantPermissions] = useState<string[]>([]);
@@ -485,21 +495,29 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
               )}
               {items.map(item => {
                 const active = pathname === item.href || (item.href !== '/teacher/dashboard' && pathname.startsWith(item.href));
+                const isDisabledPage = disabledPages.some(dp => dp.isDisabled && (dp.path === item.href || (dp.path.length > 8 && item.href.startsWith(`${dp.path}/`))));
+
                 return (
                   <Link key={item.href} href={item.href}
-                    title={isCollapsed ? item.label : undefined}
+                    title={isCollapsed ? (isDisabledPage ? `${item.label} (معطلة مؤقتاً)` : item.label) : undefined}
                     onClick={() => window.innerWidth < 1024 && setSidebarOpen(false)}
-                    className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-3 px-4'} py-3 mx-2 rounded-lg transition-all duration-200 text-sm font-medium group relative`}
+                    className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-3 px-4'} py-3 mx-2 rounded-lg transition-all duration-200 text-sm font-medium group relative ${isDisabledPage ? 'opacity-80' : ''}`}
                     style={{
-                      color: active ? 'var(--gold)' : 'var(--text-muted)',
+                      color: active ? 'var(--gold)' : (isDisabledPage ? '#f59e0b' : 'var(--text-muted)'),
                       background: active ? 'rgba(255, 255, 255, 0.03)' : 'transparent',
                       border: active ? '1px solid rgba(255, 255, 255, 0.06)' : '1px solid transparent',
                     }}
                   >
-                    <item.icon size={18} className={`flex-shrink-0 ${active ? 'scale-105' : 'opacity-70 group-hover:opacity-100'}`} />
+                    <item.icon size={18} className={`flex-shrink-0 ${active ? 'scale-105' : 'opacity-70 group-hover:opacity-100'} ${isDisabledPage ? 'text-amber-400' : ''}`} />
                     {!isCollapsed && <span className="animate-fade-in truncate">{item.label}</span>}
                     
-                    {!isCollapsed && item.href === '/teacher/subscriptions' && registrationRequests.length > 0 && (
+                    {!isCollapsed && isDisabledPage && (
+                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30 mr-auto shrink-0">
+                        معطلة
+                      </span>
+                    )}
+
+                    {!isCollapsed && !isDisabledPage && item.href === '/teacher/subscriptions' && registrationRequests.length > 0 && (
                       <span className="w-5 h-5 rounded-full bg-red-500 text-[10px] text-white flex items-center justify-center font-bold mr-auto">
                         {registrationRequests.length}
                       </span>
@@ -511,7 +529,7 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
                       </span>
                     )}
 
-                    {active && !isCollapsed && <div className="mr-auto w-1.5 h-1.5 rounded-full bg-gold" />}
+                    {active && !isCollapsed && !isDisabledPage && <div className="mr-auto w-1.5 h-1.5 rounded-full bg-gold" />}
                   </Link>
                 );
               })}
@@ -675,7 +693,9 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
               );
             })()
           )}
-          {isCurrentRouteAllowed() ? children : (
+          {isCurrentRouteAllowed() ? (
+            <DisabledPageGuard>{children}</DisabledPageGuard>
+          ) : (
             <div className="flex flex-col items-center justify-center p-12 text-center animate-fade-in mt-10">
               <ShieldCheck size={64} className="text-red-500 mb-4 opacity-50" />
               <h2 className="text-2xl font-black text-red-500 mb-2 font-cairo">غير مصرح لك بالدخول</h2>

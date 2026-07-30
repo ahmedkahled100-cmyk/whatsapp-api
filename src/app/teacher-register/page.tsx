@@ -12,6 +12,7 @@ import { PDFCompressionModal } from '@/components/PDFCompressionModal';
 import ImageCropperModal from '@/components/ImageCropperModal';
 import { PromoCodeInput } from '@/components/PromoCodeInput';
 import { CheckStatusModal } from '@/components/CheckStatusModal';
+import { sendJoinRequestEmailNotification } from '@/lib/email-service';
 
 export default function TeacherRegisterPage() {
   const { queue } = useFileProcessingStore();
@@ -120,6 +121,20 @@ export default function TeacherRegisterPage() {
           actionPath: '/admin/teachers'
         });
       } catch (e) { console.error(e); }
+
+      // Send Admin Email Notification
+      try {
+        await sendJoinRequestEmailNotification('teacher', {
+          name: form.name,
+          phone: form.phone,
+          subject: form.subject,
+          subType: form.subType,
+          subPrice: finalPrice,
+          promoCode: appliedPromo?.code || null,
+        });
+      } catch (e) {
+        console.error('Email notification trigger error:', e);
+      }
 
       setSuccess(true);
     } catch (error: any) {

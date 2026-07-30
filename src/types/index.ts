@@ -270,6 +270,27 @@ export interface Settings {
   whatsappEnabled?: boolean;
   whatsappTemplate?: string; 
   youtubeChannelUrl?: string;
+  emailNotificationsEnabled?: boolean;
+  adminNotificationEmail?: string;
+  smtpHost?: string;
+  smtpPort?: number;
+  smtpUser?: string;
+  smtpPass?: string;
+  smtpSenderName?: string;
+  notifyOnTeacherJoin?: boolean;
+  notifyOnAssistantJoin?: boolean;
+  notifyOnTeacherMessage?: boolean;
+}
+
+export interface DisabledPageItem {
+  id: string;
+  path: string;
+  title: string;
+  category: 'teacher' | 'student' | 'assistant' | 'public' | 'custom';
+  isDisabled: boolean;
+  reason: string;
+  updatedAt?: number;
+  updatedBy?: string;
 }
 
 export interface RegistrationRequest {

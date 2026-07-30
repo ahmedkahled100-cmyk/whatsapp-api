@@ -11,11 +11,13 @@ import { showToast } from '@/lib/toast';
 import { 
   Settings as SettingsIcon, Lock, Phone, CreditCard, 
   Save, UserPlus, Check, X, 
-  Trash2, ExternalLink, Clock, User, Upload
+  Trash2, ExternalLink, Clock, User, Upload,
+  Mail, Send, Server, BellRing, Loader2
 } from 'lucide-react';
 import { ImageModal } from '@/components/ImageModal';
 import { GlobalFileUpload } from '@/components/GlobalFileUpload';
 import { useTeacherStore } from '@/lib/store';
+import { sendTestEmailNotification } from '@/lib/email-service';
 
 export default function AdminSettingsPage() {
   const { user: currentUser } = useTeacherStore();
@@ -24,6 +26,7 @@ export default function AdminSettingsPage() {
   const [requests, setRequests] = useState<RegistrationRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [testingEmail, setTestingEmail] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
   
@@ -61,6 +64,32 @@ export default function AdminSettingsPage() {
       showToast('تم حفظ إعدادات المنصة بنجاح');
     } catch (e) { showToast('فشل الحفظ'); }
     finally { setSaving(false); }
+  };
+
+  const handleTestEmail = async () => {
+    setTestingEmail(true);
+    try {
+      const customConfig = {
+        emailNotificationsEnabled: settings?.emailNotificationsEnabled,
+        adminNotificationEmail: settings?.adminNotificationEmail,
+        smtpHost: settings?.smtpHost,
+        smtpPort: settings?.smtpPort,
+        smtpUser: settings?.smtpUser,
+        smtpPass: settings?.smtpPass,
+        smtpSenderName: settings?.smtpSenderName,
+      };
+
+      const result = await sendTestEmailNotification(customConfig, settings?.adminNotificationEmail);
+      if (result.success) {
+        showToast('تم إرسال البريد التجريبي بنجاح! تحقق من صندوق الوارد Inbox');
+      } else {
+        showToast(`فشل إرسال البريد التجريبي: ${result.error || 'خطأ غير معروف'}`);
+      }
+    } catch (e: any) {
+      showToast(`حدث خطأ: ${e.message}`);
+    } finally {
+      setTestingEmail(false);
+    }
   };
 
   const handleUpdatePassword = async (e: React.FormEvent) => {
@@ -239,6 +268,205 @@ export default function AdminSettingsPage() {
              <button type="submit" disabled={saving} className="btn-gold w-full bg-red-600 shadow-red-900/40">
                تحديث كلمة السر
              </button>
+          </form>
+        </div>
+
+        {/* Email Notifications Settings (Admin Only) */}
+        <div className="lg:col-span-2 card-base p-6 sm:p-8 space-y-6 border-blue-500/20 bg-blue-500/5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/5 pb-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center text-blue-400 border border-blue-500/30">
+                <Mail size={22} />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-blue-300">إعدادات إشعارات البريد الإلكتروني (للأدمن فقط)</h2>
+                <p className="text-xs text-gray-400">إرسال واستلام إشعارات فورية بالبريد الإلكتروني عند تقدم معلم أو مساعد بطلب انضمام.</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 bg-black/30 px-4 py-2 rounded-xl border border-white/5">
+              <span className="text-xs text-gray-300 font-bold">تفعيل إشعارات البريد</span>
+              <input
+                type="checkbox"
+                className="w-5 h-5 accent-blue-500 cursor-pointer rounded"
+                checked={settings?.emailNotificationsEnabled ?? true}
+                onChange={e => {
+                  const checked = e.target.checked;
+                  setSettings(s => s ? { ...s, emailNotificationsEnabled: checked } : { emailNotificationsEnabled: checked, teacherId: superAdmin?.id || '' } as any);
+                }}
+              />
+            </div>
+          </div>
+
+          <form onSubmit={handleUpdateSettings} className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Receiver Admin Email */}
+              <div className="md:col-span-2">
+                <label className="block text-xs text-gray-300 font-bold mb-1">البريد الإلكتروني للمدير (مستقبل الإشعارات)</label>
+                <div className="relative">
+                  <Mail size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500" />
+                  <input
+                    type="email"
+                    placeholder="admin@example.com"
+                    className="input-base pr-12 w-full text-left font-mono"
+                    dir="ltr"
+                    value={settings?.adminNotificationEmail || ''}
+                    onChange={e => {
+                      const v = e.target.value;
+                      setSettings(s => s ? { ...s, adminNotificationEmail: v } : { adminNotificationEmail: v, teacherId: superAdmin?.id || '' } as any);
+                    }}
+                  />
+                </div>
+                <p className="text-[11px] text-gray-500 mt-1">هذا هو البريد الذي ستصل إليه تنبيهات طلبات الانضمام فور تقديمها.</p>
+              </div>
+
+              {/* SMTP Host */}
+              <div>
+                <label className="block text-xs text-gray-300 font-bold mb-1">سيرفر الخروج (SMTP Host)</label>
+                <div className="relative">
+                  <Server size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500" />
+                  <input
+                    type="text"
+                    placeholder="smtp.gmail.com"
+                    className="input-base pr-12 w-full text-left font-mono"
+                    dir="ltr"
+                    value={settings?.smtpHost || ''}
+                    onChange={e => {
+                      const v = e.target.value;
+                      setSettings(s => s ? { ...s, smtpHost: v } : { smtpHost: v, teacherId: superAdmin?.id || '' } as any);
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* SMTP Port */}
+              <div>
+                <label className="block text-xs text-gray-300 font-bold mb-1">المنفذ (SMTP Port)</label>
+                <input
+                  type="number"
+                  placeholder="587 أو 465"
+                  className="input-base w-full text-left font-mono"
+                  dir="ltr"
+                  value={settings?.smtpPort ?? 587}
+                  onChange={e => {
+                    const v = e.target.value === '' ? 587 : parseInt(e.target.value);
+                    setSettings(s => s ? { ...s, smtpPort: v } : { smtpPort: v, teacherId: superAdmin?.id || '' } as any);
+                  }}
+                />
+              </div>
+
+              {/* SMTP User */}
+              <div>
+                <label className="block text-xs text-gray-300 font-bold mb-1">اسم بريد المرسل (SMTP Username)</label>
+                <input
+                  type="text"
+                  placeholder="your-email@gmail.com"
+                  className="input-base w-full text-left font-mono"
+                  dir="ltr"
+                  value={settings?.smtpUser || ''}
+                  onChange={e => {
+                    const v = e.target.value;
+                    setSettings(s => s ? { ...s, smtpUser: v } : { smtpUser: v, teacherId: superAdmin?.id || '' } as any);
+                  }}
+                />
+              </div>
+
+              {/* SMTP Password */}
+              <div>
+                <label className="block text-xs text-gray-300 font-bold mb-1">كلمة مرور التطبيق (SMTP Password / App Key)</label>
+                <input
+                  type="password"
+                  placeholder="••••••••••••"
+                  className="input-base w-full text-left font-mono"
+                  dir="ltr"
+                  value={settings?.smtpPass || ''}
+                  onChange={e => {
+                    const v = e.target.value;
+                    setSettings(s => s ? { ...s, smtpPass: v } : { smtpPass: v, teacherId: superAdmin?.id || '' } as any);
+                  }}
+                />
+              </div>
+
+              {/* Sender Name */}
+              <div className="md:col-span-2">
+                <label className="block text-xs text-gray-300 font-bold mb-1">اسم المرسل يظهر في البريد (Sender Name)</label>
+                <input
+                  type="text"
+                  placeholder="أكاديمية AN Academy"
+                  className="input-base w-full"
+                  value={settings?.smtpSenderName || ''}
+                  onChange={e => {
+                    const v = e.target.value;
+                    setSettings(s => s ? { ...s, smtpSenderName: v } : { smtpSenderName: v, teacherId: superAdmin?.id || '' } as any);
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Notification Toggles */}
+            <div className="p-4 rounded-xl bg-black/20 border border-white/5 space-y-3">
+              <div className="text-xs font-bold text-blue-300 flex items-center gap-1">
+                <BellRing size={14} /> حدد الأحداث التي يرغب الأدمن باستلام إشعار بريدي لها:
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                <label className="flex items-center gap-2 cursor-pointer bg-white/5 p-3 rounded-lg hover:bg-white/10 transition">
+                  <input
+                    type="checkbox"
+                    className="w-4 h-4 accent-blue-500 rounded"
+                    checked={settings?.notifyOnTeacherJoin ?? true}
+                    onChange={e => {
+                      const checked = e.target.checked;
+                      setSettings(s => s ? { ...s, notifyOnTeacherJoin: checked } : { notifyOnTeacherJoin: checked, teacherId: superAdmin?.id || '' } as any);
+                    }}
+                  />
+                  <span>إشعار طلب انضمام معلم 👨‍🏫</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer bg-white/5 p-3 rounded-lg hover:bg-white/10 transition">
+                  <input
+                    type="checkbox"
+                    className="w-4 h-4 accent-blue-500 rounded"
+                    checked={settings?.notifyOnAssistantJoin ?? true}
+                    onChange={e => {
+                      const checked = e.target.checked;
+                      setSettings(s => s ? { ...s, notifyOnAssistantJoin: checked } : { notifyOnAssistantJoin: checked, teacherId: superAdmin?.id || '' } as any);
+                    }}
+                  />
+                  <span>إشعار طلب انضمام مساعد 💼</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer bg-white/5 p-3 rounded-lg hover:bg-white/10 transition">
+                  <input
+                    type="checkbox"
+                    className="w-4 h-4 accent-blue-500 rounded"
+                    checked={settings?.notifyOnTeacherMessage ?? true}
+                    onChange={e => {
+                      const checked = e.target.checked;
+                      setSettings(s => s ? { ...s, notifyOnTeacherMessage: checked } : { notifyOnTeacherMessage: checked, teacherId: superAdmin?.id || '' } as any);
+                    }}
+                  />
+                  <span>إشعار رسائل المعلمين 💬</span>
+                </label>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex flex-col sm:flex-row gap-3 pt-2">
+              <button
+                type="submit"
+                disabled={saving}
+                className="flex-1 btn-gold bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 flex items-center justify-center gap-2"
+              >
+                <Save size={18} /> {saving ? 'جاري الحفظ...' : 'حفظ إعدادات البريد الإلكتروني'}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleTestEmail}
+                disabled={testingEmail}
+                className="px-6 py-3 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/30 text-emerald-300 font-bold rounded-xl flex items-center justify-center gap-2 transition"
+              >
+                {testingEmail ? <Loader2 size={18} className="animate-spin text-emerald-400" /> : <Send size={18} />}
+                <span>{testingEmail ? 'جاري الإرسال...' : 'إرسال بريد تجريبي الآن ✉️'}</span>
+              </button>
+            </div>
           </form>
         </div>
 

@@ -6,6 +6,7 @@ import { showToast } from '@/lib/toast';
 import { GraduationCap, ShieldCheck, Mail, Phone, Calculator, CheckCircle2, User, FileText, Upload, Image as ImageIcon, Loader2, BookOpen, Sparkles, Key, KeyRound, ArrowRight, Coins } from 'lucide-react';
 import ImageCropperModal from '@/components/ImageCropperModal';
 import { PromoCodeInput } from '@/components/PromoCodeInput';
+import { sendJoinRequestEmailNotification } from '@/lib/email-service';
 
 export default function AssistantRegisterPage() {
   const [loading, setLoading] = useState(true);
@@ -110,6 +111,20 @@ export default function AssistantRegisterPage() {
         } catch (e) {
           console.error(e);
         }
+      }
+
+      // Send Admin Email Notification
+      try {
+        await sendJoinRequestEmailNotification('assistant', {
+          name: form.name,
+          phone: form.phone,
+          roleTitle: form.roleTitle,
+          salaryPaymentMethod: form.salaryPaymentMethod,
+          username: form.username,
+          promoCode: appliedPromo?.code || null,
+        });
+      } catch (e) {
+        console.error('Email notification trigger error:', e);
       }
 
       setSuccess(true);

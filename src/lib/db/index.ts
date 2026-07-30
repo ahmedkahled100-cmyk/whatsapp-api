@@ -79,6 +79,10 @@ export {
   getAppHomeSettings, updateAppHomeSettings, APP_HOME_SETTINGS_KEY, APP_HOME_DOC 
 } from './app-settings';
 
+export {
+  getDisabledPages, saveDisabledPages, subscribeToDisabledPages, DISABLED_PAGES_DOC, DEFAULT_DISABLED_PAGES
+} from './supabase/disabled-pages';
+
 export { wipeAllData, wipeStudentInteraction, wipeTeacherData } from './admin';
 
 export {

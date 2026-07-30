@@ -55,6 +55,7 @@ import { formatDateAr, gradeColor, scoreLabel, getDownloadUrl, formatRelativeLas
 import { useFilePreview, FilePreviewModal } from '@/components/FilePreviewModal';
 import { GlobalFileUpload } from '@/components/GlobalFileUpload';
 import { MobileStudentPortalWrapper } from '@/components/MobileStudentPortalWrapper';
+import { DisabledPageGuard } from '@/components/DisabledPageGuard';
 import { TeacherDiscovery } from '@/components/TeacherDiscovery';
 import { SubscriptionExpiredOverlay } from '@/components/SubscriptionExpiredOverlay';
 import type { EducationalGame } from '@/types';
@@ -904,7 +905,8 @@ export default function StudentPortal() {
     : 0;
 
   return (
-    <div className="min-h-screen" style={{ background: 'var(--dark)' }} dir="rtl">
+    <DisabledPageGuard>
+      <div className="min-h-screen" style={{ background: 'var(--dark)' }} dir="rtl">
       {/* ═══ MOBILE APP LAYOUT OVERLAY ═══ */}
       <MobileStudentPortalWrapper
         student={student}
@@ -1765,6 +1767,7 @@ export default function StudentPortal() {
       {PreviewModal}
       {CompressionModal}
     </div>
+    </DisabledPageGuard>
   );
 }
 

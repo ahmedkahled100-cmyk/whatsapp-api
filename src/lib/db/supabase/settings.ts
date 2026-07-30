@@ -60,6 +60,16 @@ export const saveSettings = async (settings: Partial<Settings> & { teacherId: st
   const extras: any = {};
   if (settings.youtubeChannelUrl !== undefined) extras.youtubeChannelUrl = settings.youtubeChannelUrl;
   if (settings.gradePrices !== undefined) extras.gradePrices = settings.gradePrices;
+  if (settings.emailNotificationsEnabled !== undefined) extras.emailNotificationsEnabled = settings.emailNotificationsEnabled;
+  if (settings.adminNotificationEmail !== undefined) extras.adminNotificationEmail = settings.adminNotificationEmail;
+  if (settings.smtpHost !== undefined) extras.smtpHost = settings.smtpHost;
+  if (settings.smtpPort !== undefined) extras.smtpPort = settings.smtpPort;
+  if (settings.smtpUser !== undefined) extras.smtpUser = settings.smtpUser;
+  if (settings.smtpPass !== undefined) extras.smtpPass = settings.smtpPass;
+  if (settings.smtpSenderName !== undefined) extras.smtpSenderName = settings.smtpSenderName;
+  if (settings.notifyOnTeacherJoin !== undefined) extras.notifyOnTeacherJoin = settings.notifyOnTeacherJoin;
+  if (settings.notifyOnAssistantJoin !== undefined) extras.notifyOnAssistantJoin = settings.notifyOnAssistantJoin;
+  if (settings.notifyOnTeacherMessage !== undefined) extras.notifyOnTeacherMessage = settings.notifyOnTeacherMessage;
   
   const settingsCopy = { ...settings };
   if (Object.keys(extras).length > 0) {
@@ -68,6 +78,16 @@ export const saveSettings = async (settings: Partial<Settings> & { teacherId: st
     settingsCopy.paymentMethods = `${basePm} |SET:${JSON.stringify(extras)}|`;
     delete settingsCopy.youtubeChannelUrl;
     delete settingsCopy.gradePrices;
+    delete settingsCopy.emailNotificationsEnabled;
+    delete settingsCopy.adminNotificationEmail;
+    delete settingsCopy.smtpHost;
+    delete settingsCopy.smtpPort;
+    delete settingsCopy.smtpUser;
+    delete settingsCopy.smtpPass;
+    delete settingsCopy.smtpSenderName;
+    delete settingsCopy.notifyOnTeacherJoin;
+    delete settingsCopy.notifyOnAssistantJoin;
+    delete settingsCopy.notifyOnTeacherMessage;
   }
 
   const payload = toDB(settingsCopy);

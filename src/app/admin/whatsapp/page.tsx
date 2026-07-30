@@ -236,7 +236,7 @@ export default function WhatsAppAdminPage() {
                   رقمك الآن مربوط بالخادم ومستعد لإرسال الرسائل من النظام.
                 </p>
               </div>
-              <button onClick={fetchStatus} className="btn-outline">تحديث الحالة</button>
+              <button onClick={() => fetchStatus()} className="btn-outline">تحديث الحالة</button>
             </div>
           ) : status.qrCode ? (
             <div className="flex flex-col items-center gap-6 text-center">
